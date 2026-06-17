@@ -25,8 +25,10 @@ Optional (strongly recommended):
 Confirm all prerequisites from `SKILL.md` → Prerequisites. If any fail, halt with remediation.
 
 ```bash
-# Verify Interceptor available
-interceptor --version || echo "ABORT: Interceptor skill not installed"
+# Verify Claude Design automation bridge available. This workflow uses
+# claude.ai/design; for Codex-native web implementation use IntegrateIntoApp
+# with chrome/browser + build-web-apps instead.
+interceptor --version || echo "ABORT: Claude Design automation requires the interceptor CLI. On Codex, use the Codex-native lane unless claude.ai/design is required."
 ```
 
 ### 2. Construct the Brief

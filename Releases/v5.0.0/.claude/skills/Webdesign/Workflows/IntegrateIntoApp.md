@@ -83,6 +83,8 @@ OUTPUT FORMAT:
 
 Claude Design produces generic output; we need framework-specific code. Use the `frontend-design` plugin with explicit framework context:
 
+On Codex, use `build-web-apps@openai-curated` with `frontend-design` / `HumanInterface` skills for this step instead of assuming Claude Code plugin auto-activation.
+
 > "Translate this Claude Design prototype to $FRAMEWORK conventions used in $TARGET. Use the tokens from $TARGET/tailwind.config.ts. Reuse components from $TARGET/src/components/ui wherever possible."
 
 Output lands in `$OUT/translated/`.

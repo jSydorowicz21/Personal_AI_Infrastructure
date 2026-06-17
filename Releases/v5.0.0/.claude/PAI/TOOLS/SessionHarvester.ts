@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
- * SessionHarvester - Extract learnings from Claude Code session transcripts
+ * SessionHarvester - Extract learnings from framework session transcripts
  *
- * Harvests insights from ~/.claude/projects/ sessions and writes to LEARNING/
+ * Harvests insights from native framework sessions and writes to LEARNING/
  *
  * Commands:
  *   --recent N     Harvest from N most recent sessions (default: 10)
@@ -22,19 +22,24 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
-import { getLearningCategory, isLearningCapture } from "../../../.claude/hooks/lib/learning-utils";
+import { getLearningCategory, isLearningCapture } from "../../hooks/lib/learning-utils";
+import { memoryPath } from "./lib/paths";
+import {
+  getActiveFramework,
+  getFrameworkSessionRoots,
+  getSessionFiles as discoverSessionFiles,
+  parseTranscriptEntries,
+} from "./lib/transcripts";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const CLAUDE_DIR = path.join(process.env.HOME!, ".claude");
+const ACTIVE_FRAMEWORK = getActiveFramework();
 // Derive the project slug dynamically from CLAUDE_DIR (works on macOS and Linux)
 // macOS: /Users/daniel/.claude → -Users-daniel--claude
 // Linux: /home/daniel/.claude → -home-daniel--claude
-const CWD_SLUG = CLAUDE_DIR.replace(/[\/\.]/g, "-");
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", CWD_SLUG);
-const LEARNING_DIR = path.join(CLAUDE_DIR, "PAI", "MEMORY", "LEARNING");
+const LEARNING_DIR = memoryPath("LEARNING");
 
 // Patterns indicating learning moments in conversations
 const CORRECTION_PATTERNS = [
@@ -114,21 +119,6 @@ const MINING_PATTERN_MAP: Record<MemoryType, RegExp[]> = {
 // Types
 // ============================================================================
 
-interface ProjectsEntry {
-  sessionId?: string;
-  type?: "user" | "assistant" | "summary";
-  message?: {
-    role?: string;
-    content?: string | Array<{
-      type: string;
-      text?: string;
-      name?: string;
-      input?: any;
-    }>;
-  };
-  timestamp?: string;
-}
-
 interface MinedMemory {
   sessionId: string;
   timestamp: string;
@@ -155,50 +145,17 @@ interface HarvestedLearning {
 // ============================================================================
 
 function getSessionFiles(options: { recent?: number; all?: boolean; sessionId?: string }): string[] {
-  if (!fs.existsSync(PROJECTS_DIR)) {
-    console.error(`Projects directory not found: ${PROJECTS_DIR}`);
+  const files = discoverSessionFiles({ ...options, framework: ACTIVE_FRAMEWORK });
+  if (files.length === 0) {
+    console.error(`No ${ACTIVE_FRAMEWORK} session files found in: ${getFrameworkSessionRoots(ACTIVE_FRAMEWORK).join(", ")}`);
     return [];
   }
-
-  const files = fs.readdirSync(PROJECTS_DIR)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => ({
-      name: f,
-      path: path.join(PROJECTS_DIR, f),
-      mtime: fs.statSync(path.join(PROJECTS_DIR, f)).mtime.getTime()
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-
-  if (options.sessionId) {
-    const match = files.find(f => f.name.includes(options.sessionId!));
-    return match ? [match.path] : [];
-  }
-
-  if (options.all) {
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return files.filter(f => f.mtime > sevenDaysAgo).map(f => f.path);
-  }
-
-  const limit = options.recent || 10;
-  return files.slice(0, limit).map(f => f.path);
+  return files.map((file) => file.path);
 }
 
 // ============================================================================
 // Content Extraction
 // ============================================================================
-
-function extractTextContent(content: string | Array<any>): string {
-  if (typeof content === 'string') return content;
-
-  if (Array.isArray(content)) {
-    return content
-      .filter(c => c.type === 'text' && c.text)
-      .map(c => c.text)
-      .join('\n');
-  }
-
-  return '';
-}
 
 function matchesPatterns(text: string, patterns: RegExp[]): { matches: boolean; matchedPattern: string | null } {
   for (const pattern of patterns) {
@@ -215,77 +172,64 @@ function matchesPatterns(text: string, patterns: RegExp[]): { matches: boolean; 
 
 function harvestLearnings(sessionPath: string): HarvestedLearning[] {
   const learnings: HarvestedLearning[] = [];
-  const sessionId = path.basename(sessionPath, '.jsonl');
-
-  const content = fs.readFileSync(sessionPath, 'utf-8');
-  const lines = content.split('\n').filter(line => line.trim());
+  const entries = parseTranscriptEntries(sessionPath, ACTIVE_FRAMEWORK);
 
   let previousContext = '';
 
-  for (const line of lines) {
-    try {
-      const entry = JSON.parse(line) as ProjectsEntry;
+  for (const entry of entries) {
+    const textContent = entry.text;
+    if (!textContent || textContent.length < 20) continue;
 
-      if (!entry.message?.content) continue;
+    // Check for corrections (user messages)
+    if (entry.role === 'user') {
+      const { matches, matchedPattern } = matchesPatterns(textContent, CORRECTION_PATTERNS);
+      if (matches) {
+        learnings.push({
+          sessionId: entry.sessionId,
+          timestamp: entry.timestamp,
+          category: getLearningCategory(textContent),
+          type: 'correction',
+          context: previousContext.slice(0, 200),
+          content: textContent.slice(0, 500),
+          source: matchedPattern || 'correction'
+        });
+      }
+      previousContext = textContent;
+    }
 
-      const textContent = extractTextContent(entry.message.content);
-      if (!textContent || textContent.length < 20) continue;
-
-      const timestamp = entry.timestamp || new Date().toISOString();
-
-      // Check for corrections (user messages)
-      if (entry.type === 'user') {
-        const { matches, matchedPattern } = matchesPatterns(textContent, CORRECTION_PATTERNS);
-        if (matches) {
+    // Check for errors (assistant messages with error patterns)
+    if (entry.role === 'assistant') {
+      const { matches: errorMatch, matchedPattern: errorPattern } = matchesPatterns(textContent, ERROR_PATTERNS);
+      if (errorMatch) {
+        // Only capture if it seems like a real error being addressed
+        if (isLearningCapture(textContent)) {
           learnings.push({
-            sessionId,
-            timestamp,
+            sessionId: entry.sessionId,
+            timestamp: entry.timestamp,
             category: getLearningCategory(textContent),
-            type: 'correction',
+            type: 'error',
             context: previousContext.slice(0, 200),
             content: textContent.slice(0, 500),
-            source: matchedPattern || 'correction'
+            source: errorPattern || 'error'
           });
         }
-        previousContext = textContent;
       }
 
-      // Check for errors (assistant messages with error patterns)
-      if (entry.type === 'assistant') {
-        const { matches: errorMatch, matchedPattern: errorPattern } = matchesPatterns(textContent, ERROR_PATTERNS);
-        if (errorMatch) {
-          // Only capture if it seems like a real error being addressed
-          if (isLearningCapture(textContent)) {
-            learnings.push({
-              sessionId,
-              timestamp,
-              category: getLearningCategory(textContent),
-              type: 'error',
-              context: previousContext.slice(0, 200),
-              content: textContent.slice(0, 500),
-              source: errorPattern || 'error'
-            });
-          }
-        }
-
-        // Check for insights
-        const { matches: insightMatch, matchedPattern: insightPattern } = matchesPatterns(textContent, INSIGHT_PATTERNS);
-        if (insightMatch) {
-          learnings.push({
-            sessionId,
-            timestamp,
-            category: getLearningCategory(textContent),
-            type: 'insight',
-            context: previousContext.slice(0, 200),
-            content: textContent.slice(0, 500),
-            source: insightPattern || 'insight'
-          });
-        }
-
-        previousContext = textContent;
+      // Check for insights
+      const { matches: insightMatch, matchedPattern: insightPattern } = matchesPatterns(textContent, INSIGHT_PATTERNS);
+      if (insightMatch) {
+        learnings.push({
+          sessionId: entry.sessionId,
+          timestamp: entry.timestamp,
+          category: getLearningCategory(textContent),
+          type: 'insight',
+          context: previousContext.slice(0, 200),
+          content: textContent.slice(0, 500),
+          source: insightPattern || 'insight'
+        });
       }
-    } catch {
-      // Skip malformed lines
+
+      previousContext = textContent;
     }
   }
 
@@ -298,54 +242,40 @@ function harvestLearnings(sessionPath: string): HarvestedLearning[] {
 
 function mineMemories(sessionPath: string): MinedMemory[] {
   const memories: MinedMemory[] = [];
-  const sessionId = path.basename(sessionPath, '.jsonl');
+  const entries = parseTranscriptEntries(sessionPath, ACTIVE_FRAMEWORK);
 
-  const content = fs.readFileSync(sessionPath, 'utf-8');
-  const lines = content.split('\n').filter(line => line.trim());
+  for (const entry of entries) {
+    const textContent = entry.text;
+    if (!textContent || textContent.length < 20) continue;
 
-  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-    try {
-      const entry = JSON.parse(lines[lineIdx]) as ProjectsEntry;
+    for (const [memType, patterns] of Object.entries(MINING_PATTERN_MAP) as [MemoryType, RegExp[]][]) {
+      let matchCount = 0;
+      let firstMatchedPattern = '';
 
-      if (!entry.message?.content) continue;
-      if (entry.type !== 'user' && entry.type !== 'assistant') continue;
-
-      const textContent = extractTextContent(entry.message.content);
-      if (!textContent || textContent.length < 20) continue;
-
-      const timestamp = entry.timestamp || new Date().toISOString();
-
-      for (const [memType, patterns] of Object.entries(MINING_PATTERN_MAP) as [MemoryType, RegExp[]][]) {
-        let matchCount = 0;
-        let firstMatchedPattern = '';
-
-        for (const pattern of patterns) {
-          if (pattern.test(textContent)) {
-            matchCount++;
-            if (!firstMatchedPattern) firstMatchedPattern = pattern.source;
-          }
+      for (const pattern of patterns) {
+        if (pattern.test(textContent)) {
+          matchCount++;
+          if (!firstMatchedPattern) firstMatchedPattern = pattern.source;
         }
-
-        if (matchCount === 0) continue;
-
-        let confidence = Math.min(matchCount / 5.0, 1.0);
-        if (textContent.length > 200) confidence = Math.min(confidence + 0.1, 1.0);
-
-        if (confidence < 0.3) continue;
-
-        memories.push({
-          sessionId,
-          timestamp,
-          memoryType: memType,
-          content: textContent.slice(0, 500),
-          context: textContent.slice(0, 300),
-          confidence,
-          sourcePattern: firstMatchedPattern,
-          sourceLine: lineIdx + 1,
-        });
       }
-    } catch {
-      // Skip malformed lines
+
+      if (matchCount === 0) continue;
+
+      let confidence = Math.min(matchCount / 5.0, 1.0);
+      if (textContent.length > 200) confidence = Math.min(confidence + 0.1, 1.0);
+
+      if (confidence < 0.3) continue;
+
+      memories.push({
+        sessionId: entry.sessionId,
+        timestamp: entry.timestamp,
+        memoryType: memType,
+        content: textContent.slice(0, 500),
+        context: textContent.slice(0, 300),
+        confidence,
+        sourcePattern: firstMatchedPattern,
+        sourceLine: entry.sourceLine,
+      });
     }
   }
 
@@ -383,7 +313,7 @@ function confidenceIcon(c: number): string {
   return "\u{1F534}";                  // red circle
 }
 
-const HARVEST_QUEUE_DIR = path.join(CLAUDE_DIR, "PAI", "MEMORY", "KNOWLEDGE", "_harvest-queue");
+const HARVEST_QUEUE_DIR = memoryPath("KNOWLEDGE", "_harvest-queue");
 
 function writeToQueue(mem: MinedMemory): string {
   if (!fs.existsSync(HARVEST_QUEUE_DIR)) {
@@ -460,7 +390,7 @@ ${learning.content}
 
 ---
 
-*Harvested by SessionHarvester from projects/ transcript*
+*Harvested by SessionHarvester from framework transcript*
 `;
 }
 
@@ -498,7 +428,7 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(`
-SessionHarvester - Extract learnings from Claude Code session transcripts
+SessionHarvester - Extract learnings from framework session transcripts
 
 Usage:
   bun run SessionHarvester.ts --recent 10    Harvest from 10 most recent sessions

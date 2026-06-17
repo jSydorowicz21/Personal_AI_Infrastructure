@@ -12,10 +12,10 @@
  * - Skills: Directories in skills/ that contain a SKILL.md file
  * - Workflows: .md files in any Workflows/ directory (recursive)
  * - Hooks: unique commands registered in settings.json hooks.<event>[].hooks[].command (active only)
- * - Signals: .md files in MEMORY/LEARNING/ (recursive)
- * - Files: All files in PAI/USER/ (recursive)
- * - Work: Directories in MEMORY/WORK/ (depth 1)
- * - Research: .md and .json files in MEMORY/RESEARCH/ (recursive)
+ * - Signals: .md files in shared MEMORY/LEARNING/ (recursive)
+ * - Files: All files in shared USER/ (recursive)
+ * - Work: Directories in shared MEMORY/WORK/ (depth 1)
+ * - Research: .md and .json files in shared MEMORY/RESEARCH/ (recursive)
  *
  * USAGE:
  *   bun run GetCounts.ts           # JSON output
@@ -35,9 +35,9 @@
 
 import { readdirSync, existsSync, statSync } from "fs";
 import { join } from "path";
+import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME!;
-const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude");
+const FRAMEWORK_DIR = getFrameworkDir();
 
 interface Counts {
   skills: number;
@@ -101,7 +101,7 @@ function countWorkflowFiles(dir: string): number {
  */
 function countSkills(): number {
   let count = 0;
-  const skillsDir = join(PAI_DIR, "skills");
+  const skillsDir = join(FRAMEWORK_DIR, "skills");
   try {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
       // Handle both real directories and symlinks to directories
@@ -126,7 +126,7 @@ function countSkills(): number {
  * count — only what Claude Code will actually fire.
  */
 function countHooks(): number {
-  const settingsPath = join(HOME, ".claude", "settings.json");
+  const settingsPath = join(FRAMEWORK_DIR, "settings.json");
   try {
     const fs = require('fs');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
@@ -153,7 +153,7 @@ function countHooks(): number {
  * Count ratings from ratings.jsonl
  */
 function countRatings(): number {
-  const ratingsFile = join(PAI_DIR, "MEMORY/LEARNING/SIGNALS/ratings.jsonl");
+  const ratingsFile = memoryPath("LEARNING", "SIGNALS", "ratings.jsonl");
   try {
     const fs = require('fs');
     const content = fs.readFileSync(ratingsFile, 'utf-8');
@@ -169,21 +169,21 @@ function countRatings(): number {
 function getCounts(): Counts {
   return {
     skills: countSkills(),
-    workflows: countWorkflowFiles(join(PAI_DIR, "skills")),
+    workflows: countWorkflowFiles(join(FRAMEWORK_DIR, "skills")),
     hooks: countHooks(),
-    signals: countFilesRecursive(join(PAI_DIR, "MEMORY/LEARNING"), ".md"),
-    files: countFilesRecursive(join(PAI_DIR, "PAI/USER")),
+    signals: countFilesRecursive(memoryPath("LEARNING"), ".md"),
+    files: countFilesRecursive(userPath()),
     work: (() => {
       let count = 0;
       try {
-        for (const entry of readdirSync(join(PAI_DIR, "MEMORY/WORK"), { withFileTypes: true })) {
+        for (const entry of readdirSync(memoryPath("WORK"), { withFileTypes: true })) {
           if (entry.isDirectory()) count++;
         }
       } catch {}
       return count;
     })(),
-    research: countFilesRecursive(join(PAI_DIR, "MEMORY/RESEARCH"), ".md") +
-              countFilesRecursive(join(PAI_DIR, "MEMORY/RESEARCH"), ".json"),
+    research: countFilesRecursive(memoryPath("RESEARCH"), ".md") +
+              countFilesRecursive(memoryPath("RESEARCH"), ".json"),
     ratings: countRatings(),
   };
 }

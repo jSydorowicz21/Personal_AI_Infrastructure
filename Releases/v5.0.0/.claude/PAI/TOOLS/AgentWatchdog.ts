@@ -19,9 +19,9 @@
 
 import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
+import { memoryPath } from "./lib/paths";
 
-const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME!, ".claude", "PAI");
-const OBS_DIR = join(PAI_DIR, "MEMORY", "OBSERVABILITY");
+const OBS_DIR = memoryPath("OBSERVABILITY");
 const ACTIVITY_FILE = join(OBS_DIR, "tool-activity.jsonl");
 const STARTS_FILE = join(OBS_DIR, "subagent-starts.json");
 

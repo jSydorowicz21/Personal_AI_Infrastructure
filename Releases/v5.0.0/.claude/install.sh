@@ -191,12 +191,24 @@ if [ -x "$HOME/.bun/bin/bun" ]; then
   done
 fi
 
-# ─── Check Claude Code ───────────────────────────────────
-if command -v claude &>/dev/null; then
-  success "Claude Code found"
-else
-  warn "Claude Code not found — will install during setup"
-fi
+# ─── Agent Framework CLI ─────────────────────────────────
+# The TypeScript wizard asks which framework to target (Claude Code, Codex, or
+# OpenCode) and installs/checks the matching CLI after that choice. If
+# PAI_FRAMEWORK is set for unattended installs, show a best-effort preflight.
+case "${PAI_FRAMEWORK:-}" in
+  claude|claude-code|Claude|CLAUDE)
+    command -v claude &>/dev/null && success "Claude Code found" || warn "Claude Code not found — will install during setup"
+    ;;
+  codex|Codex|CODEX)
+    command -v codex &>/dev/null && success "Codex found" || warn "Codex not found — will install during setup"
+    ;;
+  opencode|OpenCode|OPENCODE)
+    command -v opencode &>/dev/null && success "OpenCode found" || warn "OpenCode not found — will install during setup"
+    ;;
+  *)
+    info "Agent framework selection deferred to installer wizard."
+    ;;
+esac
 
 # ─── Launch Installer ────────────────────────────────────
 # Resolve PAI-Install directory. Canonical location is $SCRIPT_DIR/PAI/PAI-Install
@@ -256,12 +268,13 @@ INSTALL_EXIT=$?
 # 1. Controlling terminal accessible (any path where the user can see/type:
 #    direct `bash install.sh`, SSH session running `curl … | sh`, local
 #    `curl … | sh` in Terminal): redirect stdin from /dev/tty and exec into
-#    `zsh -i -c 'source ~/.zshrc && pai'`. The /dev/tty redirect is what
-#    makes this work under `curl | sh` — stdin to the install.sh process is
-#    the curl pipe (not a TTY), but /dev/tty still resolves to the user's
-#    actual controlling terminal, so the new zsh + pai inherit a real TTY
-#    and Claude Code can read keystrokes. Without the redirect, pai would
-#    launch with a closed-pipe stdin and immediately fail or hang.
+#    the user's interactive shell after sourcing the rc file where the wizard
+#    wrote the `pai` alias. The /dev/tty redirect is what makes this work
+#    under `curl | sh` — stdin to install.sh is the curl pipe (not a TTY),
+#    but /dev/tty still resolves to the user's actual controlling terminal,
+#    so the new shell + active framework CLI can read keystrokes. Without the
+#    redirect, pai would launch with a closed-pipe stdin and immediately fail
+#    or hang.
 #
 # 2. No controlling terminal (true headless: CI harness, daemon spawn): print
 #    the explicit one-liner. We deliberately do NOT fall through to
@@ -270,11 +283,32 @@ INSTALL_EXIT=$?
 #    nothing happened (the bug Daniel hit on server.baylander.lan).
 if [ "$INSTALL_EXIT" -eq 0 ]; then
   echo ""
+  USER_SHELL="${SHELL:-/bin/sh}"
+  USER_SHELL_NAME="$(basename "$USER_SHELL")"
+  case "$USER_SHELL_NAME" in
+    zsh)
+      START_CMD='[ -f "$HOME/.zshrc" ] && source "$HOME/.zshrc"; pai'
+      DISPLAY_CMD='source ~/.zshrc && pai'
+      ;;
+    bash)
+      START_CMD='[ -f "$HOME/.bashrc" ] && source "$HOME/.bashrc"; pai'
+      DISPLAY_CMD='source ~/.bashrc && pai'
+      ;;
+    fish)
+      START_CMD='test -f "$HOME/.config/fish/config.fish"; and source "$HOME/.config/fish/config.fish"; pai'
+      DISPLAY_CMD='source ~/.config/fish/config.fish; pai'
+      ;;
+    *)
+      START_CMD='pai'
+      DISPLAY_CMD='pai'
+      ;;
+  esac
+
   if [ -r /dev/tty ]; then
     info "Launching pai..."
-    exec zsh -i -c 'source ~/.zshrc && pai' < /dev/tty
+    exec "$USER_SHELL" -i -c "$START_CMD" < /dev/tty
   else
-    info "Install complete. To start pai, run:  ${BOLD}source ~/.zshrc && pai${RESET}"
+    info "Install complete. To start pai, run:  ${BOLD}${DISPLAY_CMD}${RESET}"
   fi
 fi
 exit $INSTALL_EXIT

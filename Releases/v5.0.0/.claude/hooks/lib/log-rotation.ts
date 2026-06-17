@@ -13,7 +13,7 @@
 
 import { existsSync, statSync, renameSync, writeFileSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
-import { paiPath } from './paths';
+import { memoryPath } from './paths';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -68,8 +68,8 @@ function rotateDirectory(dirPath: string): number {
  * Returns total number of files rotated.
  */
 export function rotateLogsIfNeeded(): number {
-  const obsDir = paiPath('MEMORY', 'OBSERVABILITY');
-  const secDir = paiPath('MEMORY', 'SECURITY');
+  const obsDir = memoryPath('OBSERVABILITY');
+  const secDir = memoryPath('SECURITY');
 
   let total = 0;
   total += rotateDirectory(obsDir);

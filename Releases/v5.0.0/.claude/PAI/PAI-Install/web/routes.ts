@@ -256,6 +256,14 @@ async function startInstallation(): Promise<void> {
     // Step 9: Validation
     const checks = await runValidation(installState, emit);
     broadcast({ type: "validation_result", checks });
+    const allCritical = checks.filter((c) => c.critical).every((c) => c.passed);
+    if (!allCritical) {
+      broadcast({ type: "step_update", step: "validation", status: "failed", detail: "Critical validation checks failed" });
+      broadcast({ type: "install_complete", success: false, summary: generateSummary(installState) });
+      saveState(installState);
+      return;
+    }
+
     completeStep(installState, "validation");
     broadcast({ type: "step_update", step: "validation", status: "completed" });
 

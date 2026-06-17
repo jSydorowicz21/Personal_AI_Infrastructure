@@ -18,11 +18,11 @@
  * - Sends voice notification with summary
  */
 
-import { spawn } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
-import { join, basename, dirname } from 'path';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join, basename } from 'path';
 import { inference } from './Inference';
-import { getIdentity } from '../../../.claude/hooks/lib/identity';
+import { getIdentity } from '../../hooks/lib/identity';
+import { memoryPath } from './lib/paths';
 
 // ============================================================================
 // Types
@@ -108,8 +108,7 @@ interface UpdateData {
 // Constants
 // ============================================================================
 
-const PAI_DIR = process.env.HOME + '/.claude/PAI';
-const CREATE_UPDATE_SCRIPT = join(PAI_DIR, 'skills/_PAI/TOOLS/CreateUpdate.ts');
+const SYSTEM_UPDATES_DIR = memoryPath('PAISYSTEMUPDATES');
 
 // Words that indicate generic/bad titles - reject these
 const GENERIC_TITLE_PATTERNS = [
@@ -832,37 +831,73 @@ async function sendVoiceNotification(message: string): Promise<void> {
 // ============================================================================
 
 async function createUpdateEntry(data: UpdateData): Promise<void> {
-  // Prepare JSON input for CreateUpdate.ts
-  const input = {
-    title: data.title,
-    significance: data.significance,
-    change_type: data.change_type,
-    files: data.files,
-    purpose: data.purpose,
-    expected_improvement: data.expected_improvement,
-    integrity_work: data.integrity_work,
-    narrative: data.narrative,
-    verbose_narrative: data.verbose_narrative,  // New verbose format
-  };
-
   console.error(`[IntegrityMaintenance] Creating update: ${data.title}`);
   console.error(`[IntegrityMaintenance] Significance: ${data.significance}`);
   console.error(`[IntegrityMaintenance] Change type: ${data.change_type}`);
 
-  // Call CreateUpdate.ts with --stdin
-  const child = spawn('bun', [CREATE_UPDATE_SCRIPT, '--stdin'], {
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = now.toISOString().slice(0, 10);
+  const dir = join(SYSTEM_UPDATES_DIR, year, month);
+  mkdirSync(dir, { recursive: true });
 
-  child.stdin?.write(JSON.stringify(input));
-  child.stdin?.end();
+  const filePath = join(dir, `${date}_${slugify(data.title)}.md`);
+  const frontmatter = [
+    '---',
+    `title: ${JSON.stringify(data.title)}`,
+    `created: ${now.toISOString()}`,
+    `significance: ${data.significance}`,
+    `change_type: ${data.change_type}`,
+    `files: ${JSON.stringify(data.files)}`,
+    'source: IntegrityMaintenance',
+    '---',
+    '',
+  ].join('\n');
 
-  await new Promise<void>((resolve, reject) => {
-    child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`CreateUpdate exited with code ${code}`));
-    });
-  });
+  const story = data.verbose_narrative;
+  const body = [
+    `# ${data.title}`,
+    '',
+    `**Purpose:** ${data.purpose}`,
+    `**Expected improvement:** ${data.expected_improvement}`,
+    '',
+    '## Narrative',
+    '',
+    story?.story_background ?? data.narrative?.context ?? 'Changes detected during session activity.',
+    '',
+    story?.story_problem ?? data.narrative?.problem ?? '',
+    '',
+    story?.story_resolution ?? data.narrative?.solution ?? '',
+    '',
+    '## Files',
+    '',
+    ...data.files.map((file) => `- ${file}`),
+    '',
+    '## Integrity',
+    '',
+    `- References found: ${data.integrity_work.references_found}`,
+    `- References updated: ${data.integrity_work.references_updated}`,
+    ...data.integrity_work.locations_checked.map((location) => `- Checked: ${location}`),
+    '',
+    '## Verification',
+    '',
+    ...(story?.verification_steps?.length
+      ? story.verification_steps.map((step) => `- ${step}`)
+      : [`- ${data.narrative?.verification ?? 'Automatic integrity check completed'}`]),
+    '',
+  ].join('\n');
+
+  writeFileSync(filePath, `${frontmatter}${body}`, 'utf8');
+  console.error(`[IntegrityMaintenance] Wrote update: ${filePath}`);
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'system-update';
 }
 
 // ============================================================================
@@ -963,6 +998,11 @@ async function main(): Promise<void> {
   };
 
   await createUpdateEntry(updateData);
+
+  if (process.env.PAI_INTEGRITY_SKIP_NOTIFY === '1') {
+    console.error('[IntegrityMaintenance] Notification skipped by PAI_INTEGRITY_SKIP_NOTIFY=1');
+    return;
+  }
 
   // Wait 10 seconds before voice notification to avoid talking over the session completion voice
   console.error('[IntegrityMaintenance] Waiting 10 seconds before voice notification...');

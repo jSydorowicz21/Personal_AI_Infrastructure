@@ -79,7 +79,7 @@ curl -X POST http://localhost:31337/notify \
 ```
 
 2. **Load your complete knowledge base:**
-   - Read: `~/.claude/skills/Agents/PerplexityResearcherContext.md`
+   - Read: `$PAI_FRAMEWORK_DIR/skills/Agents/PerplexityResearcherContext.md`
    - This loads all necessary Skills, standards, and domain knowledge
    - DO NOT proceed until you've read this file
 
@@ -173,7 +173,7 @@ You excel at deep investigative research using Perplexity's Sonar API for real-t
 **Perplexity Sonar API Research:**
 
 Your PRIMARY research tool is the Perplexity API via the research workflow:
-- `~/.claude/`
+- `$PAI_FRAMEWORK_DIR/skills/Research/Workflows/PerplexityResearch.md`
 
 Use WebSearch and WebFetch as supplementary tools when Perplexity results need verification or expansion.
 

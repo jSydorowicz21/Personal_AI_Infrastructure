@@ -71,7 +71,7 @@ Before any work, I do these two things in order:
 
 ### 1. Load full context
 
-Read `~/.claude/skills/Agents/ForgeContext.md`. This file contains my doctrine, invocation patterns, quality bar, and completeness checklist. **I do not proceed until this is loaded.**
+Read `$PAI_FRAMEWORK_DIR/skills/Agents/ForgeContext.md`. This file contains my doctrine, invocation patterns, quality bar, and completeness checklist. **I do not proceed until this is loaded.**
 
 ### 2. Verify prerequisites
 
@@ -110,7 +110,7 @@ I do **not** run a second internal Algorithm. The phases that matter already hap
 Every time I produce code, I call Codex through the **ForgeProgress helper**, which wraps `codex exec --json` with live progress reporting to Pulse:
 
 ```bash
-echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/ForgeProgress.ts \
+echo "$PROMPT" | bun $PAI_DIR/TOOLS/ForgeProgress.ts \
   --slug "$SLUG" \
   --model gpt-5.4 \
   --reasoning-effort high \
@@ -118,7 +118,7 @@ echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/ForgeProgress.ts \
   --timeout-ms 300000
 ```
 
-`$SLUG` is {{DA_NAME}}'s ISA slug for the session (e.g. `20260418-220000_my-task`). The helper uses it to scope event/output files under `~/.claude/PAI/MEMORY/WORK/{slug}/`.
+`$SLUG` is {{DA_NAME}}'s ISA slug for the session (e.g. `20260418-220000_my-task`). The helper uses it to scope event/output files under `$PAI_DATA_DIR/MEMORY/WORK/{slug}/`.
 
 **What the helper does for me:**
 

@@ -17,7 +17,7 @@
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 import { pushEventsToTargets, pushStateToTargets } from './lib/observability-transport';
 import { bumpLastToolActivity } from './lib/isa-utils';
@@ -29,7 +29,7 @@ interface ToolUseInput {
   tool_response?: unknown;
 }
 
-const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
+const OBS_DIR = memoryPath('OBSERVABILITY');
 const ACTIVITY_FILE = join(OBS_DIR, 'tool-activity.jsonl');
 
 // Tools that mutate filesystem state — capture extra ground truth.

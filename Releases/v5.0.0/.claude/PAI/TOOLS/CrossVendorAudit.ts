@@ -17,12 +17,12 @@ import { readFile, writeFile, readdir, appendFile, mkdir, stat } from "node:fs/p
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { memoryPath } from "./lib/paths";
 
 const HOME = homedir();
-const PAI_DIR = join(HOME, ".claude", "PAI");
-const WORK_DIR = join(PAI_DIR, "MEMORY", "WORK");
-const FINDINGS_LOG = join(PAI_DIR, "MEMORY", "VERIFICATION", "cato-findings.jsonl");
-const TOOL_ACTIVITY_LOG = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "tool-activity.jsonl");
+const WORK_DIR = memoryPath("WORK");
+const FINDINGS_LOG = memoryPath("VERIFICATION", "cato-findings.jsonl");
+const TOOL_ACTIVITY_LOG = memoryPath("OBSERVABILITY", "tool-activity.jsonl");
 const CODEX_BIN = join(HOME, ".bun", "bin", "codex");
 
 const BUNDLE_TOKEN_CAP = 80_000;
@@ -231,7 +231,7 @@ function estimateCost(tokens: number): number {
 }
 
 async function appendFinding(slug: string, advisorVerdict: string, response: CatoResponse, tier: string): Promise<void> {
-  await mkdir(join(PAI_DIR, "MEMORY", "VERIFICATION"), { recursive: true });
+  await mkdir(memoryPath("VERIFICATION"), { recursive: true });
   const line = JSON.stringify({
     timestamp: new Date().toISOString(),
     slug,

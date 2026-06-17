@@ -40,10 +40,11 @@
 
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { getPaiDir, getSettingsPath } from './lib/paths';
+import { getPaiDir, getSettingsPath, memoryPath, userPath } from './lib/paths';
 import { recordSessionStart } from './lib/notifications';
 import { loadLearningDigest, loadWisdomFrames, loadFailurePatterns, loadSignalTrends, loadSynthesisPatterns } from './lib/learning-readback';
 import { findArtifactPath } from './lib/isa-utils';
+import { isSubagentSession } from './lib/session';
 
 interface DynamicContextConfig {
   relationshipContext?: boolean;
@@ -87,11 +88,11 @@ function loadSettings(): Settings {
  * Load relationship context for session startup.
  * Returns a lightweight summary of key opinions and recent notes.
  */
-function loadRelationshipContext(paiDir: string): string | null {
+function loadRelationshipContext(): string | null {
   const parts: string[] = [];
 
   // Load high-confidence opinions (>0.85) from OPINIONS.md
-  const opinionsPath = join(paiDir, 'USER/OPINIONS.md');
+  const opinionsPath = userPath('OPINIONS.md');
   if (existsSync(opinionsPath)) {
     try {
       const content = readFileSync(opinionsPath, 'utf-8');
@@ -129,8 +130,7 @@ function loadRelationshipContext(paiDir: string): string | null {
   const recentNotes: string[] = [];
   for (const date of [today, yesterday]) {
     const notePath = join(
-      paiDir,
-      'MEMORY/RELATIONSHIP',
+      memoryPath('RELATIONSHIP'),
       formatMonth(date),
       `${formatDate(date)}.md`
     );
@@ -162,7 +162,7 @@ function loadRelationshipContext(paiDir: string): string | null {
 
 ${parts.join('\n')}
 
-*Full details: PAI/USER/OPINIONS.md, MEMORY/RELATIONSHIP/*
+*Full details: USER/OPINIONS.md, MEMORY/RELATIONSHIP/*
 `;
 }
 
@@ -182,12 +182,12 @@ interface WorkSession {
 /**
  * Scan recent WORK/ directories (last 48h) for active sessions.
  */
-function getRecentWorkSessions(paiDir: string): WorkSession[] {
-  const workDir = join(paiDir, 'MEMORY', 'WORK');
+function getRecentWorkSessions(): WorkSession[] {
+  const workDir = memoryPath('WORK');
   if (!existsSync(workDir)) return [];
 
   let sessionNames: Record<string, string> = {};
-  const namesPath = join(paiDir, 'MEMORY', 'STATE', 'session-names.json');
+  const namesPath = memoryPath('STATE', 'session-names.json');
   try {
     if (existsSync(namesPath)) {
       sessionNames = JSON.parse(readFileSync(namesPath, 'utf-8'));
@@ -309,8 +309,8 @@ function getRecentWorkSessions(paiDir: string): WorkSession[] {
 /**
  * Load persistent project progress files, flagging stale ones (>14 days).
  */
-function getProjectProgress(paiDir: string): WorkSession[] {
-  const progressDir = join(paiDir, 'MEMORY', 'STATE', 'progress');
+function getProjectProgress(): WorkSession[] {
+  const progressDir = memoryPath('STATE', 'progress');
   if (!existsSync(progressDir)) return [];
 
   const sessions: WorkSession[] = [];
@@ -363,8 +363,8 @@ function getProjectProgress(paiDir: string): WorkSession[] {
  * Unified activity dashboard — merges recent WORK sessions + persistent projects.
  */
 async function checkActiveProgress(paiDir: string): Promise<string | null> {
-  const recentSessions = getRecentWorkSessions(paiDir);
-  const projects = getProjectProgress(paiDir);
+  const recentSessions = getRecentWorkSessions();
+  const projects = getProjectProgress();
 
   if (recentSessions.length === 0 && projects.length === 0) {
     return null;
@@ -415,11 +415,7 @@ async function checkActiveProgress(paiDir: string): Promise<string | null> {
 async function main() {
   try {
     // Subagents don't need dynamic context injection
-    const claudeProjectDir = process.env.CLAUDE_PROJECT_DIR || '';
-    const isSubagent = claudeProjectDir.includes('/.claude/Agents/') ||
-                      process.env.CLAUDE_AGENT_TYPE !== undefined;
-
-    if (isSubagent) {
+    if (isSubagentSession()) {
       console.error('🤖 Subagent session - skipping context loading');
       process.exit(0);
     }
@@ -441,7 +437,7 @@ async function main() {
     // Load relationship context (lightweight summary)
     let relationshipContext: string | null = null;
     if (isDynamicEnabled(settings, 'relationshipContext')) {
-      relationshipContext = loadRelationshipContext(paiDir);
+      relationshipContext = loadRelationshipContext();
       if (relationshipContext) {
         console.error(`💕 Loaded relationship context (${relationshipContext.length} chars)`);
       }
@@ -481,11 +477,12 @@ async function main() {
 
     // Inject dynamic context if we have any
     if (relationshipContext || learningContext) {
+      const instructionFile = process.env.PAI_FRAMEWORK === 'claude' ? 'CLAUDE.md' : 'AGENTS.md';
       const message = `<system-reminder>
 PAI Dynamic Context (Auto-loaded at Session Start)
 ${relationshipContext ?? ''}${learningContext ? '\n---\n' + learningContext : ''}
 ---
-Dynamic context loaded. Constitutional rules are in the system prompt (PAI/PAI_SYSTEM_PROMPT.md). Operational procedures are in CLAUDE.md.
+Dynamic context loaded. Constitutional rules are in the system prompt (PAI/PAI_SYSTEM_PROMPT.md). Operational procedures are in ${instructionFile}.
 </system-reminder>`;
 
       console.log(message);

@@ -101,7 +101,7 @@ v6.2.0 ships the long-running ISA expansion conversation {{PRINCIPAL_NAME}} and 
 
 **Migration command (rollback to v6.1.0):**
 ```bash
-echo 6.1.0 > ~/.claude/PAI/ALGORITHM/LATEST && \
+echo 6.1.0 > $PAI_DIR/ALGORITHM/LATEST && \
   jq '.pai.algorithmVersion="6.1.0"' ~/.claude/settings.json | sponge ~/.claude/settings.json && \
   sed -i '' 's|v6.2.0.md|v6.1.0.md|' ~/.claude/CLAUDE.md
 # The ISA skill stays on disk and is harmless under v6.1.0 (skill is invocation-agnostic)
@@ -139,7 +139,7 @@ v6.0.0 is a **frame-shift release** in two coupled moves: (1) closing the v5.0.0
 
 **Migration command (rollback to v5.5.0):**
 ```bash
-echo 5.5.0 > ~/.claude/PAI/ALGORITHM/LATEST && \
+echo 5.5.0 > $PAI_DIR/ALGORITHM/LATEST && \
   jq '.pai.algorithmVersion="5.5.0"' ~/.claude/settings.json | sponge ~/.claude/settings.json && \
   sed -i '' 's|v6.0.0.md|v5.5.0.md|' ~/.claude/CLAUDE.md
 # Remove the two new hooks from settings.json hook arrays manually
@@ -182,7 +182,7 @@ The visible win: ISA bodies stop alternating two numbering pools (`ISC-1, ISC-2,
 - `~/.claude/CLAUDE.md` (MANDATORY FIRST ACTION → v5.5.0.md)
 - `~/.claude/settings.json` (`pai.algorithmVersion` → `5.5.0`)
 
-**Migration command (rollback):** `echo v5.4.0 > ~/.claude/PAI/ALGORITHM/LATEST && jq '.pai.algorithmVersion="5.4.0"' ~/.claude/settings.json | sponge ~/.claude/settings.json && sed -i '' 's|v5.5.0.md|v5.4.0.md|' ~/.claude/CLAUDE.md`. Hooks need no rollback — both detection paths (legacy `-A-` and new `Anti:` prefix) coexist permanently.
+**Migration command (rollback):** `echo v5.4.0 > $PAI_DIR/ALGORITHM/LATEST && jq '.pai.algorithmVersion="5.4.0"' ~/.claude/settings.json | sponge ~/.claude/settings.json && sed -i '' 's|v5.5.0.md|v5.4.0.md|' ~/.claude/CLAUDE.md`. Hooks need no rollback — both detection paths (legacy `-A-` and new `Anti:` prefix) coexist permanently.
 
 **Provenance:** Direct BPE audit by {{PRINCIPAL_NAME}} against v5.4.0 — surfaced visible inconsistency in `MEMORY/WORK/20260427-040000_skill-convention-audit/ISA.md`'s ISC list (mixing `ISC-1, ISC-2, ISC-A-1, ISC-3..ISC-12, ISC-A-2, ISC-13...`). Five Questions: (1) does the `-A-` ID add information the `Anti:` prefix does not? No. (2) is the parser logic load-bearing on `-A-`? It was, but moving the test to `Anti:` is a one-line change. (3) does the gate (≥1 anti-criterion) require the dual namespace? No — the gate is a count of `Anti:`-prefixed ISCs, however numbered. Conclusion: cut the decoration, keep the gate via prefix. The pattern is now applied three times (v5.0.0 counts, v5.3.0 brackets, v5.5.0 numbering); doctrine is converging on prose-prefix-only as the surface contract.
 
@@ -243,7 +243,7 @@ v5.2.0 reintroduces **per-tier ISC count floors at E2+** as a soft minimum on th
 
 ### v5.0.0 → v5.1.0
 
-v5.1.0 adds **per-step durability** — the one design move PAI hadn't yet committed to. The `CheckpointPerISC` hook (PostToolUse Edit/Write/MultiEdit on `MEMORY/WORK/{slug}/ISA.md`) auto-commits a git checkpoint in every opted-in repo on each `[ ]`→`[x]` ISC transition. Commits use `--no-verify --no-gpg-sign` to avoid husky/GPG hangs that would block the session. Sidecar state at `MEMORY/WORK/{slug}/.checkpoint-state.json` makes commits idempotent (no double-commit). Allowlist at `~/.claude/checkpoint-repos.txt` — defaults to `~/.claude` only; other repos require explicit {{PRINCIPAL_NAME}} opt-in (no surprise commits in WIP branches). Inspection + rollback via `bun ~/.claude/PAI/TOOLS/Checkpoint.ts {list|show|rollback} <slug> [<isc-id>]`. **Rollback is preview-only** — prints the suggested `git reset --hard <sha>` per repo and exits; never executes destructive ops without {{PRINCIPAL_NAME}} running them himself. Doctrine elsewhere is unchanged from v5.0.0; the only addition is the **Checkpoints subsection** in EXECUTE below. Provenance: R1 from session `20260426-230039_hankweave-pai-improvements-analysis` — Hankweave's per-codon git checkpoint absorbed as a PAI-native primitive without adopting Hankweave's runtime.
+v5.1.0 adds **per-step durability** — the one design move PAI hadn't yet committed to. The `CheckpointPerISC` hook (PostToolUse Edit/Write/MultiEdit on `MEMORY/WORK/{slug}/ISA.md`) auto-commits a git checkpoint in every opted-in repo on each `[ ]`→`[x]` ISC transition. Commits use `--no-verify --no-gpg-sign` to avoid husky/GPG hangs that would block the session. Sidecar state at `MEMORY/WORK/{slug}/.checkpoint-state.json` makes commits idempotent (no double-commit). Allowlist at `~/.claude/checkpoint-repos.txt` — defaults to `~/.claude` only; other repos require explicit {{PRINCIPAL_NAME}} opt-in (no surprise commits in WIP branches). Inspection + rollback via `bun $PAI_DIR/TOOLS/Checkpoint.ts {list|show|rollback} <slug> [<isc-id>]`. **Rollback is preview-only** — prints the suggested `git reset --hard <sha>` per repo and exits; never executes destructive ops without {{PRINCIPAL_NAME}} running them himself. Doctrine elsewhere is unchanged from v5.0.0; the only addition is the **Checkpoints subsection** in EXECUTE below. Provenance: R1 from session `20260426-230039_hankweave-pai-improvements-analysis` — Hankweave's per-codon git checkpoint absorbed as a PAI-native primitive without adopting Hankweave's runtime.
 
 **Migration:** v5.1.0 lives alongside v5.0.0. To roll back: `echo v5.0.0 > LATEST && jq '.pai.algorithmVersion="5.0.0"' ~/.claude/settings.json | sponge ~/.claude/settings.json && sed -i '' 's|v5.1.0.md|v5.0.0.md|' ~/.claude/CLAUDE.md`. The hook can be left registered with no allowlist file (it no-ops); or remove its entries from `settings.json` PostToolUse arrays.
 

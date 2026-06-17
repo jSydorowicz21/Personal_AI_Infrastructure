@@ -12,9 +12,12 @@
 
 import { join, resolve } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { getFrameworkDir, getPaiDataDir, getPaiDir, userPath } from "../TOOLS/lib/paths"
 
 const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
+const PAI_DIR = getPaiDir()
+const FRAMEWORK_DIR = getFrameworkDir()
+const PAI_DATA_DIR = getPaiDataDir()
 const PULSE_DIR = join(PAI_DIR, "PULSE")
 
 // ── Helpers ──
@@ -50,7 +53,7 @@ function warn(text: string): void {
 async function readIdentity(): Promise<{ name: string; description: string }> {
   heading("Step 1: Worker Identity")
 
-  const identityPath = join(PAI_DIR, "USER", "DA_IDENTITY.md")
+  const identityPath = userPath("DA_IDENTITY.md")
   if (existsSync(identityPath)) {
     const content = await Bun.file(identityPath).text()
     const nameMatch = content.match(/\*\*Name:\*\*\s*(.+)/i) ?? content.match(/^-\s*\*\*Name:\*\*\s*(.+)/mi)
@@ -234,7 +237,7 @@ enabled = true
     ``,
   ]
 
-  const envPath = join(HOME, ".claude", ".env")
+  const envPath = join(FRAMEWORK_DIR, ".env")
   if (existsSync(envPath)) {
     warn(`.env already exists — appending worker config`)
     const existing = await Bun.file(envPath).text()
@@ -355,8 +358,17 @@ async function installService(): Promise<void> {
     return
   }
 
-  // Copy and load plist
-  const proc = Bun.spawn(["bash", "-c", `cp "${plistSrc}" "${plistDst}" && launchctl load "${plistDst}" 2>/dev/null`], {
+  // Fill template placeholders and load plist
+  const bunPath = process.execPath
+  const command = [
+    `sed -e "s|__HOME__|${HOME}|g"`,
+    `-e "s|__PAI_DIR__|${PAI_DIR}|g"`,
+    `-e "s|__PAI_DATA_DIR__|${PAI_DATA_DIR}|g"`,
+    `-e "s|__BUN_PATH__|${bunPath}|g"`,
+    `"${plistSrc}" > "${plistDst}"`,
+    `&& launchctl load "${plistDst}" 2>/dev/null`,
+  ].join(" ")
+  const proc = Bun.spawn(["bash", "-c", command], {
     stdout: "pipe",
     stderr: "pipe",
   })
@@ -438,7 +450,7 @@ ${"═".repeat(50)}
   Time: ${Math.floor(elapsed / 60)}m ${elapsed % 60}s
 
   Next steps:
-  - Verify ANTHROPIC_API_KEY is set in ${join(HOME, ".claude", ".env")}
+  - Verify ANTHROPIC_API_KEY is set in ${join(FRAMEWORK_DIR, ".env")}
   - Create a test issue with label "status:ready" in one of your repos
   - Watch: tail -f ${join(PULSE_DIR, "logs", "pulse-stdout.log")}
   - Status: ${join(PULSE_DIR, "manage.sh")} status

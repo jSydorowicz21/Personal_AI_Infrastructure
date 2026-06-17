@@ -384,7 +384,7 @@ High-value feed items are harvested into the PAI Knowledge Archive (`MEMORY/KNOW
 
 - `_FEED/SKILL.md` — Operational reference: API endpoints, workflows, schema
 - `ARBOLSYSTEM.md` — Arbol cloud execution: actions, pipelines, flows (consolidated reference)
-- `~/.claude/PAI/USER/ARBOL/` — Cloudflare Workers implementation
+- `$PAI_DATA_DIR/USER/ARBOL/` — Cloudflare Workers implementation
 - `~/.claude/PAI/DOCUMENTATION/PAISystemArchitecture.md` — Master PAI architecture reference
 
 ---

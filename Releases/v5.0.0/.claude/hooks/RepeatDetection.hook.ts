@@ -9,13 +9,11 @@
  * Algorithm v3.19.0 Layer 2: Safety net for intent drift.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
+import { getMemoryDir } from "./lib/paths";
 
-const STATE_FILE = join(
-  process.env.HOME || "",
-  ".claude/PAI/MEMORY/STATE/last-prompt.json",
-);
+const STATE_FILE = join(getMemoryDir(), "STATE", "last-prompt.json");
 
 interface HookInput {
   session_id: string;
@@ -56,7 +54,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 function main(): void {
   let input: HookInput;
   try {
-    input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+    input = JSON.parse(readFileSync(0, "utf-8"));
   } catch {
     // No stdin or invalid JSON — skip silently
     process.exit(0);
@@ -122,6 +120,7 @@ function main(): void {
 
 function saveCurrentPrompt(prompt: string, sessionId: string): void {
   try {
+    mkdirSync(dirname(STATE_FILE), { recursive: true });
     writeFileSync(
       STATE_FILE,
       JSON.stringify({

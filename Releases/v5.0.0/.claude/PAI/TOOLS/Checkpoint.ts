@@ -16,13 +16,14 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parseCriteriaList } from '../../hooks/lib/isa-utils';
+import { getFrameworkDir, memoryPath } from './lib/paths';
 
-// Allowlist path: top of ~/.claude per spec. We only READ it (never write),
-// so the ContainmentGuard write restriction does not apply. Parser must match
+// Allowlist path: top of the active framework home. We only READ it (never write),
+// so containment write restrictions do not apply. Parser must match
 // the hook's parser exactly: skip blanks and '#' lines, expand tilde / $HOME
 // prefixes, treat the rest as absolute repo paths.
-const ALLOWLIST_PATH = join(homedir(), '.claude', 'checkpoint-repos.txt');
-const WORK_DIR = join(homedir(), '.claude', 'PAI', 'MEMORY', 'WORK');
+const ALLOWLIST_PATH = join(getFrameworkDir(), 'checkpoint-repos.txt');
+const WORK_DIR = memoryPath('WORK');
 
 function expandPath(p: string): string {
   let s = p.trim();
@@ -188,9 +189,9 @@ function cmdRollback(slug: string, iscId: string) {
 
 function usage() {
   console.log(`Usage:
-  bun ~/.claude/PAI/TOOLS/Checkpoint.ts list <slug>
-  bun ~/.claude/PAI/TOOLS/Checkpoint.ts show <slug> <isc-id>
-  bun ~/.claude/PAI/TOOLS/Checkpoint.ts rollback <slug> <isc-id>
+  bun $PAI_DIR/TOOLS/Checkpoint.ts list <slug>
+  bun $PAI_DIR/TOOLS/Checkpoint.ts show <slug> <isc-id>
+  bun $PAI_DIR/TOOLS/Checkpoint.ts rollback <slug> <isc-id>
 
 Allowlist: ${ALLOWLIST_PATH}
 Work dir:  ${WORK_DIR}

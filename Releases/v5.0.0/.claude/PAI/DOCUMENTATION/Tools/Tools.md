@@ -10,7 +10,7 @@ This file documents single-purpose CLI utilities that have been consolidated fro
 
 ## Inference.ts - Unified AI Inference Tool
 
-**Location:** `~/.claude/PAI/TOOLS/Inference.ts`
+**Location:** `$PAI_DIR/TOOLS/Inference.ts`
 
 **Use this — never import `@anthropic-ai/sdk` directly.** Inference.ts handles auth, retries, timeouts, and PAI-specific defaults. Hooks, skills, agents, and ad-hoc Bash all route through it.
 
@@ -19,19 +19,19 @@ Single inference tool with three run levels for different speed/capability trade
 **Usage:**
 ```bash
 # Fast (Haiku) - quick tasks, simple generation
-bun ~/.claude/PAI/TOOLS/Inference.ts --level fast "System prompt" "User prompt"
+bun $PAI_DIR/TOOLS/Inference.ts --level fast "System prompt" "User prompt"
 
 # Standard (Sonnet) - balanced reasoning, typical analysis
-bun ~/.claude/PAI/TOOLS/Inference.ts --level standard "System prompt" "User prompt"
+bun $PAI_DIR/TOOLS/Inference.ts --level standard "System prompt" "User prompt"
 
 # Smart (Opus) - deep reasoning, strategic decisions
-bun ~/.claude/PAI/TOOLS/Inference.ts --level smart "System prompt" "User prompt"
+bun $PAI_DIR/TOOLS/Inference.ts --level smart "System prompt" "User prompt"
 
 # With JSON output
-bun ~/.claude/PAI/TOOLS/Inference.ts --json --level fast "Return JSON" "Input"
+bun $PAI_DIR/TOOLS/Inference.ts --json --level fast "Return JSON" "Input"
 
 # Custom timeout
-bun ~/.claude/PAI/TOOLS/Inference.ts --level standard --timeout 60000 "Prompt" "Input"
+bun $PAI_DIR/TOOLS/Inference.ts --level standard --timeout 60000 "Prompt" "Input"
 ```
 
 **Run Levels:**
@@ -44,7 +44,7 @@ bun ~/.claude/PAI/TOOLS/Inference.ts --level standard --timeout 60000 "Prompt" "
 **Programmatic Usage:**
 ```typescript
 // From hooks (at ~/.claude/hooks/):
-import { inference } from '../../.claude/PAI/TOOLS/Inference';
+import { inference } from '$PAI_DIR/TOOLS/Inference';
 
 const result = await inference({
   systemPrompt: 'Analyze this',
@@ -75,20 +75,20 @@ if (result.success) {
 
 ## RemoveBg.ts - Remove Image Backgrounds
 
-**Location:** `~/.claude/PAI/TOOLS/RemoveBg.ts`
+**Location:** `$PAI_DIR/TOOLS/RemoveBg.ts`
 
 Remove backgrounds from images using local `rembg` (no external API).
 
 **Usage:**
 ```bash
 # Remove background from single image (overwrites; renames .jpg→.png)
-bun ~/.claude/PAI/TOOLS/RemoveBg.ts /path/to/image.png
+bun $PAI_DIR/TOOLS/RemoveBg.ts /path/to/image.png
 
 # Remove background and save to different path
-bun ~/.claude/PAI/TOOLS/RemoveBg.ts /path/to/input.png /path/to/output.png
+bun $PAI_DIR/TOOLS/RemoveBg.ts /path/to/input.png /path/to/output.png
 
 # Process multiple images
-bun ~/.claude/PAI/TOOLS/RemoveBg.ts image1.png image2.png image3.png
+bun $PAI_DIR/TOOLS/RemoveBg.ts image1.png image2.png image3.png
 ```
 
 **Requirements:**
@@ -104,17 +104,17 @@ bun ~/.claude/PAI/TOOLS/RemoveBg.ts image1.png image2.png image3.png
 
 ## AddBg.ts - Add Background Color
 
-**Location:** `~/.claude/PAI/TOOLS/AddBg.ts`
+**Location:** `$PAI_DIR/TOOLS/AddBg.ts`
 
 Add solid background color to transparent images.
 
 **Usage:**
 ```bash
 # Add specific background color
-bun ~/.claude/PAI/TOOLS/AddBg.ts /path/to/transparent.png "#EAE9DF" /path/to/output.png
+bun $PAI_DIR/TOOLS/AddBg.ts /path/to/transparent.png "#EAE9DF" /path/to/output.png
 
 # Add your brand background color (uses the color from PAI config)
-bun ~/.claude/PAI/TOOLS/AddBg.ts /path/to/transparent.png --brand /path/to/output.png
+bun $PAI_DIR/TOOLS/AddBg.ts /path/to/transparent.png --brand /path/to/output.png
 ```
 
 **When to Use:**
@@ -128,17 +128,17 @@ bun ~/.claude/PAI/TOOLS/AddBg.ts /path/to/transparent.png --brand /path/to/outpu
 
 ## GetTranscript.ts - Extract YouTube Transcripts
 
-**Location:** `~/.claude/PAI/TOOLS/GetTranscript.ts`
+**Location:** `$PAI_DIR/TOOLS/GetTranscript.ts`
 
 Extract transcripts from YouTube videos using yt-dlp (via fabric).
 
 **Usage:**
 ```bash
 # Extract transcript to stdout
-bun ~/.claude/PAI/TOOLS/GetTranscript.ts "https://www.youtube.com/watch?v=VIDEO_ID"
+bun $PAI_DIR/TOOLS/GetTranscript.ts "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Save transcript to file
-bun ~/.claude/PAI/TOOLS/GetTranscript.ts "https://www.youtube.com/watch?v=VIDEO_ID" --save /path/to/transcript.txt
+bun $PAI_DIR/TOOLS/GetTranscript.ts "https://www.youtube.com/watch?v=VIDEO_ID" --save /path/to/transcript.txt
 ```
 
 **Supported URL Formats:**
@@ -162,23 +162,23 @@ bun ~/.claude/PAI/TOOLS/GetTranscript.ts "https://www.youtube.com/watch?v=VIDEO_
 
 ## MemoryRetriever.ts - Compressed Knowledge Retrieval
 
-**Location:** `~/.claude/PAI/TOOLS/MemoryRetriever.ts`
+**Location:** `$PAI_DIR/TOOLS/MemoryRetriever.ts`
 
 BM25-lite search across the Knowledge Archive with optional LLM compression. Finds relevant notes by keyword matching, tag co-occurrence, and content frequency, then compresses results into a dense context-efficient summary.
 
 **Usage:**
 ```bash
 # Search and return compressed results (default: top 3)
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "memory architecture"
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "memory architecture"
 
 # Return top 5 results
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "security policy" --top 5
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "security policy" --top 5
 
 # Skip LLM compression, return raw excerpts
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "karpathy" --raw
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "karpathy" --raw
 
 # Custom token budget for output
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "threat model" --budget 800
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "threat model" --budget 800
 ```
 
 **Scoring:**
@@ -199,29 +199,29 @@ bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "threat model" --budget 800
 
 ## KnowledgeGraph.ts - Associative Knowledge Navigation
 
-**Location:** `~/.claude/PAI/TOOLS/KnowledgeGraph.ts`
+**Location:** `$PAI_DIR/TOOLS/KnowledgeGraph.ts`
 
 Builds an in-memory graph from Knowledge Archive frontmatter (tags, wikilinks, related fields) and enables BFS traversal for associative recall. No persistent storage — computed from existing markdown files at query time.
 
 **Usage:**
 ```bash
 # BFS traversal from a note (default: 2 hops)
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts traverse karpathy
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts traverse karpathy
 
 # Traverse with custom depth
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts traverse mempalace --hops 3
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts traverse mempalace --hops 3
 
 # Show directly connected notes
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts related mempalace
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts related mempalace
 
 # Graph summary: nodes, edges, clusters
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts stats
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts stats
 
 # Top 10 most-connected notes
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts hubs
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts hubs
 
 # Find all notes with a specific tag
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts find architecture
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts find architecture
 ```
 
 **Edge Types:**
@@ -285,14 +285,14 @@ sleep 2
 
 ## extract-transcript.py - Transcribe Audio/Video Files
 
-**Location:** `~/.claude/PAI/TOOLS/extract-transcript.py`
+**Location:** `$PAI_DIR/TOOLS/extract-transcript.py`
 
 Local transcription using faster-whisper (4x faster than OpenAI Whisper, 50% less memory). Self-contained UV script for offline transcription.
 
 **Usage:**
 ```bash
 # Transcribe single file (base.en model - recommended)
-cd ~/.claude/PAI/TOOLS/
+cd $PAI_DIR/TOOLS/
 uv run extract-transcript.py /path/to/audio.m4a
 
 # Use different model
@@ -346,20 +346,20 @@ uv run extract-transcript.py /path/to/folder/ --batch --model base.en
 
 ## YouTubeApi.ts - YouTube Channel & Video Stats
 
-**Location:** `~/.claude/PAI/TOOLS/YouTubeApi.ts`
+**Location:** `$PAI_DIR/TOOLS/YouTubeApi.ts`
 
 Wrapper around YouTube Data API v3 for channel statistics and video metrics.
 
 **Usage:**
 ```bash
 # Get channel statistics
-bun ~/.claude/PAI/TOOLS/YouTubeApi.ts --channel-stats
+bun $PAI_DIR/TOOLS/YouTubeApi.ts --channel-stats
 
 # Get video statistics
-bun ~/.claude/PAI/TOOLS/YouTubeApi.ts --video-stats VIDEO_ID
+bun $PAI_DIR/TOOLS/YouTubeApi.ts --video-stats VIDEO_ID
 
 # Get latest uploads
-bun ~/.claude/PAI/TOOLS/YouTubeApi.ts --latest-videos
+bun $PAI_DIR/TOOLS/YouTubeApi.ts --latest-videos
 ```
 
 **Environment Variables:**
@@ -500,7 +500,7 @@ Monitor({
   description: "Agent watchdog",
   persistent: true,
   timeout_ms: 3600000,
-  command: "bun $HOME/.claude/PAI/TOOLS/AgentWatchdog.ts"
+  command: "bun $PAI_DIR/TOOLS/AgentWatchdog.ts"
 })
 ```
 
@@ -601,7 +601,7 @@ Monitor({
 
 When adding a new utility tool to this system:
 
-1. **Add tool file:** Place `.ts` or `.py` file directly in `~/.claude/PAI/TOOLS/`
+1. **Add tool file:** Place `.ts` or `.py` file directly in `$PAI_DIR/TOOLS/`
    - Use **Title Case** for filenames (e.g., `GetTranscript.ts`, not `get-transcript.ts`)
    - Keep the directory flat - NO subdirectories
 
@@ -636,7 +636,7 @@ Archived skill files have been removed.
 
 ## algorithm.ts - The Algorithm CLI
 
-**Location:** `~/.claude/PAI/TOOLS/algorithm.ts`
+**Location:** `$PAI_DIR/TOOLS/algorithm.ts`
 
 Run the PAI Algorithm in Loop, Interactive, Ideate, or Optimize mode against a ISA.
 
@@ -675,13 +675,13 @@ algorithm resume -p <ISA>                      # Resume a paused loop
 algorithm stop -p <ISA>                        # Stop a loop
 ```
 
-**Parameter schema:** `~/.claude/PAI/ALGORITHM/parameter-schema.md`
+**Parameter schema:** `$PAI_DIR/ALGORITHM/parameter-schema.md`
 
 ---
 
 ## AlgorithmPhaseReport.ts - Algorithm State Reporter
 
-**Location:** `~/.claude/PAI/TOOLS/AlgorithmPhaseReport.ts`
+**Location:** `$PAI_DIR/TOOLS/AlgorithmPhaseReport.ts`
 
 Writes algorithm execution state to `algorithm-phase.json` for dashboard consumption.
 
@@ -711,26 +711,26 @@ bun AlgorithmPhaseReport.ts meta-adjust --param selectionPressure --from 0.3 --t
 
 ## KnowledgeHarvester.ts - Knowledge Archive Harvester
 
-**Location:** `~/.claude/PAI/TOOLS/KnowledgeHarvester.ts`
+**Location:** `$PAI_DIR/TOOLS/KnowledgeHarvester.ts`
 
 Validate and maintain the KNOWLEDGE/ archive (4 entity types: People, Companies, Ideas, Research). Validates against schemas in `_schema.md`, handles MOC regeneration and maintenance. Note: Algorithm LEARN phase writes knowledge directly; harvester reflections are disabled. The harvester's primary role is now validation, maintenance, and index regeneration.
 
 **Usage:**
 ```bash
 # Harvest from all sources
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts harvest
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts harvest
 
 # Harvest from specific source
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts harvest --source work
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts harvest --source work
 
 # Preview without writing
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts harvest --dry-run
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts harvest --dry-run
 
 # Archive health dashboard
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts status
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts status
 
 # Regenerate all MOC dashboards
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts index
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts index
 ```
 
 **Sources:**
@@ -751,17 +751,17 @@ bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts index
 
 ## ArchitectureSummaryGenerator.ts - Architecture Summary Generator
 
-**Location:** `~/.claude/PAI/TOOLS/ArchitectureSummaryGenerator.ts`
+**Location:** `$PAI_DIR/TOOLS/ArchitectureSummaryGenerator.ts`
 
 Generate `PAI_ARCHITECTURE_SUMMARY.md` from PAISYSTEMARCHITECTURE.md and subsystem docs. Provides a compact architecture overview derived from the master architecture document.
 
 **Usage:**
 ```bash
 # Generate/regenerate the architecture summary
-bun ~/.claude/PAI/TOOLS/ArchitectureSummaryGenerator.ts generate
+bun $PAI_DIR/TOOLS/ArchitectureSummaryGenerator.ts generate
 
 # Check if summary is stale (exit 1 if stale, 0 if fresh)
-bun ~/.claude/PAI/TOOLS/ArchitectureSummaryGenerator.ts check
+bun $PAI_DIR/TOOLS/ArchitectureSummaryGenerator.ts check
 ```
 
 **When to Use:**

@@ -25,6 +25,7 @@
 
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { memoryPath } from './paths';
 
 /**
  * Read the N most recent learning files from a LEARNING subdirectory.
@@ -33,7 +34,7 @@ import { join } from 'path';
  */
 function getRecentLearnings(baseDir: string, subdir: string, count: number): string[] {
   const insights: string[] = [];
-  const learningDir = join(baseDir, 'MEMORY', 'LEARNING', subdir);
+  const learningDir = memoryPath('LEARNING', subdir);
   if (!existsSync(learningDir)) return insights;
 
   try {
@@ -104,7 +105,7 @@ export function loadLearningDigest(paiDir: string): string | null {
  * (lines matching "### Name [CRYSTAL: N%]").
  */
 export function loadWisdomFrames(paiDir: string): string | null {
-  const framesDir = join(paiDir, 'MEMORY', 'WISDOM', 'FRAMES');
+  const framesDir = memoryPath('WISDOM', 'FRAMES');
   if (!existsSync(framesDir)) return null;
 
   const principles: string[] = [];
@@ -140,7 +141,7 @@ export function loadWisdomFrames(paiDir: string): string | null {
  * first paragraph for a compact summary of what went wrong.
  */
 export function loadFailurePatterns(paiDir: string): string | null {
-  const failuresDir = join(paiDir, 'MEMORY', 'LEARNING', 'FAILURES');
+  const failuresDir = memoryPath('LEARNING', 'FAILURES');
   if (!existsSync(failuresDir)) return null;
 
   const patterns: string[] = [];
@@ -196,7 +197,7 @@ export function loadFailurePatterns(paiDir: string): string | null {
  * plus the top issue clusters so every session is primed with current themes.
  */
 export function loadSynthesisPatterns(paiDir: string): string | null {
-  const synthesisDir = join(paiDir, 'MEMORY', 'LEARNING', 'SYNTHESIS');
+  const synthesisDir = memoryPath('LEARNING', 'SYNTHESIS');
   if (!existsSync(synthesisDir)) return null;
 
   try {
@@ -252,7 +253,7 @@ export function loadSynthesisPatterns(paiDir: string): string | null {
  * Extracts numeric averages and trend direction for a compact status line.
  */
 export function loadSignalTrends(paiDir: string): string | null {
-  const cachePath = join(paiDir, 'MEMORY', 'STATE', 'learning-cache.sh');
+  const cachePath = memoryPath('STATE', 'learning-cache.sh');
   if (!existsSync(cachePath)) return null;
 
   try {

@@ -5,9 +5,29 @@
 
 // ─── System Detection ────────────────────────────────────────────
 
+export type FrameworkId = "claude" | "codex" | "opencode";
+
+export interface ToolDetection {
+  installed: boolean;
+  version?: string;
+  path?: string;
+}
+
+export interface FrameworkTarget {
+  id: FrameworkId;
+  displayName: string;
+  command: string;
+  installRoot: string;
+  configDir: string;
+  instructionFile: string;
+  settingsFile: string;
+  supportsHooks: boolean;
+  supportsSkills: boolean;
+}
+
 export interface DetectionResult {
   os: {
-    platform: "darwin" | "linux";
+    platform: "darwin" | "linux" | "win32";
     arch: string;
     version: string;
     name: string; // e.g., "macOS 15.2" or "Ubuntu 24.04"
@@ -18,10 +38,13 @@ export interface DetectionResult {
     path: string;
   };
   tools: {
-    bun: { installed: boolean; version?: string; path?: string };
-    git: { installed: boolean; version?: string; path?: string };
-    claude: { installed: boolean; version?: string; path?: string };
-    node: { installed: boolean; version?: string; path?: string };
+    bun: ToolDetection;
+    git: ToolDetection;
+    claude: ToolDetection;
+    codex: ToolDetection;
+    opencode: ToolDetection;
+    selectedFramework: ToolDetection;
+    node: ToolDetection;
     brew: { installed: boolean; path?: string }; // macOS only
   };
   existing: {
@@ -60,8 +83,9 @@ export interface DetectionResult {
   };
   timezone: string;
   homeDir: string;
-  paiDir: string; // resolved ~/.claude
-  configDir: string; // resolved ~/.claude/PAI
+  framework: FrameworkTarget;
+  paiDir: string; // resolved framework install root
+  configDir: string; // resolved shared PAI config dir
 }
 
 export interface ExistingUserContentDetection {
@@ -154,6 +178,7 @@ export interface InstallState {
 
   // Collected data
   collected: {
+    framework?: FrameworkId;
     elevenLabsKey?: string;
     scanConsent?: "yes-full" | "yes-id" | "no";
     principalName?: string;
@@ -184,6 +209,7 @@ export interface StepError {
 // ─── Configuration ───────────────────────────────────────────────
 
 export interface PAIConfig {
+  framework: FrameworkId;
   principalName: string;
   timezone: string;
   aiName: string;
@@ -194,6 +220,7 @@ export interface PAIConfig {
   voiceId?: string;
   paiDir: string;
   configDir: string;
+  dataDir?: string;
 }
 
 // ─── WebSocket Protocol ──────────────────────────────────────────
@@ -234,6 +261,8 @@ export interface ValidationCheck {
 
 export interface InstallSummary {
   paiVersion: string;
+  framework: FrameworkId;
+  frameworkName: string;
   principalName: string;
   aiName: string;
   timezone: string;

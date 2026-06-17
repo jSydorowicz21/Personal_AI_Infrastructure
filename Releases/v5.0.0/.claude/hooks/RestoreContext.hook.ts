@@ -28,7 +28,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { join } from 'path';
-import { getPaiDir, getSettingsPath, paiPath } from './lib/paths';
+import { getPaiDir, getSettingsPath, memoryPath, userPath } from './lib/paths';
 
 interface PostCompactConfig {
   _docs?: string;
@@ -98,8 +98,18 @@ function loadSettings(): Settings {
   return {};
 }
 
+function resolveRestorePath(relPath: string): string {
+  const normalized = relPath.replace(/\\/g, '/');
+  if (normalized.startsWith('USER/')) {
+    return userPath(...normalized.slice('USER/'.length).split('/'));
+  }
+  if (normalized.startsWith('MEMORY/')) {
+    return memoryPath(...normalized.slice('MEMORY/'.length).split('/'));
+  }
+  return join(getPaiDir(), relPath);
+}
+
 function main() {
-  const paiDir = getPaiDir();
   const settings = loadSettings();
   const parts: string[] = [];
 
@@ -115,7 +125,7 @@ function main() {
   let restoredCount = 0;
 
   for (const relPath of fullFiles) {
-    const fullPath = join(paiDir, relPath);
+    const fullPath = resolveRestorePath(relPath);
     const content = safeRead(fullPath);
     if (content) {
       parts.push(content.trim());
@@ -128,7 +138,7 @@ function main() {
 
   // --- Tier 2: Identity anchors (critical sections only) ---
 
-  const identityPath = paiPath('USER', 'DA_IDENTITY.md');
+  const identityPath = userPath('DA_IDENTITY.md');
   const identitySections = extractSections(identityPath, [
     'My Identity',
     'First-Person Voice',
@@ -147,7 +157,7 @@ function main() {
   }
 
   // Current work status
-  const status = safeRead(paiPath('USER', 'TELOS', 'STATUS.md'), 20);
+  const status = safeRead(userPath('TELOS', 'STATUS.md'), 20);
   if (status) {
     parts.push('## Current Status');
     parts.push(status);
@@ -156,7 +166,7 @@ function main() {
   // Active ISA if one exists in current session.
   // We look for ISA.md first (v4.1+ canonical) and fall back to PRD.md (legacy).
   try {
-    const workDir = paiPath('MEMORY', 'WORK');
+    const workDir = memoryPath('WORK');
     const probe = (filename: string): string =>
       execSync(
         `fd -t f -n "${filename}" --changed-within 60min "${workDir}" 2>/dev/null | head -1`,

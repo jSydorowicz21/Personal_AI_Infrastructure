@@ -22,6 +22,7 @@
 
 import { readFileSync } from 'fs';
 import { isContained, isPatternAllowlisted, relativeToClaudeRoot } from './lib/containment-zones';
+import { getFrameworkDir } from './lib/paths';
 
 interface HookInput {
   session_id?: string;
@@ -45,7 +46,7 @@ const IDENTITY_PATTERNS: readonly string[] = [
   '0baeb281c44f46878a4650ee3ff26b5b',
 ];
 
-const CLAUDE_ROOT = `${process.env.HOME ?? ''}/.claude`;
+const CLAUDE_ROOT = getFrameworkDir();
 
 function isUnderClaudeRoot(filePath: string): boolean {
   const prefix = CLAUDE_ROOT.endsWith('/') ? CLAUDE_ROOT : CLAUDE_ROOT + '/';
@@ -96,7 +97,7 @@ function findMatch(content: string): string | undefined {
 function main(): void {
   let input: HookInput;
   try {
-    const raw = readFileSync('/dev/stdin', 'utf-8');
+    const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return;
     input = JSON.parse(raw);
   } catch {

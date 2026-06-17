@@ -324,7 +324,7 @@ Walks `USER/` (root + one level), parses frontmatter + body of each `.md`, compu
 Formalizes how Pulse instantiates, manages, and evolves a Digital Assistant. Replaces manual DA_IDENTITY.md editing with a structured YAML schema, adds proactive heartbeat evaluation (2-layer: free context gathering + cheap Haiku eval), natural-language scheduled tasks, and bounded identity growth over time. Supports multiple DAs via a registry with primary/worker roles.
 
 - **Status:** Active
-- **Location:** `~/.claude/PAI/USER/DA/` (identity data), `~/.claude/` (runtime)
+- **Location:** `$PAI_DATA_DIR/USER/DA/` (identity data), `~/.claude/` (runtime)
 - **Full doc:** `PAI/DOCUMENTATION/Pulse/DaSubsystem.md`, `PAI/DOCUMENTATION/Pulse/PulseSystem.md` (DA Module section)
 
 ### Browser Automation

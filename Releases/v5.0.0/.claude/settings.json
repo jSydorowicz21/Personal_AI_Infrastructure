@@ -2,11 +2,12 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "PAI_DIR": "${HOME}/.claude/PAI",
+    "PAI_DATA_DIR": "${HOME}/.pai",
     "PROJECTS_DIR": "${HOME}/Projects",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
     "API_TIMEOUT_MS": "1800000",
-    "PAI_CONFIG_DIR": "${HOME}/.claude/PAI",
-    "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE": "$HOME/.claude/PAI/USER/CREDENTIALS/google/your-domain.example.com.json"
+    "PAI_CONFIG_DIR": "${HOME}/.config/PAI",
+    "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE": "$PAI_DATA_DIR/USER/CREDENTIALS/google/your-domain.example.com.json"
   },
   "includeGitInstructions": false,
   "permissions": {
@@ -367,7 +368,7 @@
   "httpHookAllowedEnvVars": [],
   "statusLine": {
     "type": "command",
-    "command": "$HOME/.claude/PAI/statusline-command.sh",
+    "command": "$PAI_DIR/statusline-command.sh",
     "refreshInterval": 2
   },
   "enabledPlugins": {
@@ -1157,7 +1158,7 @@
     "allow": [
       "Writing and editing files under ~/.claude/ is always safe — this is the user's own AI infrastructure workspace",
       "Writing and editing files under ~/Projects/ is safe — these are the user's own project directories",
-      "Creating work directories and ISA files under ~/.claude/PAI/MEMORY/WORK/ is a routine operation",
+      "Creating work directories and ISA files under $PAI_DATA_DIR/MEMORY/WORK/ is a routine operation",
       "Running bun, bunx, git, curl, wrangler, and standard CLI tools is safe in this trusted workspace",
       "Compound commands chaining trusted tools (cd && bunx, cd && bun, cd && git, cd && wrangler) are safe — cd just changes directory before running an allowed command",
       "Database queries via wrangler d1 execute are read-only operations and always safe",
@@ -1170,7 +1171,7 @@
       "~/.claude/ is the user's PAI (Personal AI) infrastructure workspace — the primary working directory for all AI system development. ALL operations within ~/.claude/ and all subdirectories are trusted and should be auto-approved without prompting.",
       "~/Projects/ contains project repositories. ALL operations within ~/Projects/ are trusted — cd, build, deploy, query, test commands are routine development work.",
       "~/Projects/ contains project repositories. ALL operations within ~/Projects/ are trusted — cd, build, deploy, query, test commands are routine development work.",
-      "Routine trusted operations include: creating directories under MEMORY/WORK/ for PRDs, writing/editing any file under ~/.claude/PAI/, running bun, bunx, git, curl, wrangler commands, spawning agents and tasks, mkdir -p for any path under ~/.claude/, and all file operations on PAI infrastructure files.",
+      "Routine trusted operations include: creating directories under shared MEMORY/WORK/ for PRDs, writing/editing files under $PAI_DIR/ and $PAI_DATA_DIR/, running bun, bunx, git, curl, wrangler commands, spawning agents and tasks, and all file operations on PAI infrastructure files.",
       "Compound shell commands (cd X && bunx Y, cmd | rg Z) are standard development patterns — always approve when sub-commands are individually trusted.",
       "Source control: github.com/danielmiessler",
       "Trusted local service: pai:31337"
@@ -1299,7 +1300,8 @@
     },
     "_httpHooks": "Pulse HTTP routes on pai:31337 (managed by Pulse process). SecurityPipeline: command hook on Bash/Write/Edit/Read (exit(2) hard-block). SkillGuard + AgentGuard: HTTP hooks via Pulse routes (fail-open).",
     "_env": {
-      "PAI_DIR": "Root directory for PAI data (~/.claude/PAI). Memory, Algorithm, Tools, USER config. Hooks and skills stay in ~/.claude.",
+      "PAI_DIR": "Active framework PAI directory. Algorithm, Tools, hooks, and framework assets live here.",
+      "PAI_DATA_DIR": "Shared PAI data directory. MEMORY and USER live here so Claude, Codex, and OpenCode share state.",
       "PROJECTS_DIR": "Base directory for projects. Use ${PROJECTS_DIR}/PAI for PAI repo, ${PROJECTS_DIR}/fabric for fabric, etc.",
       "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "Maximum tokens for Claude responses. Higher values allow longer outputs but cost more.",
       "BASH_DEFAULT_TIMEOUT_MS": "Default timeout for bash commands in milliseconds."

@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import { parse as parseYaml } from 'yaml';
 import type { Inspector, InspectionContext, InspectionResult } from '../types';
 import { ALLOW, deny, requireApproval, alert } from '../types';
-import { paiPath } from '../../lib/paths';
+import { paiPath, userPath } from '../../lib/paths';
 
 // ── Types ──
 
@@ -37,7 +37,7 @@ type FileAction = 'read' | 'write' | 'delete';
 
 // ── Pattern Loading ──
 
-const USER_PATTERNS_PATH = paiPath('USER', 'SECURITY', 'PATTERNS.yaml');
+const USER_PATTERNS_PATH = userPath('SECURITY', 'PATTERNS.yaml');
 const SYSTEM_PATTERNS_PATH = paiPath('DOCUMENTATION', 'Security', 'Patterns.example.yaml');
 
 let patternsCache: PatternsConfig | null = null;

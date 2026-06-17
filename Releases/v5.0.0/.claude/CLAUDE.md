@@ -33,7 +33,7 @@ On follow-ups, include the ITERATION line. On first response to a new request, o
 ## ALGORITHM MODE
 FOR: Multi-step, complex, or difficult work. Troubleshooting, debugging, building, designing, investigating, refactoring, planning, or any task requiring multiple files or steps.
 
-**MANDATORY FIRST ACTION:** Read `PAI/ALGORITHM/LATEST` to get the current version (e.g. `v5.4.0`), then Read `PAI/ALGORITHM/v{VERSION}.md` and follow that file's instructions exactly. Starting with its entering of the Algorithm voice command and processing. Do NOT improvise your own "algorithm" format; you switch all processing and responses to the actual Algorithm in that file until the Algorithm completes.
+**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` to get the current version (e.g. `6.3.0` or `v6.3.0`). Normalize it to an algorithm filename by prefixing `v` if the value does not already start with `v`, then read `$PAI_DIR/ALGORITHM/{NORMALIZED_VERSION}.md` and follow that file's instructions exactly. `$PAI_DIR` is the active PAI subsystem directory supplied by the launcher (for Codex on Windows, usually `C:\Users\sydor\.codex\PAI`); do not resolve the Algorithm relative to the project working directory. Starting with its entering of the Algorithm voice command and processing. Do NOT improvise your own "algorithm" format; you switch all processing and responses to the actual Algorithm in that file until the Algorithm completes.
 
 ## MINIMAL — pure acknowledgments, ratings
 ```
@@ -88,7 +88,7 @@ Startup context is `@`-imported above (PRINCIPAL_IDENTITY, DA_IDENTITY, PROJECTS
 | Hook system | `~/.claude/PAI/DOCUMENTATION/Hooks/HookSystem.md` |
 | Agent system | `~/.claude/PAI/DOCUMENTATION/Agents/AgentSystem.md` |
 | Delegation system | `~/.claude/PAI/DOCUMENTATION/Delegation/DelegationSystem.md` |
-| User credentials | `~/.claude/PAI/USER/Config/PAI_CONFIG.yaml` |
+| User credentials | `$PAI_DATA_DIR/USER/Config/PAI_CONFIG.yaml` |
 | Security system | `~/.claude/PAI/DOCUMENTATION/Security/SecuritySystem.md` |
 | Notification system | `~/.claude/PAI/DOCUMENTATION/Notifications/NotificationSystem.md` |
 | Observability system | `~/.claude/PAI/DOCUMENTATION/Observability/ObservabilitySystem.md` |
@@ -107,41 +107,41 @@ Startup context is `@`-imported above (PRINCIPAL_IDENTITY, DA_IDENTITY, PROJECTS
 
 | Topic | Path |
 |-------|------|
-| Career & resume | `~/.claude/PAI/USER/RESUME.md` |
-| Contacts | `~/.claude/PAI/USER/CONTACTS.md` |
-| Opinions | `~/.claude/PAI/USER/OPINIONS.md` |
-| Definitions | `~/.claude/PAI/USER/DEFINITIONS.md` |
-| Core content themes | `~/.claude/PAI/USER/CORECONTENT.md` |
-| Writing style | `~/.claude/PAI/USER/WRITINGSTYLE.md` |
-| AI writing patterns | `~/.claude/PAI/USER/AI_WRITING_PATTERNS.md` |
-| Rhetorical style | `~/.claude/PAI/USER/RHETORICALSTYLE.md` |
+| Career & resume | `$PAI_DATA_DIR/USER/RESUME.md` |
+| Contacts | `$PAI_DATA_DIR/USER/CONTACTS.md` |
+| Opinions | `$PAI_DATA_DIR/USER/OPINIONS.md` |
+| Definitions | `$PAI_DATA_DIR/USER/DEFINITIONS.md` |
+| Core content themes | `$PAI_DATA_DIR/USER/CORECONTENT.md` |
+| Writing style | `$PAI_DATA_DIR/USER/WRITINGSTYLE.md` |
+| AI writing patterns | `$PAI_DATA_DIR/USER/AI_WRITING_PATTERNS.md` |
+| Rhetorical style | `$PAI_DATA_DIR/USER/RHETORICALSTYLE.md` |
 
 ## {PRINCIPAL.NAME} — Life Goals (Telos)
 
 | Topic | Path |
 |-------|------|
-| Telos overview | `~/.claude/PAI/USER/TELOS/README.md` |
-| Mission | `~/.claude/PAI/USER/TELOS/MISSION.md` |
-| Goals | `~/.claude/PAI/USER/TELOS/GOALS.md` |
-| Challenges | `~/.claude/PAI/USER/TELOS/CHALLENGES.md` |
-| Beliefs | `~/.claude/PAI/USER/TELOS/BELIEFS.md` |
-| Wisdom | `~/.claude/PAI/USER/TELOS/WISDOM.md` |
-| Favorite books | `~/.claude/PAI/USER/TELOS/BOOKS.md` |
+| Telos overview | `$PAI_DATA_DIR/USER/TELOS/README.md` |
+| Mission | `$PAI_DATA_DIR/USER/TELOS/MISSION.md` |
+| Goals | `$PAI_DATA_DIR/USER/TELOS/GOALS.md` |
+| Challenges | `$PAI_DATA_DIR/USER/TELOS/CHALLENGES.md` |
+| Beliefs | `$PAI_DATA_DIR/USER/TELOS/BELIEFS.md` |
+| Wisdom | `$PAI_DATA_DIR/USER/TELOS/WISDOM.md` |
+| Favorite books | `$PAI_DATA_DIR/USER/TELOS/BOOKS.md` |
 
 ## {DA_IDENTITY.NAME} (DA Identity)
 
 | Topic | Path |
 |-------|------|
-| Our relationship | `~/.claude/PAI/USER/OUR_STORY.md` |
+| Our relationship | `$PAI_DATA_DIR/USER/OUR_STORY.md` |
 
 ## {PRINCIPAL.NAME} — Work
 
 | Topic | Path |
 |-------|------|
-| Feed system | `~/.claude/PAI/USER/FEED.md` |
-| Business context | `~/.claude/PAI/USER/BUSINESS/` |
-| Health data | `~/.claude/PAI/USER/HEALTH/` |
-| Financial context | `~/.claude/PAI/USER/FINANCES/` |
+| Feed system | `$PAI_DATA_DIR/USER/FEED.md` |
+| Business context | `$PAI_DATA_DIR/USER/BUSINESS/` |
+| Health data | `$PAI_DATA_DIR/USER/HEALTH/` |
+| Financial context | `$PAI_DATA_DIR/USER/FINANCES/` |
 
 ## Project-Specific Rules
 

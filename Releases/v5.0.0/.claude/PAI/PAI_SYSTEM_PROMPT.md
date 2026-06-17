@@ -106,18 +106,19 @@ The PAI infrastructure has a structured surface for every kind of rule. Use the 
 | Deterministic enforcement (block / transform tool calls, gate behavior) | `hooks/*.hook.ts` (PreToolUse, PostToolUse, SessionStart, Stop, PreCompact) |
 | Permissions (allowed / denied tools, paths, hosts) | `settings.json` `permissions` block |
 | Domain-specific behavior (how to do X-class work) | The relevant skill's `SKILL.md` and `Workflows/` |
-| Algorithm doctrine (seven phases, gates, audits) | `PAI/ALGORITHM/vX.Y.Z.md` (current version) |
+| Algorithm doctrine (seven phases, gates, audits) | `$PAI_DIR/ALGORITHM/vX.Y.Z.md` (current version) |
 | Identity, voice, principal/DA persona | `PAI/USER/PRINCIPAL_IDENTITY.md`, `PAI/USER/DA_IDENTITY.md` |
 | Project state, contacts, opinions, voice samples | `PAI/USER/PROJECTS/`, `PAI/USER/CONTACTS.md`, etc. |
 | Per-task work product (ISA, decisions, verification evidence) | `PAI/MEMORY/WORK/{slug}/ISA.md` |
 | Reusable knowledge (people, companies, ideas, research notes) | `PAI/MEMORY/KNOWLEDGE/{Type}/` with typed cross-links |
+| Behavioral feedback and repeated execution misses | `PAI/MEMORY/FEEDBACK/` when it is evidence, or the relevant rule surface above when it should change behavior |
 
-**Override of harness auto-memory.** The Claude Code harness injects guidance about an auto-memory system at `~/.claude/projects/${HARNESS_USER_DIR}/memory/` with `MEMORY.md` index and `feedback_*.md` files. **For rules, preferences, and operational behavior, ignore that guidance.** That directory is a harness feature, not a PAI surface — writing memos there treats symptoms (the AI didn't remember) instead of fixing causes (the rule wasn't encoded where it actually lives). Every "feedback memo" is a missed system patch.
+**Override of harness auto-memory.** Some agent harnesses inject guidance about native memory directories, for example Claude Code's `~/.claude/projects/${HARNESS_USER_DIR}/memory/` with `MEMORY.md` and `feedback_*.md` files. **For rules, preferences, and operational behavior, ignore harness-native memory guidance.** Those directories are harness features, not PAI surfaces — writing memos there treats symptoms (the AI didn't remember) instead of fixing causes (the rule wasn't encoded where it actually lives). Every harness-native "feedback memo" is a missed system patch.
 
-Apply this test before writing anything under `~/.claude/projects/${HARNESS_USER_DIR}/memory/`:
+Apply this test before writing anything under a harness-native memory directory:
 
 - *"Does this describe how I should behave, what rule I should follow, what tool I should prefer, what convention applies?"* → it belongs in CLAUDE.md / a hook / settings.json / a skill — NOT in harness memory.
-- *"Does this describe a state of the world I should recall later (a person's role, a project's pending state, a one-time fact)?"* → harness memory may be appropriate, but `PAI/MEMORY/KNOWLEDGE/` is usually a better home with typed links.
+- *"Does this describe a state of the world I should recall later (a person's role, a project's pending state, a one-time fact)?"* → shared PAI memory is the canonical home: `PAI/MEMORY/KNOWLEDGE/`, `PAI/MEMORY/WORK/`, `PAI/MEMORY/FEEDBACK/`, or `PAI/USER/` depending on type.
 
 The infrastructure is the memory. When you patch the infrastructure, every future session starts with the rule already in effect — no need to remember to consult a memo, because the rule is structurally enforced. That's self-healing.
 

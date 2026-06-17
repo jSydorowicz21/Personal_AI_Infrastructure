@@ -39,7 +39,7 @@ Iteration 3+: Continue until coverage gates pass
 
 All artifacts persist at:
 ```
-~/.claude/PAI/MEMORY/RESEARCH/{YYYY-MM}/{YYYY-MM-DD}_{topic-slug}/
+$PAI_DATA_DIR/MEMORY/RESEARCH/{YYYY-MM}/{YYYY-MM-DD}_{topic-slug}/
 ```
 
 

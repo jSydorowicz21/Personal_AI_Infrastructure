@@ -16,16 +16,31 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { getMemoryDir } from "./lib/paths";
+import {
+  getActiveFramework,
+  getActiveFrameworkRoot,
+  getFrameworkSessionRoots,
+  getSessionFiles as discoverSessionFiles,
+  parseFileOperations,
+} from "./lib/transcripts";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const CLAUDE_DIR = path.join(process.env.HOME!, ".claude");
-const MEMORY_DIR = path.join(CLAUDE_DIR, "PAI", "MEMORY");
-const USERNAME = process.env.USER || require("os").userInfo().username;
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects", `-Users-${USERNAME}--claude`);  // Claude Code native storage
+const FRAMEWORK_DIR = getActiveFrameworkRoot();
+const MEMORY_DIR = getMemoryDir();
+const ACTIVE_FRAMEWORK = getActiveFramework();
 const SYSTEM_UPDATES_DIR = path.join(MEMORY_DIR, "PAISYSTEMUPDATES");  // Canonical system change history
+
+function toPosix(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
+function isFrameworkFile(filePath: string): boolean {
+  return toPosix(filePath).startsWith(toPosix(FRAMEWORK_DIR));
+}
 
 // ============================================================================
 // Types
@@ -86,7 +101,7 @@ function shouldSkip(filePath: string): boolean {
 
 function categorizeFile(filePath: string): keyof ParsedActivity["categories"] | null {
   if (shouldSkip(filePath)) return null;
-  if (!filePath.includes("/.claude/")) return null;
+  if (!isFrameworkFile(filePath)) return null;
 
   if (PATTERNS.skills.test(filePath)) return "skills";
   if (PATTERNS.workflows.test(filePath)) return "workflows";
@@ -104,116 +119,51 @@ function extractSkillName(filePath: string): string | null {
 }
 
 function getRelativePath(filePath: string): string {
-  const claudeIndex = filePath.indexOf("/.claude/");
-  if (claudeIndex === -1) return filePath;
-  return filePath.substring(claudeIndex + 9); // Skip "/.claude/"
+  const normalized = toPosix(filePath);
+  const root = toPosix(FRAMEWORK_DIR).replace(/\/+$/, "");
+  if (!normalized.startsWith(root)) return filePath;
+  return normalized.slice(root.length).replace(/^\/+/, "");
 }
 
 // ============================================================================
 // Event Parsing
 // ============================================================================
 
-// Projects/ format from Claude Code native storage
-interface ProjectsEntry {
-  sessionId?: string;
-  type?: "user" | "assistant" | "summary";
-  message?: {
-    role?: string;
-    content?: Array<{
-      type: string;
-      name?: string;
-      input?: {
-        file_path?: string;
-        command?: string;
-      };
-    }>;
-  };
-  timestamp?: string;
-}
-
 /**
  * Get session files from today (modified within last 24 hours)
  */
 function getTodaySessionFiles(): string[] {
-  if (!fs.existsSync(PROJECTS_DIR)) {
-    return [];
-  }
-
-  const now = Date.now();
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
-
-  const files = fs.readdirSync(PROJECTS_DIR)
-    .filter(f => f.endsWith('.jsonl'))
-    .map(f => ({
-      name: f,
-      path: path.join(PROJECTS_DIR, f),
-      mtime: fs.statSync(path.join(PROJECTS_DIR, f)).mtime.getTime()
-    }))
-    .filter(f => f.mtime > oneDayAgo)
-    .sort((a, b) => b.mtime - a.mtime);
-
-  return files.map(f => f.path);
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  return discoverSessionFiles({
+    framework: ACTIVE_FRAMEWORK,
+    modifiedAfterMs: oneDayAgo,
+  }).map((file) => file.path);
 }
 
 async function parseEvents(sessionFilter?: string): Promise<ParsedActivity> {
   const today = new Date();
   const dateStr = today.toISOString().split("T")[0];
 
-  // Get today's session files from projects/
+  // Get today's native session files for the active framework.
   const sessionFiles = getTodaySessionFiles();
 
   if (sessionFiles.length === 0) {
-    console.error(`No session files found for today in: ${PROJECTS_DIR}`);
+    console.error(`No ${ACTIVE_FRAMEWORK} session files found for today in: ${getFrameworkSessionRoots(ACTIVE_FRAMEWORK).join(", ")}`);
     return emptyActivity(dateStr, sessionFilter || null);
   }
 
-  // Parse all session files (or just the filtered one)
-  const entries: ProjectsEntry[] = [];
-
-  for (const sessionFile of sessionFiles) {
-    // If filtering by session, check filename matches
-    if (sessionFilter && !sessionFile.includes(sessionFilter)) {
-      continue;
-    }
-
-    const content = fs.readFileSync(sessionFile, "utf-8");
-    const lines = content.split("\n").filter(line => line.trim());
-
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line) as ProjectsEntry;
-        entries.push(entry);
-      } catch {
-        // Skip malformed lines
-      }
-    }
-  }
-
-  // Extract file operations from tool_use entries
   const filesModified = new Set<string>();
   const filesCreated = new Set<string>();
 
-  for (const entry of entries) {
-    // Only process assistant messages with tool_use
-    if (entry.type !== "assistant" || !entry.message?.content) continue;
+  for (const sessionFile of sessionFiles) {
+    if (sessionFilter && !sessionFile.includes(sessionFilter)) continue;
 
-    for (const contentItem of entry.message.content) {
-      if (contentItem.type !== "tool_use") continue;
-
-      // Write tool = new files
-      if (contentItem.name === "Write" && contentItem.input?.file_path) {
-        const filePath = contentItem.input.file_path;
-        if (filePath.includes("/.claude/")) {
-          filesCreated.add(filePath);
-        }
-      }
-
-      // Edit tool = modified files
-      if (contentItem.name === "Edit" && contentItem.input?.file_path) {
-        const filePath = contentItem.input.file_path;
-        if (filePath.includes("/.claude/")) {
-          filesModified.add(filePath);
-        }
+    for (const operation of parseFileOperations(sessionFile, ACTIVE_FRAMEWORK)) {
+      if (!isFrameworkFile(operation.filePath)) continue;
+      if (operation.action === "created") {
+        filesCreated.add(operation.filePath);
+      } else {
+        filesModified.add(operation.filePath);
       }
     }
   }

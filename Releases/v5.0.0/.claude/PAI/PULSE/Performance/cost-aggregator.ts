@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 /**
- * Cost Aggregator — scans Claude Code session JSONLs for token usage data
+ * Cost Aggregator — scans active framework session JSONLs for token usage data
  * and computes per-session costs.
  *
- * Data source: ~/.claude/projects/{project}/{uuid}.jsonl
- * Output: MEMORY/OBSERVABILITY/session-costs.jsonl
+ * Data source: active framework transcript directory (Claude projects/ today)
+ * Output: shared MEMORY/OBSERVABILITY/session-costs.jsonl
  *
  * Runs incrementally: tracks last scan time, only processes new/modified files.
  * Called by Pulse cron every 15 minutes or directly for initial scan.
@@ -12,12 +12,12 @@
 
 import { join, basename, dirname } from "path"
 import { existsSync, readFileSync, writeFileSync, appendFileSync, readdirSync, statSync, mkdirSync } from "fs"
+import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
 
-const HOME = process.env.HOME ?? ""
-const PAI_DIR = join(HOME, ".claude", "PAI")
-const PROJECTS_DIR = join(HOME, ".claude", "projects")
-const OUTPUT_FILE = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "session-costs.jsonl")
-const STATE_FILE = join(PAI_DIR, "PULSE", "Performance", "aggregator-state.json")
+const FRAMEWORK_DIR = getFrameworkDir()
+const PROJECTS_DIR = join(FRAMEWORK_DIR, "projects")
+const OUTPUT_FILE = memoryPath("OBSERVABILITY", "session-costs.jsonl")
+const STATE_FILE = memoryPath("STATE", "pulse", "performance", "aggregator-state.json")
 
 // Model pricing per million tokens (as of 2026-04)
 const MODEL_PRICING: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {

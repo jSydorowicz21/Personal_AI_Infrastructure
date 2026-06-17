@@ -14,15 +14,26 @@
 import { resolve } from 'path';
 import { homedir } from 'os';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { paiPath } from './lib/paths';
+import { getFrameworkDir, userPath } from './lib/paths';
 
 const HOME = homedir();
+const FRAMEWORK_DIR = getFrameworkDir();
+const TRUSTED_FRAMEWORK_DIR = resolve(FRAMEWORK_DIR);
+
+function slashPath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function trustedPrefix(path: string): string {
+  const normalized = slashPath(resolve(path));
+  return normalized.endsWith('/') ? normalized : `${normalized}/`;
+}
 
 const TRUSTED_PREFIXES = [
-  resolve(HOME, '.claude') + '/',
-  resolve(HOME, 'Projects') + '/',
-  resolve(HOME, 'LocalProjects') + '/',
-  resolve(HOME, 'Downloads') + '/',
+  trustedPrefix(TRUSTED_FRAMEWORK_DIR),
+  trustedPrefix(resolve(HOME, 'Projects')),
+  trustedPrefix(resolve(HOME, 'LocalProjects')),
+  trustedPrefix(resolve(HOME, 'Downloads')),
   '/tmp/',
   '/private/tmp/',
   '/var/folders/',
@@ -34,7 +45,7 @@ interface PermissionCache {
   [toolKey: string]: 'allow' | 'ask';
 }
 
-const CACHE_PATH = paiPath('USER', 'SECURITY', 'permission-cache.yaml');
+const CACHE_PATH = userPath('SECURITY', 'permission-cache.yaml');
 let memoryCache: PermissionCache = {};
 
 function loadCache(): PermissionCache {
@@ -64,16 +75,21 @@ function isTrustedPath(filePath: string): boolean {
   const expanded = filePath.startsWith('~')
     ? filePath.replace('~', HOME)
     : filePath;
-  const normalized = resolve(expanded);
+  const normalized = slashPath(resolve(expanded));
   return TRUSTED_PREFIXES.some(prefix => normalized.startsWith(prefix));
 }
 
 function bashTargetsTrustedPath(command: string): boolean {
   const patterns = [
     '~/.claude/', `${HOME}/.claude/`,
+    '~/.codex/', `${HOME}/.codex/`,
+    '~/.config/opencode/', `${HOME}/.config/opencode/`,
+    `${slashPath(TRUSTED_FRAMEWORK_DIR)}/`,
     '~/Projects/', `${HOME}/Projects/`,
     '~/LocalProjects/', `${HOME}/LocalProjects/`,
     '$HOME/.claude/', '${HOME}/.claude/',
+    '$HOME/.codex/', '${HOME}/.codex/',
+    '$HOME/.config/opencode/', '${HOME}/.config/opencode/',
     '$HOME/Projects/', '${HOME}/Projects/',
   ];
   return patterns.some(p => command.includes(p));
@@ -112,7 +128,7 @@ async function main(): Promise<void> {
   const { readFileSync } = await import('fs');
   let rawText: string;
   try {
-    rawText = readFileSync('/dev/stdin', 'utf-8');
+    rawText = readFileSync(0, 'utf-8');
   } catch {
     return;
   }

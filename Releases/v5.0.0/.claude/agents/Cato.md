@@ -22,7 +22,7 @@ permissions:
     - "Read(*)"
     - "Grep(*)"
     - "Glob(*)"
-    - "Write(${HOME}/.claude/PAI/MEMORY/VERIFICATION/*)"
+    - "Write($PAI_DATA_DIR/MEMORY/VERIFICATION/*)"
 maxTurns: 5
 disallowedTools:
   - Edit
@@ -48,7 +48,7 @@ Only by the primary DA, at the end of the VERIFY phase, on ISAs with `effort: de
 2. Shell out to the audit tool:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/CrossVendorAudit.ts \
+bun $PAI_DIR/TOOLS/CrossVendorAudit.ts \
   --slug "${SLUG}" \
   --advisor-verdict "${ADVISOR_VERDICT}"
 ```

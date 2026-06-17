@@ -1,0 +1,400 @@
+#!/usr/bin/env bash
+#
+# PAI Installed Hotfix Updater
+#
+# Fetches a PAI release bundle, reads hotfix-manifest.json, and overlays only
+# the managed files listed there into an existing framework install. It
+# intentionally does not touch USER, MEMORY, settings.json, config.toml, auth,
+# env files, or hook trust state.
+
+set -euo pipefail
+
+REPO_URL="https://github.com/jSydorowicz21/Personal_AI_Infrastructure.git"
+BRANCH="pai-codex-windows-installer"
+FRAMEWORK=""
+INSTALL_ROOT=""
+AGENTS_SKILLS_ROOT=""
+SOURCE_DIR=""
+MANIFEST_PATH=""
+DRY_RUN=0
+NO_PULL=0
+KEEP_TEMP=0
+TEMP_ROOT=""
+
+info() { printf '  [INFO] %s\n' "$*" >&2; }
+success() { printf '  [OK] %s\n' "$*"; }
+warn() { printf '  [WARN] %s\n' "$*" >&2; }
+fail() { printf '  [ERROR] %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+PAI Installed Hotfix Updater
+
+Usage:
+  update-installed.sh [options]
+
+Options:
+  --repo-url URL          Git repository to fetch when --source-dir is omitted
+  --branch NAME           Git branch to fetch
+  --framework NAME        claude, codex, or opencode
+  --install-root PATH     Existing framework home to patch
+  --source-dir PATH       Local checkout or release root to use
+  --manifest-path PATH    Override manifest path
+  --dry-run               Show planned updates without writing files
+  --no-pull               Do not git fetch/pull when --source-dir is a checkout
+  --keep-temp             Keep the temporary clone
+  -h, --help              Show this help
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --repo-url) REPO_URL="${2:?missing value for --repo-url}"; shift 2 ;;
+    --branch) BRANCH="${2:?missing value for --branch}"; shift 2 ;;
+    --framework) FRAMEWORK="${2:?missing value for --framework}"; shift 2 ;;
+    --install-root) INSTALL_ROOT="${2:?missing value for --install-root}"; shift 2 ;;
+    --agents-skills-root) AGENTS_SKILLS_ROOT="${2:?missing value for --agents-skills-root}"; shift 2 ;;
+    --source-dir) SOURCE_DIR="${2:?missing value for --source-dir}"; shift 2 ;;
+    --manifest-path) MANIFEST_PATH="${2:?missing value for --manifest-path}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --no-pull) NO_PULL=1; shift ;;
+    --keep-temp) KEEP_TEMP=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) fail "Unknown option: $1" ;;
+  esac
+done
+
+cleanup() {
+  if [ -n "$TEMP_ROOT" ] && [ "$KEEP_TEMP" -eq 0 ]; then
+    case "$TEMP_ROOT" in
+      "${TMPDIR:-/tmp}"/pai-hotfix-*|/tmp/pai-hotfix-*) rm -rf -- "$TEMP_ROOT" ;;
+    esac
+  elif [ -n "$TEMP_ROOT" ]; then
+    info "Kept temp checkout: $TEMP_ROOT"
+  fi
+}
+trap cleanup EXIT
+
+absolute_path() {
+  local path="$1"
+  if [ -d "$path" ]; then
+    (cd "$path" && pwd -P)
+  else
+    local dir base
+    dir="$(dirname "$path")"
+    base="$(basename "$path")"
+    (cd "$dir" && printf '%s/%s\n' "$(pwd -P)" "$base")
+  fi
+}
+
+normalize_framework() {
+  local value="${1:-}"
+  value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' | tr -d ' _-')"
+  case "$value" in
+    claude|claudecode) printf 'claude\n' ;;
+    codex|openai|openaicodex) printf 'codex\n' ;;
+    opencode) printf 'opencode\n' ;;
+    *) printf '\n' ;;
+  esac
+}
+
+json_tool() {
+  if command -v python3 >/dev/null 2>&1; then
+    printf 'python3\n'
+  elif command -v python >/dev/null 2>&1; then
+    printf 'python\n'
+  elif command -v node >/dev/null 2>&1; then
+    printf 'node\n'
+  elif command -v bun >/dev/null 2>&1; then
+    printf 'bun\n'
+  else
+    printf '\n'
+  fi
+}
+
+read_framework_state() {
+  local state_path="$HOME/.pai/framework.json"
+  [ -f "$state_path" ] || return 0
+  local tool
+  tool="$(json_tool)"
+  [ -n "$tool" ] || return 0
+
+  if [ "$tool" = "python3" ] || [ "$tool" = "python" ]; then
+    "$tool" - "$state_path" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+print("{}\t{}".format(data.get("active", "") or "", data.get("root", "") or ""))
+PY
+  else
+    "$tool" -e 'const fs=require("fs"); try { const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log(`${data.active||""}\t${data.root||""}`); } catch {}' "$state_path"
+  fi
+}
+
+resolve_target() {
+  local state active root fw
+  state="$(read_framework_state || true)"
+  active="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $1}')"
+  root="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $2}')"
+
+  fw="$(normalize_framework "$FRAMEWORK")"
+  if [ -z "$fw" ] && [ -n "${PAI_FRAMEWORK:-}" ]; then fw="$(normalize_framework "$PAI_FRAMEWORK")"; fi
+  if [ -z "$fw" ] && [ -n "$active" ]; then fw="$(normalize_framework "$active")"; fi
+  if [ -z "$fw" ]; then
+    if [ -n "${CODEX_HOME:-}" ] || [ -d "$HOME/.codex" ]; then fw="codex"
+    elif [ -n "${CLAUDE_HOME:-}" ] || [ -d "$HOME/.claude" ]; then fw="claude"
+    elif [ -n "${OPENCODE_CONFIG_DIR:-}" ] || [ -d "$HOME/.config/opencode" ]; then fw="opencode"
+    fi
+  fi
+  [ -n "$fw" ] || fail "Could not determine framework. Pass --framework codex|claude|opencode."
+
+  local target_root="$INSTALL_ROOT"
+  if [ -z "$target_root" ] && [ -n "$active" ] && [ "$(normalize_framework "$active")" = "$fw" ] && [ -n "$root" ]; then
+    target_root="$root"
+  fi
+  if [ -z "$target_root" ]; then
+    case "$fw" in
+      codex) target_root="${CODEX_HOME:-$HOME/.codex}" ;;
+      claude) target_root="${CLAUDE_HOME:-$HOME/.claude}" ;;
+      opencode) target_root="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}" ;;
+    esac
+  fi
+
+  target_root="$(absolute_path "$target_root")"
+  [ -d "$target_root" ] || fail "Install root does not exist: $target_root"
+  printf '%s\t%s\n' "$fw" "$target_root"
+}
+
+resolve_release_root() {
+  local path candidate
+  path="$(absolute_path "$1")"
+  if [ -f "$path/CLAUDE.md" ] && [ -d "$path/PAI" ]; then
+    printf '%s\n' "$path"
+    return 0
+  fi
+  candidate="$path/Releases/v5.0.0/.claude"
+  if [ -f "$candidate/CLAUDE.md" ] && [ -d "$candidate/PAI" ]; then
+    absolute_path "$candidate"
+    return 0
+  fi
+  fail "Could not locate release root under $path"
+}
+
+get_release_root() {
+  if [ -n "$SOURCE_DIR" ]; then
+    local source_abs
+    source_abs="$(absolute_path "$SOURCE_DIR")"
+    info "Using local source: $source_abs"
+    if [ "$NO_PULL" -eq 0 ] && [ -d "$source_abs/.git" ]; then
+      command -v git >/dev/null 2>&1 || fail "Git is required to update local source. Install Git or pass --no-pull."
+      info "Updating local source with git fetch + pull --ff-only"
+      git -C "$source_abs" fetch --prune >&2
+      git -C "$source_abs" pull --ff-only >&2
+    fi
+    resolve_release_root "$source_abs"
+    return 0
+  fi
+
+  command -v git >/dev/null 2>&1 || fail "Git is required for fetching hotfixes. Install Git or pass --source-dir."
+  TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pai-hotfix-XXXXXX")"
+  info "Fetching $REPO_URL ($BRANCH) into $TEMP_ROOT"
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$TEMP_ROOT" >&2
+  resolve_release_root "$TEMP_ROOT"
+}
+
+manifest_entries() {
+  local manifest="$1"
+  local framework="$2"
+  local tool
+  tool="$(json_tool)"
+  [ -n "$tool" ] || fail "Need python3, python, node, or bun to parse $manifest"
+
+  if [ "$tool" = "python3" ] || [ "$tool" = "python" ]; then
+    "$tool" - "$manifest" "$framework" <<'PY'
+import json, sys
+manifest, framework = sys.argv[1], sys.argv[2]
+with open(manifest, "r", encoding="utf-8") as f:
+    data = json.load(f)
+for entry in data.get("entries", []):
+    source = entry.get("source", "")
+    target = ""
+    if isinstance(entry.get("targets"), dict):
+        target = entry["targets"].get(framework, "") or ""
+    else:
+        target = entry.get("target", "") or source
+    if not target:
+        continue
+    transform = "1" if entry.get("transformInstructions") else "0"
+    mirror = "1" if entry.get("mirrorToCodexAgentsSkills") else "0"
+    print("\t".join([source, target, transform, mirror]))
+PY
+  else
+    "$tool" -e 'const fs=require("fs"); const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const fw=process.argv[2]; for (const e of data.entries||[]) { const source=e.source||""; const target=e.targets ? (e.targets[fw]||"") : (e.target||source); if (!target) continue; console.log([source,target,e.transformInstructions?1:0,e.mirrorToCodexAgentsSkills?1:0].join("\t")); }' "$manifest" "$framework"
+  fi
+}
+
+convert_instruction_content() {
+  local source="$1"
+  local framework="$2"
+  local name="OpenCode"
+  [ "$framework" = "codex" ] && name="Codex"
+
+  sed \
+    -e 's/\bCLAUDE\.md\b/AGENTS.md/g' \
+    -e "s/Claude Code/$name/g" \
+    -e 's#~/\.claude/PAI#$PAI_DIR#g' \
+    -e 's#~/\.claude#$PAI_FRAMEWORK_DIR#g' \
+    -e 's#\$PAI_FRAMEWORK_DIR/PAI#$PAI_DIR#g' \
+    -e 's/^# AGENTS\.md.*$/# AGENTS.md/' \
+    "$source"
+}
+
+copy_directory_contents() {
+  local source="$1"
+  local destination="$2"
+  mkdir -p "$destination"
+  (cd "$source" && tar cf - .) | (cd "$destination" && tar xf -)
+}
+
+backup_relative_path() {
+  local install_root="$1"
+  local path="$2"
+  local root_full path_full
+  root_full="$(absolute_path "$install_root")"
+  path_full="$(absolute_path "$path")"
+  case "$path_full" in
+    "$root_full") basename "$path_full" ;;
+    "$root_full"/*) printf '%s\n' "${path_full#"$root_full"/}" ;;
+    *) printf '%s\n' "$path_full" | sed 's#[:/\\]\+#_#g' ;;
+  esac
+}
+
+backup_existing() {
+  local install_root="$1"
+  local path="$2"
+  local backup_root="$3"
+  [ -e "$path" ] || return 0
+  local relative backup_path
+  relative="$(backup_relative_path "$install_root" "$path")"
+  backup_path="$backup_root/$relative"
+  mkdir -p "$(dirname "$backup_path")"
+  cp -R "$path" "$backup_path"
+  printf '%s\n' "$backup_path"
+}
+
+apply_entry() {
+  local release_root="$1"
+  local install_root="$2"
+  local framework="$3"
+  local backup_root="$4"
+  local source_rel="$5"
+  local target_rel="$6"
+  local transform="$7"
+  local mirror="$8"
+
+  source_rel="${source_rel//\//\/}"
+  target_rel="${target_rel//\//\/}"
+  local source="$release_root/$source_rel"
+  local target="$install_root/$target_rel"
+  [ -e "$source" ] || fail "Manifest source missing: $source"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    info "DRY RUN $source_rel -> $target_rel"
+    return 0
+  fi
+
+  local backup=""
+  backup="$(backup_existing "$install_root" "$target" "$backup_root" || true)"
+  mkdir -p "$(dirname "$target")"
+
+  if [ -d "$source" ]; then
+    copy_directory_contents "$source" "$target"
+  elif [ "$transform" = "1" ] && [ "$framework" != "claude" ]; then
+    convert_instruction_content "$source" "$framework" > "$target"
+  else
+    cp "$source" "$target"
+  fi
+
+  if [ "$framework" = "codex" ] && [ "$mirror" = "1" ]; then
+    case "$target_rel" in
+      skills/*)
+        local skill_name agents_root agents_target
+        skill_name="$(basename "$target_rel")"
+        agents_root="${AGENTS_SKILLS_ROOT:-$HOME/.agents/skills}"
+        agents_target="$agents_root/$skill_name"
+        backup_existing "$install_root" "$agents_target" "$backup_root" >/dev/null || true
+        mkdir -p "$agents_root"
+        copy_directory_contents "$source" "$agents_target"
+        ;;
+    esac
+  fi
+
+  if [ -n "$backup" ]; then
+    success "$target (backup: $backup)"
+  else
+    success "$target (new file/dir)"
+  fi
+}
+
+verify_install() {
+  local install_root="$1"
+  local framework="$2"
+  local pai_dir="$install_root/PAI"
+  local latest_path="$pai_dir/ALGORITHM/LATEST"
+  if [ -f "$latest_path" ]; then
+    local latest normalized algo_path
+    latest="$(tr -d '[:space:]' < "$latest_path")"
+    case "$latest" in v*) normalized="$latest" ;; *) normalized="v$latest" ;; esac
+    algo_path="$pai_dir/ALGORITHM/$normalized.md"
+    [ -f "$algo_path" ] || fail "Algorithm path does not resolve: $algo_path"
+    success "Algorithm path resolves: $algo_path"
+  fi
+
+  local instruction="$install_root/AGENTS.md"
+  [ "$framework" = "claude" ] && instruction="$install_root/CLAUDE.md"
+  if [ -f "$instruction" ]; then
+    if grep -Fq '$PAI_DIR/ALGORITHM/LATEST' "$instruction"; then
+      success 'Instruction file points at $PAI_DIR/ALGORITHM/LATEST.'
+    else
+      warn "Instruction file does not mention \$PAI_DIR/ALGORITHM/LATEST: $instruction"
+    fi
+  fi
+}
+
+printf '\nPAI | Installed Hotfix Updater\n\n'
+
+target="$(resolve_target)"
+target_framework="$(printf '%s' "$target" | awk -F '\t' 'NR==1 {print $1}')"
+target_root="$(printf '%s' "$target" | awk -F '\t' 'NR==1 {print $2}')"
+info "Framework: $target_framework"
+info "Install root: $target_root"
+
+release_root="$(get_release_root)"
+info "Release root: $release_root"
+
+manifest_file="${MANIFEST_PATH:-$release_root/hotfix-manifest.json}"
+manifest_file="$(absolute_path "$manifest_file")"
+[ -f "$manifest_file" ] || fail "Manifest not found: $manifest_file"
+info "Manifest: $manifest_file"
+
+stamp="$(date -u +%Y%m%d-%H%M%S)"
+backup_root="$HOME/.pai/BACKUPS/hotfix-$stamp"
+if [ "$DRY_RUN" -eq 0 ]; then
+  mkdir -p "$backup_root"
+  info "Backups: $backup_root"
+fi
+
+while IFS=$'\t' read -r source_rel target_rel transform mirror; do
+  [ -n "$source_rel" ] || continue
+  apply_entry "$release_root" "$target_root" "$target_framework" "$backup_root" "$source_rel" "$target_rel" "$transform" "$mirror"
+done < <(manifest_entries "$manifest_file" "$target_framework")
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  verify_install "$target_root" "$target_framework"
+  success "Hotfix update complete. Restart the agent session so instructions reload."
+else
+  info "Dry run complete. No files changed."
+fi

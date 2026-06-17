@@ -12,10 +12,10 @@ import { join } from "path"
 import { readFileSync } from "fs"
 import { parse } from "smol-toml"
 import { SignJWT, importPKCS8 } from "jose"
+import { getPaiDir, memoryPath } from "../../TOOLS/lib/paths"
 
-const HOME = process.env.HOME ?? ""
-const PULSE_DIR = join(HOME, ".claude", "PAI", "PULSE")
-const STATE_FILE = join(PULSE_DIR, "state", "work-token.json")
+const PULSE_DIR = join(getPaiDir(), "PULSE")
+const STATE_FILE = memoryPath("STATE", "pulse", "work-token.json")
 
 // ── Worker Config (from PULSE.toml [worker] section) ──
 

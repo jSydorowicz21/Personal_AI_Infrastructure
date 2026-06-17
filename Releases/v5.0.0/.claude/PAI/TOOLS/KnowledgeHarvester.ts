@@ -21,28 +21,20 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { memoryPath } from "./lib/paths";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const HOME = process.env.HOME!;
-const PAI_DIR = process.env.PAI_DIR || path.join(HOME, ".claude", "PAI");
-const MEMORY_DIR = path.join(PAI_DIR, "MEMORY");
+const MEMORY_DIR = memoryPath();
 const KNOWLEDGE_DIR = path.join(MEMORY_DIR, "KNOWLEDGE");
 const WORK_DIR = path.join(MEMORY_DIR, "WORK");
 const LEARNING_DIR = path.join(MEMORY_DIR, "LEARNING");
 const RESEARCH_DIR = path.join(MEMORY_DIR, "RESEARCH");
 const HARVEST_QUEUE_DIR = path.join(KNOWLEDGE_DIR, "_harvest-queue");
 const ARCHIVE_DIR = path.join(KNOWLEDGE_DIR, "_archive");
-
-const CURRENT_USER = process.env.USER;
-if (!CURRENT_USER) {
-  console.error("KnowledgeHarvester: USER env var is required to locate auto-memory dir");
-  process.exit(1);
-}
-const AUTO_MEMORY_DIR = path.join(HOME, ".claude", "projects",
-  `-Users-${CURRENT_USER}--claude`, "memory");
+const AUTO_MEMORY_DIR = path.join(KNOWLEDGE_DIR, "_legacy-auto-memory");
 
 const HARVEST_STATE_FILE = path.join(KNOWLEDGE_DIR, ".harvest-state.json");
 const REFLECTIONS_FILE = path.join(LEARNING_DIR, "REFLECTIONS", "algorithm-reflections.jsonl");
@@ -254,14 +246,14 @@ function scanResearch(state: HarvestState): HarvestCandidate[] {
   return candidates;
 }
 
-function scanHarvestQueue(state: HarvestState): HarvestCandidate[] {
+function scanHarvestQueue(state: HarvestState, consume: boolean = true): HarvestCandidate[] {
   const candidates: HarvestCandidate[] = [];
   if (!fs.existsSync(HARVEST_QUEUE_DIR)) return candidates;
 
   for (const file of fs.readdirSync(HARVEST_QUEUE_DIR)) {
     if (!file.endsWith(".json")) continue;
     try {
-      const data = JSON.parse(fs.readFileSync(path.join(HARVEST_QUEUE_DIR, file), "utf-8"));
+      const data = JSON.parse(fs.readFileSync(path.join(HARVEST_QUEUE_DIR, file), "utf-8").replace(/^\uFEFF/, ""));
       candidates.push({
         sourcePath: data.sourcePath || `queue:${file}`,
         title: data.title || file.replace(/\.json$/, ""),
@@ -270,8 +262,7 @@ function scanHarvestQueue(state: HarvestState): HarvestCandidate[] {
         type: data.type || "reference",
         tags: data.tags || [],
       });
-      // Remove queue file after processing
-      fs.unlinkSync(path.join(HARVEST_QUEUE_DIR, file));
+      if (consume) fs.unlinkSync(path.join(HARVEST_QUEUE_DIR, file));
     } catch { /* skip malformed */ }
   }
   return candidates;
@@ -744,8 +735,8 @@ function cmdHarvest(sourceFilter: string | null, dryRun: boolean, maxNotes: numb
 
   // Collect candidates from each source
   if (!sourceFilter || sourceFilter === "memory") {
-    const memCandidates = scanAutoMemory(state);
-    console.log(`  Auto-memory: ${memCandidates.length} candidates`);
+    const memCandidates = scanHarvestQueue(state, !dryRun);
+    console.log(`  Memory queue: ${memCandidates.length} candidates`);
     allCandidates.push(...memCandidates);
   }
 
@@ -768,8 +759,8 @@ function cmdHarvest(sourceFilter: string | null, dryRun: boolean, maxNotes: numb
     allCandidates.push(...resCandidates);
   }
 
-  // Always check harvest queue
-  const queueCandidates = scanHarvestQueue(state);
+  // Always check harvest queue for focused non-memory harvests.
+  const queueCandidates = sourceFilter && sourceFilter !== "memory" ? scanHarvestQueue(state, !dryRun) : [];
   if (queueCandidates.length > 0) {
     console.log(`  Queue: ${queueCandidates.length} candidates`);
     allCandidates.push(...queueCandidates);

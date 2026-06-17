@@ -139,8 +139,8 @@ paths:
     - ~/.claude/.mcp.json
   readOnly:
     - /etc/**
-    - ~/.claude/PAI/USER/SECURITY/PATTERNS.yaml
-    - ~/.claude/PAI/USER/SECURITY/SECURITY_RULES.md
+    - $PAI_DATA_DIR/USER/SECURITY/PATTERNS.yaml
+    - $PAI_DATA_DIR/USER/SECURITY/SECURITY_RULES.md
     - ~/.claude/hooks/SecurityPipeline.hook.ts
     - ~/.claude/hooks/ContentScanner.hook.ts
     - ~/.claude/hooks/SmartApprover.hook.ts
@@ -148,7 +148,7 @@ paths:
     - ~/.claude/hooks/security/pipeline.ts
     - ~/.claude/hooks/security/logger.ts
     - ~/.claude/hooks/security/types.ts
-    - ~/.claude/PAI/MEMORY/SECURITY/**
+    - $PAI_DATA_DIR/MEMORY/SECURITY/**
   noDelete:
     - ~/.claude/hooks/**
     - ~/.claude/PAI/**

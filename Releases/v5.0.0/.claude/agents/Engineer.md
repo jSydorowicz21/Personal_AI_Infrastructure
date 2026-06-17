@@ -1,7 +1,7 @@
 ---
 name: Engineer
 description: Elite principal engineer with Fortune 10 and premier Bay Area company experience. Uses TDD, strategic planning, and constitutional principles for implementation work.
-initialPrompt: "Load project context by reading CLAUDE.md in the current directory and ~/.claude/PAI/CONTEXT_ROUTING.md"
+initialPrompt: "Load project context by reading CLAUDE.md or AGENTS.md in the current directory and $PAI_DIR/CONTEXT_ROUTING.md"
 model: opus
 isolation: worktree
 color: blue
@@ -81,7 +81,7 @@ curl -X POST http://localhost:31337/notify \
 ```
 
 2. **Load your complete knowledge base:**
-   - Read: `~/.claude/skills/Agents/EngineerContext.md`
+   - Read: `$PAI_FRAMEWORK_DIR/skills/Agents/EngineerContext.md`
    - This loads all necessary Skills, standards, and domain knowledge
    - DO NOT proceed until you've read this file
 

@@ -7,8 +7,9 @@
 import { execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { join } from "path";
-import type { DetectionResult, ExistingUserContentDetection } from "./types";
+import { basename, join } from "path";
+import type { DetectionResult, ExistingUserContentDetection, FrameworkId } from "./types";
+import { getFrameworkTarget } from "./frameworks";
 
 function tryExec(cmd: string): string | null {
   try {
@@ -21,7 +22,8 @@ function tryExec(cmd: string): string | null {
 }
 
 function detectOS(): DetectionResult["os"] {
-  const platform = process.platform === "darwin" ? "darwin" : "linux";
+  const platform: DetectionResult["os"]["platform"] =
+    process.platform === "darwin" ? "darwin" : process.platform === "win32" ? "win32" : "linux";
   const arch = process.arch;
 
   let version = "";
@@ -31,6 +33,9 @@ function detectOS(): DetectionResult["os"] {
     const swVers = tryExec("sw_vers -productVersion");
     version = swVers || "";
     name = `macOS ${version}`;
+  } else if (platform === "win32") {
+    version = tryExec("ver") || "";
+    name = version || "Windows";
   } else {
     const release = tryExec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
     name = release || "Linux";
@@ -41,9 +46,11 @@ function detectOS(): DetectionResult["os"] {
 }
 
 function detectShell(): DetectionResult["shell"] {
-  const shellPath = process.env.SHELL || "/bin/sh";
-  const shellName = shellPath.split("/").pop() || "sh";
-  const version = tryExec(`${shellPath} --version 2>&1 | head -1`) || "";
+  const shellPath = process.env.SHELL || (process.platform === "win32" ? process.env.ComSpec || "powershell.exe" : "/bin/sh");
+  const shellName = shellPath.split(/[\\/]/).pop() || (process.platform === "win32" ? "powershell.exe" : "sh");
+  const version = process.platform === "win32"
+    ? tryExec("powershell -NoProfile -Command \"$PSVersionTable.PSVersion.ToString()\"") || tryExec("cmd /c ver") || ""
+    : tryExec(`${shellPath} --version 2>&1 | head -1`) || "";
 
   return { name: shellName, version, path: shellPath };
 }
@@ -52,7 +59,10 @@ function detectTool(
   name: string,
   versionCmd: string
 ): { installed: boolean; version?: string; path?: string } {
-  const path = tryExec(`which ${name}`);
+  const pathOutput = process.platform === "win32"
+    ? tryExec(`where.exe ${name}`)
+    : tryExec(`which ${name}`);
+  const path = pathOutput?.split(/\r?\n/).find(Boolean);
   if (!path) return { installed: false };
 
   const versionOutput = tryExec(versionCmd);
@@ -66,7 +76,8 @@ function detectTool(
 function detectExisting(
   home: string,
   paiDir: string,
-  _configDir: string
+  _configDir: string,
+  settingsFile: string
 ): DetectionResult["existing"] {
   const result: DetectionResult["existing"] = {
     paiInstalled: false,
@@ -77,19 +88,25 @@ function detectExisting(
   };
 
   // Check for existing PAI installation
-  const settingsPath = join(paiDir, "settings.json");
+  const settingsPath = join(paiDir, settingsFile);
   if (existsSync(settingsPath)) {
     result.paiInstalled = true;
     result.settingsPath = settingsPath;
   }
 
-  // Check for existing PAI skill
-  if (existsSync(join(paiDir, "skills", "PAI", "SKILL.md"))) {
+  // Check for existing v5 PAI skills
+  if (existsSync(join(paiDir, "skills", "ContextSearch", "SKILL.md"))) {
+    result.paiInstalled = true;
+  }
+  if (existsSync(join(paiDir, "PAI", "USER"))) {
     result.paiInstalled = true;
   }
 
   // Check for backup directories
   const backupPatterns = [
+    join(home, `${basename(paiDir)}-backup`),
+    join(home, `${basename(paiDir)}-old`),
+    join(home, `${basename(paiDir)}.bak`),
     join(home, ".claude-backup"),
     join(home, ".claude-old"),
     join(home, ".claude-BACKUP"),
@@ -335,10 +352,12 @@ function detectVoice(): DetectionResult["voice"] {
 /**
  * Run full system detection. Safe, read-only, non-destructive.
  */
-export function detectSystem(): DetectionResult {
+export function detectSystem(frameworkId?: FrameworkId): DetectionResult {
   const home = homedir();
-  const paiDir = join(home, ".claude");
-  const configDir = process.env.PAI_CONFIG_DIR || join(home, ".config", "PAI");
+  const framework = getFrameworkTarget(frameworkId);
+  const paiDir = framework.installRoot;
+  const configDir = framework.configDir;
+  const selectedFramework = detectTool(framework.command, `${framework.command} --version 2>&1`);
 
   return {
     os: detectOS(),
@@ -347,17 +366,21 @@ export function detectSystem(): DetectionResult {
       bun: detectTool("bun", "bun --version"),
       git: detectTool("git", "git --version"),
       claude: detectTool("claude", "claude --version 2>&1"),
+      codex: detectTool("codex", "codex --version 2>&1"),
+      opencode: detectTool("opencode", "opencode --version 2>&1"),
+      selectedFramework,
       node: detectTool("node", "node --version"),
       brew: {
         installed: tryExec("which brew") !== null,
         path: tryExec("which brew") || undefined,
       },
     },
-    existing: detectExisting(home, paiDir, configDir),
+    existing: detectExisting(home, paiDir, configDir, framework.settingsFile),
     principal: detectPrincipal(),
     voice: detectVoice(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     homeDir: home,
+    framework,
     paiDir,
     configDir,
   };

@@ -1,6 +1,6 @@
 ---
 name: Knowledge
-description: "Manage the PAI Knowledge Archive — a curated, typed graph of notes across four entity domains: People, Companies, Ideas, and Research. Operations: search (3-pass: lexical + frontmatter + wikilink), add (creates note with mandatory typed cross-links), harvest (KnowledgeHarvester pulls from PAI sources), develop (surfaces seedling notes for enrichment), ingest (fetch URL or file, create primary note, ripple updates to related notes), contradictions (find conflicting claims via tag-overlap pairs), graph (stats or 2-hop traversal via KnowledgeGraph.ts), retrieve (BM25-lite compressed context via MemoryRetriever.ts), mine (SessionHarvester extracts memory candidates from recent conversations). Every note ships with typed related: frontmatter links (8 relationship types: supports, contradicts, extends, part-of, instance-of, caused-by, preceded-by, related). USE WHEN knowledge, knowledge base, search knowledge, what do we know about, archive, harvest, knowledge status, develop note, add to knowledge, ingest, contradictions, knowledge graph, graph, retrieve, mine conversations. NOT FOR session/ISA context recovery (use ContextSearch)."
+description: "Capture, retrieve, organize, and reason over durable PAI knowledge and memory artifacts. USE WHEN saving knowledge, searching memory, updating knowledge graphs, harvesting lessons, or turning observations into reusable context."
 argument-hint: [search|add|harvest|develop|ingest|contradictions|graph|retrieve|mine|<query>]
 effort: low
 context: fork
@@ -8,9 +8,9 @@ context: fork
 
 # Knowledge Skill
 
-Manage the PAI Knowledge Archive at `~/.claude/PAI/MEMORY/KNOWLEDGE/`.
+Manage the PAI Knowledge Archive at `$PAI_DATA_DIR/MEMORY/KNOWLEDGE/`.
 
-**Archive schema:** `~/.claude/PAI/MEMORY/KNOWLEDGE/_schema.md`
+**Archive schema:** `$PAI_DATA_DIR/MEMORY/KNOWLEDGE/_schema.md`
 
 ## Command Routing
 
@@ -38,7 +38,7 @@ If `$ARGUMENTS` doesn't match a subcommand, treat it as a search query.
 Run the harvester status command and display results:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts status
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts status
 ```
 
 Also show:
@@ -57,17 +57,17 @@ Search the Knowledge Archive for notes matching `$ARGUMENTS`.
 
 **Step 1 — Lexical search:**
 ```bash
-rg -i "$ARGUMENTS" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l
+rg -i "$ARGUMENTS" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l
 ```
 
 **Step 2 — Frontmatter search (tags and titles):**
 ```bash
-rg -i "title:.*$ARGUMENTS|tags:.*$ARGUMENTS" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l
+rg -i "title:.*$ARGUMENTS|tags:.*$ARGUMENTS" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l
 ```
 
 **Step 3 — Wikilink search:**
 ```bash
-rg "\[\[.*$ARGUMENTS.*\]\]" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l
+rg "\[\[.*$ARGUMENTS.*\]\]" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l
 ```
 
 Deduplicate results across all three. For each match, read the first 5 lines of frontmatter to show title, domain, status, tags.
@@ -94,7 +94,7 @@ Create a new note manually in the specified entity type.
 7. Verify every slug in `related:` exists in the archive before saving
 8. Regenerate the type's MOC:
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts index
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts index
 ```
 
 **Topic is a tag, not a type.** A security insight is an Idea with a `security` tag. A security company is a Company with a `security` tag. The entity type determines the schema; the tag determines the topic.
@@ -133,13 +133,13 @@ related:
 **How to find related notes before writing:**
 ```bash
 # By topic/keyword
-rg -l "TOPIC" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md
+rg -l "TOPIC" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md
 
 # By tag overlap
-rg "^tags:.*TAG" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l
+rg "^tags:.*TAG" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l
 
 # For People/Companies — grep by name
-rg -l "Person Name" ~/.claude/PAI/MEMORY/KNOWLEDGE/
+rg -l "Person Name" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/
 ```
 
 **Enforcement:**
@@ -155,7 +155,7 @@ rg -l "Person Name" ~/.claude/PAI/MEMORY/KNOWLEDGE/
 Run the KnowledgeHarvester to pull new knowledge from all PAI sources:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts harvest
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts harvest
 ```
 
 Display results. If nothing was harvested, explain that sources are already up to date.
@@ -170,7 +170,7 @@ The weekly gardening workflow. Surface seedling notes that are ready for enrichm
 
 **Step 1 — Find seedlings:**
 ```bash
-rg "^status: seedling" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l
+rg "^status: seedling" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l
 ```
 
 **Step 2 — For each seedling:**
@@ -220,10 +220,10 @@ Search for existing notes that relate to this new content:
 
 ```bash
 # Search by extracted tags
-rg -i "TAG1|TAG2|TAG3" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l --glob '!_*'
+rg -i "TAG1|TAG2|TAG3" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l --glob '!_*'
 
 # Search by key entities/concepts mentioned
-rg -i "ENTITY1|ENTITY2" ~/.claude/PAI/MEMORY/KNOWLEDGE/ --type md -l --glob '!_*'
+rg -i "ENTITY1|ENTITY2" $PAI_DATA_DIR/MEMORY/KNOWLEDGE/ --type md -l --glob '!_*'
 ```
 
 For each related note found (up to 10):
@@ -267,7 +267,7 @@ Append to `KNOWLEDGE/_log.md`:
 
 Regenerate MOCs:
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts index
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts index
 ```
 
 Present in NATIVE mode.
@@ -282,7 +282,7 @@ Find and review conflicting claims across Knowledge notes.
 
 Run the KnowledgeHarvester contradiction finder:
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeHarvester.ts contradictions
+bun $PAI_DIR/TOOLS/KnowledgeHarvester.ts contradictions
 ```
 
 This outputs pairs of notes with high tag overlap (2+ shared tags), ranked by overlap count.
@@ -335,21 +335,21 @@ Navigate the Knowledge Archive as a graph.
 
 **No argument — stats overview:**
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts stats
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts stats
 ```
 
 Show node count, edge count, top clusters, most connected hubs, and isolated nodes.
 
 **With slug — traverse from a note:**
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts traverse <slug> --hops 2
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts traverse <slug> --hops 2
 ```
 
 Show all notes connected within 2 hops via tags, wikilinks, and typed relationships. Useful for exploring how knowledge connects across domains.
 
 **Related notes only:**
 ```bash
-bun ~/.claude/PAI/TOOLS/KnowledgeGraph.ts related <slug>
+bun $PAI_DIR/TOOLS/KnowledgeGraph.ts related <slug>
 ```
 
 Present in NATIVE mode.
@@ -361,14 +361,14 @@ Present in NATIVE mode.
 Compressed context retrieval over the Knowledge Archive using BM25-lite scoring.
 
 ```bash
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "<query>" --top 5
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "<query>" --top 5
 ```
 
 Returns the top matching notes with compressed summaries, ranked by title match, tag overlap, and content frequency. Useful for loading relevant knowledge context without reading full files.
 
 For raw excerpts without LLM compression:
 ```bash
-bun ~/.claude/PAI/TOOLS/MemoryRetriever.ts "<query>" --raw
+bun $PAI_DIR/TOOLS/MemoryRetriever.ts "<query>" --raw
 ```
 
 Present in NATIVE mode.
@@ -380,14 +380,14 @@ Present in NATIVE mode.
 Mine recent conversations for memory candidates (decisions, preferences, milestones, problems).
 
 ```bash
-bun ~/.claude/PAI/TOOLS/SessionHarvester.ts --mine --recent 10
+bun $PAI_DIR/TOOLS/SessionHarvester.ts --mine --recent 10
 ```
 
 Candidates are written to `KNOWLEDGE/_harvest-queue/` for review — never directly to KNOWLEDGE/. Use `/knowledge harvest` to process the queue.
 
 For dry run (preview only):
 ```bash
-bun ~/.claude/PAI/TOOLS/SessionHarvester.ts --mine --recent 10 --dry-run
+bun $PAI_DIR/TOOLS/SessionHarvester.ts --mine --recent 10 --dry-run
 ```
 
 Present in NATIVE mode.

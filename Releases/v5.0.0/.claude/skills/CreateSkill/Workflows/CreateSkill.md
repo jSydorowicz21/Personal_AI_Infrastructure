@@ -162,7 +162,7 @@ User: "[Different request]"
 
 ### Where Personal Context Belongs
 
-User-specific preferences, project names, domain lists, and war stories go in `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/` — the skill body loads these at runtime via the Customization block. This keeps the public skill generic while each PAI user layers their own context.
+User-specific preferences, project names, domain lists, and war stories go in `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/<SkillName>/` — the skill body loads these at runtime via the Customization block. This keeps the public skill generic while each PAI user layers their own context.
 
 ### Pre-Flight Check
 

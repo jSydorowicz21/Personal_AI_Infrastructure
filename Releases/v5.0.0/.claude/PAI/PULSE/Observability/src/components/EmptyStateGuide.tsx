@@ -7,7 +7,7 @@ interface EmptyStateGuideProps {
   section: string;
   /** Short sentence describing what kind of content lives here. */
   description: string;
-  /** Subdir under PAI/USER/ that holds this section's data, if any. e.g. "TELOS". */
+  /** Subdir under shared USER/ that holds this section's data, if any. e.g. "TELOS". */
   userDir?: string;
   /** Concrete interview command to surface. Defaults to "/interview". */
   interviewCommand?: string;
@@ -25,8 +25,8 @@ export default function EmptyStateGuide({
   daPromptExample,
   hideInterview = false,
 }: EmptyStateGuideProps) {
-  const userPath = userDir ? `~/.claude/PAI/USER/${userDir}/` : "~/.claude/PAI/USER/";
-  const readmePath = userDir ? `~/.claude/PAI/USER/${userDir}/README.md` : "~/.claude/PAI/USER/README.md";
+  const userPath = userDir ? `~/.pai/USER/${userDir}/` : "~/.pai/USER/";
+  const readmePath = userDir ? `~/.pai/USER/${userDir}/README.md` : "~/.pai/USER/README.md";
   const defaultDaPrompt = daPromptExample ?? `help me set up my ${section.toLowerCase()}`;
 
   return (

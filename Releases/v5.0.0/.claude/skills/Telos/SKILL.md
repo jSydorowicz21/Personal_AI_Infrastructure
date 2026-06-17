@@ -1,6 +1,6 @@
 ---
 name: Telos
-description: "Dual-context Life OS and organizational analysis skill. Personal TELOS: read and update goals, beliefs, wisdom, books, movies, challenges, narratives, strategies, mission, mental models, predictions, traumas, frames, lessons-learned, and wrong-beliefs stored in the USER/TELOS/ directory — all via the Update workflow with timestamped backups and change logging. Valid personal files: BELIEFS.md, BOOKS.md, CHALLENGES.md, FRAMES.md, GOALS.md, LEARNED.md, MISSION.md, MODELS.md, MOVIES.md, NARRATIVES.md, PREDICTIONS.md, PROBLEMS.md, PROJECTS.md, STRATEGIES.md, TELOS.md, TRAUMAS.md, WISDOM.md, WRONG.md. Project TELOS: analyze any directory of .md/.csv files to extract relationships, dependency chains (PROBLEMS→GOALS→STRATEGIES→PROJECTS), bottlenecks, goal alignment, and progress metrics; generate McKinsey-style professional reports (WriteReport) or n=24 slide-ready narrative bullet points (CreateNarrativePoints); build interactive Next.js 14 + shadcn/ui + Aceternity + Recharts + D3.js dashboards via up to 16 parallel engineers. Also: InterviewExtraction workflow for analyzing interview content. USE WHEN Telos, life goals, projects, dependencies, books, movies, beliefs, wisdom, update TELOS, narrative points, interview extraction, write report, McKinsey report, TELOS report, project analysis, dashboard, n=24, analyze interviews, create narrative, professional report, executive summary, dependency mapping, what am I wrong about, add prediction, update traumas, life frames, mental models."
+description: "Manage mission, goals, beliefs, values, challenges, wisdom, and ideal-state direction in PAI. USE WHEN updating TELOS, clarifying mission, aligning decisions to goals, reviewing values, or building a personal operating frame."
 effort: medium
 ---
 
@@ -27,7 +27,7 @@ effort: medium
 
 **TELOS** (Telic Evolution and Life Operating System) is a comprehensive context-gathering system with two applications:
 
-1. **Personal TELOS** - {PRINCIPAL.NAME}'s life context system (beliefs, goals, lessons, wisdom) at `~/.claude/PAI/USER/TELOS/`
+1. **Personal TELOS** - {PRINCIPAL.NAME}'s life context system (beliefs, goals, lessons, wisdom) at `$PAI_DATA_DIR/USER/TELOS/`
 2. **Project TELOS** - Analysis framework for organizations/projects (relationships, dependencies, goals, progress)
 
 
@@ -104,7 +104,7 @@ User: "write a TELOS report for Acme Corp"
 
 | User Request | Context | Location |
 |--------------|---------|----------|
-| "my TELOS", "my goals", "my beliefs", "add to TELOS" | Personal TELOS | `~/.claude/PAI/USER/TELOS/` |
+| "my TELOS", "my goals", "my beliefs", "add to TELOS" | Personal TELOS | `$PAI_DATA_DIR/USER/TELOS/` |
 | "Alma", "TELOSAPP", "analyze [project]", "dashboard for" | Project TELOS | User-specified directory |
 | "analyze ~/path/to/project" | Project TELOS | Specified path |
 
@@ -116,14 +116,14 @@ User: "write a TELOS report for Acme Corp"
 
 **CRITICAL PATH:** All personal TELOS files are located at:
 ```
-~/.claude/PAI/USER/TELOS/
+$PAI_DATA_DIR/USER/TELOS/
 ```
 
 Personal TELOS lives in the CORE USER directory, NOT directly under the Telos skill directory.
 
 ## Personal TELOS Framework
 
-All files located in `~/.claude/PAI/USER/TELOS/`:
+All files located in `$PAI_DATA_DIR/USER/TELOS/`:
 
 ### Core Philosophy
 - **TELOS.md** - Main framework document
@@ -160,11 +160,11 @@ All files located in `~/.claude/PAI/USER/TELOS/`:
 
 ```bash
 # View specific file
-read ~/.claude/PAI/USER/TELOS/GOALS.md
-read ~/.claude/PAI/USER/TELOS/BELIEFS.md
+read $PAI_DATA_DIR/USER/TELOS/GOALS.md
+read $PAI_DATA_DIR/USER/TELOS/BELIEFS.md
 
 # View recent updates
-read ~/.claude/PAI/USER/TELOS/updates.md
+read $PAI_DATA_DIR/USER/TELOS/updates.md
 ```
 
 ### Update Personal TELOS
@@ -375,7 +375,7 @@ Engineer 10: Integration and testing
 ## Key Principles
 
 1. **Dual Context** - Handles both personal and project TELOS seamlessly
-   - Personal TELOS: `~/.claude/PAI/USER/TELOS/` (in CORE USER directory)
+   - Personal TELOS: `$PAI_DATA_DIR/USER/TELOS/` (in CORE USER directory)
    - Project TELOS: User-specified directories
 2. **Auto-Detection** - Determines context from user question
 3. **Flexible Discovery** - Finds files regardless of structure
@@ -389,7 +389,7 @@ Engineer 10: Integration and testing
 
 **TELOS is {PRINCIPAL.NAME}'s life operating system AND project analysis framework. One skill, two powerful contexts.**
 
-**Remember:** Personal TELOS files live at `~/.claude/PAI/USER/TELOS/` (in the CORE USER directory)
+**Remember:** Personal TELOS files live at `$PAI_DATA_DIR/USER/TELOS/` (in the CORE USER directory)
 
 ## Gotchas
 
@@ -402,7 +402,7 @@ Engineer 10: Integration and testing
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Telos","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Telos","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

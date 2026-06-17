@@ -29,13 +29,12 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from "fs";
-import { join, dirname } from "path";
+import { dirname } from "path";
 import { createHash } from "crypto";
+import { memoryPath } from "../../TOOLS/lib/paths";
 
-const HOME = process.env.HOME || "";
-const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
-const STATE_FILE = join(PAI_DIR, "PULSE", "state", "notification-governor.json");
-const LOG_FILE = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "notification-governor.jsonl");
+const STATE_FILE = memoryPath("STATE", "pulse", "notification-governor.json");
+const LOG_FILE = memoryPath("OBSERVABILITY", "notification-governor.jsonl");
 const NOTIFY_URL = "http://localhost:31337/notify";
 const VOICE_ID = "fTtv3eikoepIosk8dTZ5";
 

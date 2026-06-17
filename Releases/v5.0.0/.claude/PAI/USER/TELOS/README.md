@@ -51,7 +51,7 @@ Whenever you edit a file in this directory, regenerate the summary so
 session-start context stays in sync:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/GenerateTelosSummary.ts
+bun $PAI_DIR/TOOLS/GenerateTelosSummary.ts
 ```
 
 (`/interview` calls this automatically when it finishes a phase.)

@@ -3,7 +3,7 @@
 #
 # This file provides MINIMAL working examples for the Agents skill.
 # For full customization, add your own Traits.yaml to:
-#   ~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Agents/Traits.yaml
+#   $PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Agents/Traits.yaml
 #
 # The ComposeAgent tool merges: base + user (user takes priority)
 #

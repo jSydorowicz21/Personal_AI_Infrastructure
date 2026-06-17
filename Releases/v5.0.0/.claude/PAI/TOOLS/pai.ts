@@ -2,16 +2,17 @@
 /**
  * pai - Personal AI CLI Tool
  *
- * Comprehensive CLI for managing Claude Code with dynamic MCP loading,
+ * Comprehensive CLI for managing PAI across Claude Code, Codex, and OpenCode,
+ * with dynamic MCP loading,
  * updates, version checking, and profile management.
  *
  * Usage:
- *   pai                  Launch Claude (default profile)
+ *   pai                  Launch active framework (default profile)
  *   pai -m bd            Launch with Bright Data MCP
  *   pai -m bd,ap         Launch with multiple MCPs
  *   pai -r / --resume    Resume last session
- *   pai --local          Stay in current directory (don't cd to ~/.claude)
- *   pai update           Update Claude Code
+ *   pai --local          Compatibility flag; launches already stay in current directory
+ *   pai update           Update active framework CLI
  *   pai version          Show version info
  *   pai profiles         List available profiles
  *   pai mcp list         List available MCPs
@@ -19,21 +20,25 @@
  */
 
 import { spawn, spawnSync } from "bun";
-import { getIdentity, getStartupCatchphrase } from "../../../.claude/hooks/lib/identity";
-import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
 import { homedir } from "os";
-import { join, basename } from "path";
+import { join, basename, dirname, delimiter, extname } from "path";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const CLAUDE_DIR = join(homedir(), ".claude");
-const MCP_DIR = join(CLAUDE_DIR, "MCPs");
-const ACTIVE_MCP = join(CLAUDE_DIR, ".mcp.json");
-const BANNER_SCRIPT = join(homedir(), ".claude", "PAI", "Tools", "Banner.ts");
+type FrameworkId = "claude" | "codex" | "opencode";
+
+const HOME = homedir();
+const CURRENT_PAI_DIR = join(import.meta.dir, "..");
+const CURRENT_INSTALL_ROOT = join(CURRENT_PAI_DIR, "..");
+const DATA_DIR = process.env.PAI_DATA_DIR || join(HOME, ".pai");
+const CONFIG_DIR = process.env.PAI_CONFIG_DIR || join(HOME, ".config", "PAI");
+const FRAMEWORK_STATE = join(DATA_DIR, "framework.json");
+const BANNER_SCRIPT = join(import.meta.dir, "Banner.ts");
 const VOICE_SERVER = "http://localhost:31337/notify/personality";
-const WALLPAPER_DIR = join(homedir(), "Projects", "Wallpaper");
+const WALLPAPER_DIR = join(HOME, "Projects", "Wallpaper");
 // Note: RAW archiving removed - Claude Code handles its own cleanup (30-day retention in projects/)
 
 // MCP shorthand mappings
@@ -77,6 +82,848 @@ function log(message: string, emoji = "") {
 function error(message: string) {
   console.error(`❌ ${message}`);
   process.exit(1);
+}
+
+function readFrameworkState(): { active?: FrameworkId; framework?: FrameworkId; root?: string; dataDir?: string } | null {
+  try {
+    if (!existsSync(FRAMEWORK_STATE)) return null;
+    const parsed = JSON.parse(readFileSync(FRAMEWORK_STATE, "utf-8"));
+    const active = normalizeFramework(parsed.active);
+    const framework = normalizeFramework(parsed.framework);
+    return {
+      active: active || undefined,
+      framework: framework || undefined,
+      root: typeof parsed.root === "string" ? parsed.root : undefined,
+      dataDir: typeof parsed.dataDir === "string" ? parsed.dataDir : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getSettingsPath(): string {
+  if (process.env.PAI_SETTINGS_PATH) return process.env.PAI_SETTINGS_PATH;
+  const state = readFrameworkState();
+  if (state?.root) return join(state.root, "settings.json");
+  return join(CURRENT_INSTALL_ROOT, "settings.json");
+}
+
+function readSettings(): Record<string, any> {
+  try {
+    const path = getSettingsPath();
+    if (!existsSync(path)) return {};
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+function getIdentity() {
+  const settings = readSettings();
+  const daidentity = settings.daidentity || {};
+  const voices = daidentity.voices || {};
+  const voiceConfig = voices.main || daidentity.voice;
+  return {
+    name: daidentity.name || settings.env?.DA || "PAI",
+    personality: daidentity.personality,
+    mainDAVoiceID: voiceConfig?.voiceId || daidentity.voiceId || "",
+  };
+}
+
+function getStartupCatchphrase(): string {
+  const settings = readSettings();
+  const name = getIdentity().name;
+  const template = settings.daidentity?.startupCatchphrase || "{name} here, ready to go.";
+  return template.replace(/\{name\}/gi, name);
+}
+
+function frameworkRoot(id: FrameworkId): string {
+  const state = readFrameworkState();
+  const stateFramework = state?.active || state?.framework;
+  if (state?.root && stateFramework === id) return state.root;
+  const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
+  const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (frameworkDirOverride && envFramework === id) return frameworkDirOverride;
+  if (id === "codex") return process.env.CODEX_HOME || join(HOME, ".codex");
+  if (id === "opencode") return process.env.OPENCODE_CONFIG_DIR || join(HOME, ".config", "opencode");
+  return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || join(HOME, ".claude");
+}
+
+function frameworkCommand(id: FrameworkId): string {
+  if (id === "codex") return "codex";
+  if (id === "opencode") return "opencode";
+  return "claude";
+}
+
+function resolveWindowsCommand(command: string): string {
+  if (process.platform !== "win32") return command;
+  if (command.includes("\\") || command.includes("/") || extname(command)) return command;
+
+  const pathEntries = (process.env.PATH || "").split(delimiter).filter(Boolean);
+  const pathExts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((ext) => ext.toLowerCase());
+  const candidateExts = [".cmd", ".exe", ".bat", "", ...pathExts]
+    .filter((ext, index, all) => all.indexOf(ext) === index);
+
+  for (const dir of pathEntries) {
+    for (const ext of candidateExts) {
+      const candidate = join(dir, `${command}${ext}`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+
+  return command;
+}
+
+function quoteCmdArg(value: string): string {
+  if (value === "") return "\"\"";
+  if (!/[ \t&()^|<>"%]/.test(value)) return value;
+  return `"${value.replace(/"/g, "\"\"").replace(/%/g, "%%")}"`;
+}
+
+function frameworkSpawnArgs(args: string[]): string[] {
+  if (process.platform !== "win32") return args;
+
+  const command = resolveWindowsCommand(args[0]);
+  const ext = extname(command).toLowerCase();
+  if (ext !== ".cmd" && ext !== ".bat") return [command, ...args.slice(1)];
+
+  const cmd = process.env.ComSpec || "cmd.exe";
+  const line = [command, ...args.slice(1)].map(quoteCmdArg).join(" ");
+  return [cmd, "/d", "/s", "/c", line];
+}
+
+function frameworkName(id: FrameworkId): string {
+  if (id === "codex") return "Codex";
+  if (id === "opencode") return "OpenCode";
+  return "Claude Code";
+}
+
+function normalizeFramework(value: string | undefined): FrameworkId | null {
+  const v = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (v === "claude" || v === "claudecode") return "claude";
+  if (v === "codex" || v === "openai" || v === "openaicodex") return "codex";
+  if (v === "opencode") return "opencode";
+  return null;
+}
+
+function getActiveFramework(): FrameworkId {
+  const state = readFrameworkState();
+  if (state?.active || state?.framework) return state.active || state.framework || "claude";
+  const settings = readSettings();
+  return normalizeFramework(settings.pai?.framework) || normalizeFramework(process.env.PAI_FRAMEWORK) || "claude";
+}
+
+function copyMissing(src: string, dst: string): number {
+  let copied = 0;
+  if (!existsSync(src)) return copied;
+  const stat = lstatSync(src);
+  if (stat.isFile()) {
+    if (!existsSync(dst)) {
+      mkdirSync(dirname(dst), { recursive: true });
+      cpSync(src, dst);
+      copied++;
+    }
+    return copied;
+  }
+  if (stat.isDirectory()) {
+    mkdirSync(dst, { recursive: true });
+    for (const entry of readdirSync(src, { withFileTypes: true })) {
+      copied += copyMissing(join(src, entry.name), join(dst, entry.name));
+    }
+  }
+  return copied;
+}
+
+function linkDirectory(localPath: string, globalPath: string): number {
+  mkdirSync(dirname(localPath), { recursive: true });
+  mkdirSync(globalPath, { recursive: true });
+  if (existsSync(localPath)) {
+    const stat = lstatSync(localPath);
+    if (stat.isSymbolicLink()) return 0;
+    const copied = copyMissing(localPath, globalPath);
+    rmSync(localPath, { recursive: true, force: true });
+    symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
+    return copied;
+  }
+  symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
+  return 0;
+}
+
+function createDirectoryLink(src: string, dst: string) {
+  symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir");
+}
+
+function syncCodexPrompts(root: string): number {
+  const commandsDir = join(root, "commands");
+  const promptsDir = join(root, "prompts");
+  if (!existsSync(commandsDir)) return 0;
+
+  if (existsSync(promptsDir) && lstatSync(promptsDir).isSymbolicLink()) {
+    rmSync(promptsDir, { recursive: true, force: true });
+  }
+  mkdirSync(promptsDir, { recursive: true });
+
+  let written = 0;
+  for (const entry of readdirSync(commandsDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const dst = join(promptsDir, entry.name);
+    if (existsSync(dst) && !shouldReplaceGeneratedPaiFile(dst)) continue;
+    const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(join(commandsDir, entry.name), "utf-8"));
+    writeFileSync(dst, codexPromptContent(frontmatter.description || `PAI ${basename(entry.name, ".md")} command.`, body));
+    written++;
+  }
+  return written;
+}
+
+function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
+  if (!content.startsWith("---\n") && !content.startsWith("---\r\n")) {
+    return { frontmatter: {}, body: content };
+  }
+
+  const normalized = content.replace(/\r\n/g, "\n");
+  const end = normalized.indexOf("\n---\n", 4);
+  if (end === -1) return { frontmatter: {}, body: content };
+
+  const frontmatter: Record<string, string> = {};
+  for (const line of normalized.slice(4, end).split("\n")) {
+    const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!match) continue;
+    const raw = match[2].trim();
+    if (!raw) continue;
+    frontmatter[match[1]] = raw.replace(/^["']|["']$/g, "");
+  }
+
+  return { frontmatter, body: normalized.slice(end + "\n---\n".length) };
+}
+
+function slugifyAgentName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "pai-agent";
+}
+
+function codexAgentInstructions(initialPrompt: string | undefined, body: string): string {
+  const parts = [
+    "This PAI agent was generated from the shared Claude-style PAI agent definition for Codex.",
+    initialPrompt ? `Startup context: ${initialPrompt}` : "",
+    body,
+  ].filter(Boolean);
+
+  return parts.join("\n\n")
+    .replace(/\bCLAUDE\.md\b/g, "AGENTS.md")
+    .replace(/\bClaude Code\b/g, "Codex")
+    .replace(/~\/\.claude/g, "~/.codex");
+}
+
+function codexPromptContent(description: string, body: string): string {
+  const adaptedBody = body
+    .replace(/Use the Skill tool to invoke ([A-Za-z0-9_-]+) with the provided arguments:/g, "Invoke the $$$1 skill with the provided arguments:")
+    .replace(/Skill\("([A-Za-z0-9_-]+)",\s*"\$ARGUMENTS"\)/g, "$$$1 $ARGUMENTS")
+    .replace(/\bClaude Code\b/g, "Codex");
+
+  return [
+    "---",
+    `description: ${yamlString(description)}`,
+    "---",
+    "",
+    "This PAI prompt was generated for Codex from the shared PAI command definition.",
+    "",
+    adaptedBody,
+    "",
+  ].join("\n");
+}
+
+function openCodeInstructions(initialPrompt: string | undefined, body: string): string {
+  const parts = [
+    "This PAI agent was generated from the shared Claude-style PAI agent definition for OpenCode.",
+    initialPrompt ? `Startup context: ${initialPrompt}` : "",
+    body,
+  ].filter(Boolean);
+
+  return parts.join("\n\n")
+    .replace(/\bCLAUDE\.md\b/g, "AGENTS.md")
+    .replace(/\bClaude Code\b/g, "OpenCode")
+    .replace(/~\/\.claude/g, "~/.config/opencode");
+}
+
+function frameworkInstructionContent(content: string, id: FrameworkId): string {
+  const framework = frameworkName(id);
+  return content
+    .replace(/\bCLAUDE\.md\b/g, id === "claude" ? "CLAUDE.md" : "AGENTS.md")
+    .replace(/\bClaude Code\b/g, framework)
+    .replace(/~\/\.claude\/PAI/g, "$PAI_DIR")
+    .replace(/~\/\.claude/g, "$PAI_FRAMEWORK_DIR")
+    .replace(/\$PAI_FRAMEWORK_DIR\/PAI/g, "$PAI_DIR");
+}
+
+function yamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function syncCodexAgents(root: string): number {
+  let sourceDir = join(CURRENT_INSTALL_ROOT, "agents");
+  if (!existsSync(sourceDir)) return 0;
+
+  const agentsDir = join(root, "agents");
+  if (existsSync(agentsDir)) {
+    const stat = lstatSync(agentsDir);
+    if (stat.isSymbolicLink()) {
+      sourceDir = realpathSync(sourceDir);
+      rmSync(agentsDir, { recursive: true, force: true });
+    }
+  }
+  mkdirSync(agentsDir, { recursive: true });
+
+  let written = 0;
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const sourcePath = join(sourceDir, entry.name);
+    const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(sourcePath, "utf-8"));
+    const name = frontmatter.name || basename(entry.name, ".md");
+    const dst = join(agentsDir, `${slugifyAgentName(name)}.toml`);
+    if (existsSync(dst)) continue;
+    const description = frontmatter.description || `PAI ${name} agent.`;
+    const instructions = codexAgentInstructions(frontmatter.initialPrompt, body);
+    writeFileSync(dst, [
+      `name = ${JSON.stringify(name)}`,
+      `description = ${JSON.stringify(description)}`,
+      `developer_instructions = ${JSON.stringify(instructions)}`,
+      "",
+    ].join("\n"));
+    written++;
+  }
+  return written;
+}
+
+function shouldReplaceGeneratedPaiFile(path: string): boolean {
+  if (!existsSync(path)) return true;
+  try {
+    const content = readFileSync(path, "utf-8");
+    return content.includes("This PAI agent was generated")
+      || content.includes("This PAI command was generated")
+      || content.includes("This PAI prompt was generated")
+      || content.includes('Skill("')
+      || content.includes("initialPrompt:")
+      || content.includes("argument-hint:")
+      || content.includes("This command has been migrated to");
+  } catch {
+    return false;
+  }
+}
+
+function syncOpenCodeAgents(root: string): number {
+  let sourceDir = join(CURRENT_INSTALL_ROOT, "agents");
+  if (!existsSync(sourceDir)) return 0;
+
+  const agentsDir = join(root, "agents");
+  if (existsSync(agentsDir)) {
+    const stat = lstatSync(agentsDir);
+    if (stat.isSymbolicLink()) {
+      sourceDir = realpathSync(sourceDir);
+      rmSync(agentsDir, { recursive: true, force: true });
+    }
+  }
+  mkdirSync(agentsDir, { recursive: true });
+
+  let written = 0;
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const sourcePath = join(sourceDir, entry.name);
+    const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(sourcePath, "utf-8"));
+    const name = frontmatter.name || basename(entry.name, ".md");
+    const dst = join(agentsDir, entry.name);
+    if (!shouldReplaceGeneratedPaiFile(dst)) continue;
+    writeFileSync(dst, [
+      "---",
+      `description: ${yamlString(frontmatter.description || `PAI ${name} agent.`)}`,
+      "mode: subagent",
+      "---",
+      "",
+      openCodeInstructions(frontmatter.initialPrompt, body),
+      "",
+    ].join("\n"));
+    written++;
+  }
+  return written;
+}
+
+function syncOpenCodeCommands(root: string): number {
+  let sourceDir = join(CURRENT_INSTALL_ROOT, "commands");
+  if (!existsSync(sourceDir)) return 0;
+
+  const commandsDir = join(root, "commands");
+  if (existsSync(commandsDir)) {
+    const stat = lstatSync(commandsDir);
+    if (stat.isSymbolicLink()) {
+      sourceDir = realpathSync(sourceDir);
+      rmSync(commandsDir, { recursive: true, force: true });
+    }
+  }
+  mkdirSync(commandsDir, { recursive: true });
+
+  let written = 0;
+  for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const sourcePath = join(sourceDir, entry.name);
+    const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(sourcePath, "utf-8"));
+    const dst = join(commandsDir, entry.name);
+    if (!shouldReplaceGeneratedPaiFile(dst)) continue;
+    writeFileSync(dst, [
+      "---",
+      `description: ${yamlString(frontmatter.description || `PAI ${basename(entry.name, ".md")} command.`)}`,
+      "---",
+      "",
+      "This PAI command was generated for OpenCode from the shared PAI command definition.",
+      "",
+      body
+        .replace(/Use the Skill tool to invoke ([A-Za-z0-9_-]+) with the provided arguments:/g, "Invoke the $$$1 skill with the provided arguments:")
+        .replace(/Skill\("([A-Za-z0-9_-]+)",\s*"\$ARGUMENTS"\)/g, "$$$1 $ARGUMENTS")
+        .replace(/\bSkill tool\b/g, "OpenCode skill tool")
+        .replace(/\bClaude Code\b/g, "OpenCode"),
+      "",
+    ].join("\n"));
+    written++;
+  }
+  return written;
+}
+
+function getMcpDir(): string {
+  const candidates = [
+    join(CURRENT_INSTALL_ROOT, "MCPs"),
+    join(CURRENT_PAI_DIR, "MCPs"),
+    join(CURRENT_INSTALL_ROOT, "PAI", "MCPs"),
+  ];
+  return candidates.find((path) => existsSync(path)) || candidates[0];
+}
+
+function activeMcpPath(root = CURRENT_INSTALL_ROOT): string {
+  return join(root, ".mcp.json");
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function powerShellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function frameworkEnv(root: string, id: FrameworkId): Record<string, string> {
+  return {
+    PAI_DIR: join(root, "PAI"),
+    PAI_DATA_DIR: DATA_DIR,
+    PAI_FRAMEWORK: id,
+    PAI_FRAMEWORK_DIR: root,
+    PAI_SETTINGS_PATH: join(root, "settings.json"),
+    PAI_CONFIG_DIR: CONFIG_DIR,
+  };
+}
+
+function codexHookCommand(root: string, hookFile: string): string {
+  const env = frameworkEnv(root, "codex");
+  const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
+  return [
+    ...Object.entries(env).map(([key, value]) => `${key}=${shellSingleQuote(value)}`),
+    "bun",
+    shellSingleQuote(adapter),
+    "--framework",
+    "'codex'",
+    "--target",
+    shellSingleQuote(hookFile),
+  ].join(" ");
+}
+
+function codexHookCommandWindows(root: string, hookFile: string): string {
+  const env = frameworkEnv(root, "codex");
+  const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
+  const envAssignments = Object.entries(env)
+    .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
+    .join(" ");
+  return [
+    "powershell",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    powerShellSingleQuote(`${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`),
+  ].join(" ");
+}
+
+function codexCommandHook(root: string, hookFile: string, timeout = 10): Record<string, any> {
+  return {
+    type: "command",
+    command: codexHookCommand(root, hookFile),
+    commandWindows: codexHookCommandWindows(root, hookFile),
+    timeout,
+  };
+}
+
+function generateCodexHooks(root: string): Record<string, any> {
+  return {
+    hooks: {
+      SessionStart: [
+        {
+          matcher: "startup|resume",
+          hooks: [
+            codexCommandHook(root, "KittyEnvPersist.hook.ts"),
+            codexCommandHook(root, "LoadContext.hook.ts", 20),
+          ],
+        },
+      ],
+      PreToolUse: [
+        {
+          matcher: "Bash|Shell|Write|Edit|MultiEdit|Read|apply_patch",
+          hooks: [codexCommandHook(root, "SecurityPipeline.hook.ts")],
+        },
+      ],
+      PostToolUse: [
+        {
+          matcher: "WebFetch|WebSearch",
+          hooks: [codexCommandHook(root, "ContentScanner.hook.ts", 5)],
+        },
+        {
+          matcher: "Write|Edit|MultiEdit|apply_patch",
+          hooks: [codexCommandHook(root, "TelosSummarySync.hook.ts", 5)],
+        },
+        {
+          hooks: [codexCommandHook(root, "ToolActivityTracker.hook.ts", 5)],
+        },
+      ],
+      UserPromptSubmit: [
+        {
+          hooks: [
+            codexCommandHook(root, "PromptGuard.hook.ts", 5),
+            codexCommandHook(root, "RepeatDetection.hook.ts", 5),
+          ],
+        },
+      ],
+      PreCompact: [
+        {
+          matcher: "*",
+          hooks: [codexCommandHook(root, "PreCompact.hook.ts", 10)],
+        },
+      ],
+      Stop: [
+        {
+          hooks: [
+            codexCommandHook(root, "LastResponseCache.hook.ts", 10),
+            codexCommandHook(root, "ResponseTabReset.hook.ts", 10),
+            codexCommandHook(root, "VoiceCompletion.hook.ts", 10),
+            codexCommandHook(root, "DocIntegrity.hook.ts", 20),
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function tomlArray(values: unknown[]): string {
+  return `[${values.map((value) => tomlString(String(value))).join(", ")}]`;
+}
+
+function tomlScalar(value: unknown): string {
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : tomlString(String(value));
+  return tomlString(String(value));
+}
+
+function tomlTable(name: string, table: Record<string, unknown>): string[] {
+  const lines = [`[${name}]`];
+  for (const [key, value] of Object.entries(table)) {
+    if (value === undefined || value === null) continue;
+    lines.push(`${key} = ${tomlScalar(value)}`);
+  }
+  return lines;
+}
+
+function safeMcpName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_-]/g, "_");
+}
+
+const CODEX_ROOT_BEGIN = "# BEGIN PAI MANAGED ROOT CONFIG";
+const CODEX_ROOT_END = "# END PAI MANAGED ROOT CONFIG";
+const CODEX_MCP_BEGIN = "# BEGIN PAI MANAGED MCP CONFIG";
+const CODEX_MCP_END = "# END PAI MANAGED MCP CONFIG";
+
+function stripManagedTomlBlocks(content: string): string {
+  return content
+    .replace(new RegExp(`\\n?${CODEX_ROOT_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${CODEX_ROOT_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n?`, "g"), "\n")
+    .replace(new RegExp(`\\n?${CODEX_MCP_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${CODEX_MCP_END.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\n?`, "g"), "\n")
+    .trim();
+}
+
+function firstTomlTableIndex(content: string): number {
+  const match = content.match(/^\[.+\]\s*$/m);
+  return match?.index ?? content.length;
+}
+
+function rootTomlHasKey(content: string, key: string): boolean {
+  const root = content.slice(0, firstTomlTableIndex(content));
+  return new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=`, "m").test(root);
+}
+
+function existingMcpTableNames(content: string): Set<string> {
+  const names = new Set<string>();
+  const stripped = stripManagedTomlBlocks(content);
+  const pattern = /^\[mcp_servers\.([^\].]+)\]/gm;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(stripped))) names.add(match[1]);
+  return names;
+}
+
+function isLegacyPaiOnlyCodexConfig(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("# Generated by PAI.") && !trimmed.startsWith("# Generated by the PAI installer.")) return false;
+  return !/^\[(?!mcp_servers\.)/m.test(trimmed);
+}
+
+function codexRootConfigToml(existing = ""): string {
+  const lines = [
+    CODEX_ROOT_BEGIN,
+    "# PAI uses AGENTS.md for Codex instructions.",
+    "# PAI hooks are written to hooks.json.",
+  ];
+  if (!rootTomlHasKey(existing, "project_doc_fallback_filenames")) {
+    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"CLAUDE.md\"]");
+  }
+  if (!rootTomlHasKey(existing, "project_doc_max_bytes")) {
+    lines.push("project_doc_max_bytes = 65536");
+  }
+  lines.push(CODEX_ROOT_END);
+  return lines.join("\n");
+}
+
+function buildCodexMcpConfigToml(mcpConfig?: Record<string, any>, skipNames = new Set<string>()): string {
+  const lines = [
+    CODEX_MCP_BEGIN,
+  ];
+
+  const servers = mcpConfig?.mcpServers || {};
+  for (const [rawName, server] of Object.entries(servers) as Array<[string, any]>) {
+    const name = safeMcpName(rawName);
+    if (skipNames.has(name)) continue;
+    lines.push(`[mcp_servers.${name}]`);
+    if (server.url) {
+      lines.push(`url = ${tomlString(server.url)}`);
+      if (server.bearer_token_env_var) lines.push(`bearer_token_env_var = ${tomlString(server.bearer_token_env_var)}`);
+      if (server.startup_timeout_sec) lines.push(`startup_timeout_sec = ${tomlScalar(server.startup_timeout_sec)}`);
+      if (server.tool_timeout_sec) lines.push(`tool_timeout_sec = ${tomlScalar(server.tool_timeout_sec)}`);
+      if (server.enabled === false) lines.push("enabled = false");
+      if (server.http_headers && typeof server.http_headers === "object") {
+        lines.push(...tomlTable(`mcp_servers.${name}.http_headers`, server.http_headers));
+      }
+      if (server.env_http_headers && typeof server.env_http_headers === "object") {
+        lines.push(...tomlTable(`mcp_servers.${name}.env_http_headers`, server.env_http_headers));
+      }
+    } else if (server.command) {
+      lines.push(`command = ${tomlString(server.command)}`);
+      if (Array.isArray(server.args)) lines.push(`args = ${tomlArray(server.args)}`);
+      if (server.cwd) lines.push(`cwd = ${tomlString(server.cwd)}`);
+      if (server.startup_timeout_sec) lines.push(`startup_timeout_sec = ${tomlScalar(server.startup_timeout_sec)}`);
+      if (server.tool_timeout_sec) lines.push(`tool_timeout_sec = ${tomlScalar(server.tool_timeout_sec)}`);
+      if (server.enabled === false) lines.push("enabled = false");
+      if (server.env && typeof server.env === "object") {
+        lines.push(...tomlTable(`mcp_servers.${name}.env`, server.env));
+      }
+      if (Array.isArray(server.env_vars)) {
+        const stringVars = server.env_vars.filter((item: unknown) => typeof item === "string");
+        if (stringVars.length === server.env_vars.length) lines.push(`env_vars = ${tomlArray(stringVars)}`);
+      }
+    }
+    lines.push("");
+  }
+
+  lines.push(CODEX_MCP_END);
+  return lines.join("\n");
+}
+
+function buildCodexConfigToml(root: string, mcpConfig?: Record<string, any>): string {
+  return [
+    codexRootConfigToml(),
+    "",
+    buildCodexMcpConfigToml(mcpConfig),
+    "",
+  ].join("\n");
+}
+
+function mergeCodexConfigToml(existing: string, root: string, mcpConfig?: Record<string, any>): string {
+  if (isLegacyPaiOnlyCodexConfig(existing)) return buildCodexConfigToml(root, mcpConfig);
+
+  const stripped = stripManagedTomlBlocks(existing);
+  const rootBlock = codexRootConfigToml(stripped);
+  const skipMcpNames = existingMcpTableNames(stripped);
+  const mcpBlock = buildCodexMcpConfigToml(mcpConfig, skipMcpNames);
+  return [
+    rootBlock,
+    "",
+    stripped,
+    "",
+    mcpBlock,
+    "",
+  ].filter((part) => part.trim().length > 0).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function writeCodexConfigToml(path: string, root: string, mcpConfig?: Record<string, any>): void {
+  const existing = existsSync(path) ? readFileSync(path, "utf-8") : "";
+  const next = existing.trim() ? mergeCodexConfigToml(existing, root, mcpConfig) : buildCodexConfigToml(root, mcpConfig);
+  writeFileSync(path, next);
+}
+
+function openCodeMcpServer(server: any): Record<string, any> {
+  if (server.url) {
+    const headers = { ...(server.http_headers || {}) };
+    if (server.bearer_token_env_var && process.env[server.bearer_token_env_var]) {
+      headers.Authorization = `Bearer ${process.env[server.bearer_token_env_var]}`;
+    }
+    return {
+      type: "remote",
+      url: server.url,
+      enabled: server.enabled !== false,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      ...(server.tool_timeout_sec ? { timeout: Number(server.tool_timeout_sec) * 1000 } : {}),
+    };
+  }
+
+  return {
+    type: "local",
+    command: [server.command, ...(Array.isArray(server.args) ? server.args : [])].filter(Boolean),
+    enabled: server.enabled !== false,
+    ...(server.env && typeof server.env === "object" ? { environment: server.env } : {}),
+  };
+}
+
+function buildOpenCodeConfig(root: string, id: FrameworkId, mcpConfig?: Record<string, any>): Record<string, any> {
+  const config: Record<string, any> = {
+    "$schema": "https://opencode.ai/config.json",
+    instructions: ["AGENTS.md"],
+    env: frameworkEnv(root, id),
+  };
+
+  const servers = mcpConfig?.mcpServers || {};
+  const mcp: Record<string, any> = {};
+  for (const [rawName, server] of Object.entries(servers) as Array<[string, any]>) {
+    if (!server?.command && !server?.url) continue;
+    mcp[safeMcpName(rawName)] = openCodeMcpServer(server);
+  }
+  if (Object.keys(mcp).length > 0) config.mcp = mcp;
+  return config;
+}
+
+function readActiveMcpConfig(root: string): Record<string, any> | null {
+  const path = activeMcpPath(root);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeFrameworkFiles(id: FrameworkId, root: string) {
+  const settings = readSettings();
+  const mcpConfig = readActiveMcpConfig(root) || readActiveMcpConfig(CURRENT_INSTALL_ROOT) || undefined;
+  settings.pai = { ...(settings.pai || {}), framework: id };
+  settings.env = { ...(settings.env || {}), ...frameworkEnv(root, id) };
+  writeFileSync(join(root, "settings.json"), JSON.stringify(settings, null, 2));
+
+  const claudeMd = join(CURRENT_INSTALL_ROOT, "CLAUDE.md");
+  if (existsSync(claudeMd)) {
+    const content = frameworkInstructionContent(readFileSync(claudeMd, "utf-8"), id);
+    if (id === "claude") {
+      writeFileSync(join(root, "CLAUDE.md"), content);
+    } else {
+      writeFileSync(join(root, "AGENTS.md"), content.replace(/^#\s*CLAUDE\.md\b.*$/m, "# AGENTS.md"));
+    }
+  }
+
+  if (id === "codex") {
+    writeCodexConfigToml(join(root, "config.toml"), root, mcpConfig);
+    writeFileSync(join(root, "hooks.json"), JSON.stringify(generateCodexHooks(root), null, 2));
+  } else if (id === "opencode") {
+    writeFileSync(join(root, "opencode.json"), JSON.stringify(buildOpenCodeConfig(root, id, mcpConfig), null, 2));
+  }
+}
+
+function ensureFrameworkInstall(id: FrameworkId): string {
+  const root = frameworkRoot(id);
+  mkdirSync(root, { recursive: true });
+  mkdirSync(DATA_DIR, { recursive: true });
+  copyMissing(join(CURRENT_PAI_DIR, "MEMORY"), join(DATA_DIR, "MEMORY"));
+  copyMissing(join(CURRENT_PAI_DIR, "USER"), join(DATA_DIR, "USER"));
+
+  const targetPaiDir = join(root, "PAI");
+  if (!existsSync(targetPaiDir)) {
+    mkdirSync(targetPaiDir, { recursive: true });
+  }
+
+  for (const entry of readdirSync(CURRENT_PAI_DIR, { withFileTypes: true })) {
+    if (entry.name === "MEMORY" || entry.name === "USER") continue;
+    const src = join(CURRENT_PAI_DIR, entry.name);
+    const dst = join(targetPaiDir, entry.name);
+    if (existsSync(dst)) continue;
+    if (entry.isDirectory()) createDirectoryLink(src, dst);
+    else if (entry.isFile()) cpSync(src, dst);
+  }
+
+  for (const dir of ["skills", "hooks", "plugins", "commands", "agents", "MCPs"]) {
+    if ((id === "codex" || id === "opencode") && dir === "agents") continue;
+    if (id === "opencode" && dir === "commands") continue;
+    const src = join(CURRENT_INSTALL_ROOT, dir);
+    const dst = join(root, dir);
+    if (existsSync(src) && !existsSync(dst)) {
+      createDirectoryLink(src, dst);
+    }
+  }
+
+  linkDirectory(join(root, "MEMORY"), join(DATA_DIR, "MEMORY"));
+  linkDirectory(join(root, "USER"), join(DATA_DIR, "USER"));
+  linkDirectory(join(root, "PAI", "MEMORY"), join(DATA_DIR, "MEMORY"));
+  linkDirectory(join(root, "PAI", "USER"), join(DATA_DIR, "USER"));
+
+  if (id === "codex") {
+    const codexSkills = join(HOME, ".agents", "skills");
+    mkdirSync(codexSkills, { recursive: true });
+    const sourceSkills = join(root, "skills");
+    if (existsSync(sourceSkills)) {
+      for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const src = join(sourceSkills, entry.name);
+        if (!existsSync(join(src, "SKILL.md"))) continue;
+        const dst = join(codexSkills, entry.name);
+        if (!existsSync(dst)) createDirectoryLink(src, dst);
+      }
+    }
+    syncCodexPrompts(root);
+    syncCodexAgents(root);
+  } else if (id === "opencode") {
+    syncOpenCodeAgents(root);
+    syncOpenCodeCommands(root);
+  }
+
+  writeFrameworkFiles(id, root);
+  return root;
+}
+
+function setActiveFramework(id: FrameworkId) {
+  const root = ensureFrameworkInstall(id);
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(FRAMEWORK_STATE, JSON.stringify({
+    active: id,
+    frameworkName: frameworkName(id),
+    root,
+    dataDir: DATA_DIR,
+    updatedAt: new Date().toISOString(),
+  }, null, 2));
+  log(`Active framework set to ${frameworkName(id)} at ${root}`, "✅");
+  log(`Global PAI memory remains at ${join(DATA_DIR, "MEMORY")}`, "🧠");
 }
 
 function notifyVoice(message: string) {
@@ -126,7 +973,7 @@ function displayBanner() {
 }
 
 function getCurrentVersion(): string | null {
-  const result = spawnSync(["claude", "--version"]);
+  const result = spawnSync(frameworkSpawnArgs([frameworkCommand(getActiveFramework()), "--version"]));
   const output = result.stdout.toString();
   const match = output.match(/([0-9]+\.[0-9]+\.[0-9]+)/);
   return match ? match[1] : null;
@@ -142,7 +989,9 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-async function getLatestVersion(): Promise<string | null> {
+async function getLatestVersion(framework: FrameworkId): Promise<string | null> {
+  if (framework !== "claude") return null;
+
   try {
     const response = await fetch(
       "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest"
@@ -162,6 +1011,7 @@ async function getLatestVersion(): Promise<string | null> {
 // ============================================================================
 
 function getMcpProfiles(): string[] {
+  const MCP_DIR = getMcpDir();
   if (!existsSync(MCP_DIR)) return [];
   return readdirSync(MCP_DIR)
     .filter((f) => f.endsWith(".mcp.json"))
@@ -169,6 +1019,7 @@ function getMcpProfiles(): string[] {
 }
 
 function getIndividualMcps(): string[] {
+  const MCP_DIR = getMcpDir();
   if (!existsSync(MCP_DIR)) return [];
   return readdirSync(MCP_DIR)
     .filter((f) => f.endsWith("-MCP.json"))
@@ -176,6 +1027,8 @@ function getIndividualMcps(): string[] {
 }
 
 function getCurrentProfile(): string | null {
+  const activeFramework = getActiveFramework();
+  const ACTIVE_MCP = activeMcpPath(frameworkRoot(activeFramework));
   if (!existsSync(ACTIVE_MCP)) return null;
   try {
     const stats = lstatSync(ACTIVE_MCP);
@@ -192,6 +1045,7 @@ function getCurrentProfile(): string | null {
 }
 
 function mergeMcpConfigs(mcpFiles: string[]): object {
+  const MCP_DIR = getMcpDir();
   const merged: Record<string, any> = { mcpServers: {} };
 
   for (const file of mcpFiles) {
@@ -213,27 +1067,42 @@ function mergeMcpConfigs(mcpFiles: string[]): object {
   return merged;
 }
 
+function writeActiveMcpConfig(config: Record<string, any>, activeFramework = getActiveFramework(), activeRoot = frameworkRoot(activeFramework)) {
+  mkdirSync(activeRoot, { recursive: true });
+  writeFileSync(activeMcpPath(activeRoot), JSON.stringify(config, null, 2));
+
+  if (activeFramework === "codex") {
+    writeCodexConfigToml(join(activeRoot, "config.toml"), activeRoot, config);
+  } else if (activeFramework === "opencode") {
+    writeFileSync(join(activeRoot, "opencode.json"), JSON.stringify(buildOpenCodeConfig(activeRoot, activeFramework, config), null, 2));
+  }
+}
+
 function setMcpProfile(profile: string) {
+  const MCP_DIR = getMcpDir();
+  const activeFramework = getActiveFramework();
+  const activeRoot = ensureFrameworkInstall(activeFramework);
+  if (profile.toLowerCase() === "none") {
+    writeActiveMcpConfig({ mcpServers: {} }, activeFramework, activeRoot);
+    log(`Switched ${frameworkName(activeFramework)} to no MCP servers`, "✅");
+    log(`Restart ${frameworkName(activeFramework)} to apply`, "⚠️");
+    return;
+  }
   const profileFile = join(MCP_DIR, `${profile}.mcp.json`);
   if (!existsSync(profileFile)) {
     error(`Profile '${profile}' not found`);
   }
-
-  // Remove existing
-  if (existsSync(ACTIVE_MCP)) {
-    unlinkSync(ACTIVE_MCP);
-  }
-
-  // Create symlink
-  symlinkSync(profileFile, ACTIVE_MCP);
-  log(`Switched to '${profile}' profile`, "✅");
-  log("Restart Claude Code to apply", "⚠️");
+  const config = JSON.parse(readFileSync(profileFile, "utf-8"));
+  writeActiveMcpConfig(config, activeFramework, activeRoot);
+  log(`Switched ${frameworkName(activeFramework)} to '${profile}' MCP profile`, "✅");
+  log(`Restart ${frameworkName(activeFramework)} to apply`, "⚠️");
 }
 
 function setMcpCustom(mcpNames: string[]) {
   const files: string[] = [];
 
   for (const name of mcpNames) {
+    if (name.toLowerCase() === "none") continue;
     const file = MCP_SHORTCUTS[name.toLowerCase()];
     if (file) {
       files.push(file);
@@ -251,17 +1120,20 @@ function setMcpCustom(mcpNames: string[]) {
     }
   }
 
-  const merged = mergeMcpConfigs(files);
+  const activeFramework = getActiveFramework();
+  const activeRoot = ensureFrameworkInstall(activeFramework);
+  const ACTIVE_MCP = activeMcpPath(activeRoot);
+  const merged = mergeMcpConfigs(files) as Record<string, any>;
 
   // Remove symlink if exists, write new file
   if (existsSync(ACTIVE_MCP)) {
     unlinkSync(ACTIVE_MCP);
   }
-  writeFileSync(ACTIVE_MCP, JSON.stringify(merged, null, 2));
+  writeActiveMcpConfig(merged, activeFramework, activeRoot);
 
   const serverCount = Object.keys((merged as any).mcpServers || {}).length;
   if (serverCount > 0) {
-    log(`Configured ${serverCount} MCP server(s): ${mcpNames.join(", ")}`, "✅");
+    log(`Configured ${serverCount} MCP server(s) for ${frameworkName(activeFramework)}: ${mcpNames.join(", ")}`, "✅");
   }
 }
 
@@ -388,39 +1260,53 @@ function cmdWallpaper(args: string[]) {
 // Commands
 // ============================================================================
 
-async function cmdLaunch(options: { mcp?: string; resume?: boolean; skipPerms?: boolean; local?: boolean; systemPrompt?: string }) {
+async function cmdLaunch(options: { mcp?: string; resume?: boolean; dangerous?: boolean; local?: boolean; systemPrompt?: string }) {
   // CLAUDE.md is now static — no build step needed.
   // Algorithm spec is loaded on-demand when Algorithm mode triggers.
   // (InstantiatePAI.ts is retired — kept for reference only)
 
   displayBanner();
-  const args = ["claude"];
+  const activeFramework = getActiveFramework();
+  const activeRoot = ensureFrameworkInstall(activeFramework);
+  const args = [frameworkCommand(activeFramework)];
 
-  // PAI System Prompt — constitutional rules appended to Claude Code's system prompt
-  // These rules get highest instruction authority (system prompt layer > CLAUDE.md layer)
-  const systemPromptFile = options.systemPrompt ?? join(CLAUDE_DIR, "PAI", "PAI_SYSTEM_PROMPT.md");
-  if (existsSync(systemPromptFile)) {
+  // PAI System Prompt — currently Claude Code-specific. Codex/OpenCode use
+  // AGENTS.md generated by the framework switch/install path.
+  const systemPromptFile = options.systemPrompt ?? join(activeRoot, "PAI", "PAI_SYSTEM_PROMPT.md");
+  if (activeFramework === "claude" && existsSync(systemPromptFile)) {
     args.push("--append-system-prompt-file", systemPromptFile);
+  } else if (activeFramework !== "claude" && options.systemPrompt) {
+    log(`System prompt append is Claude-only; ${frameworkName(activeFramework)} will use its generated AGENTS.md instructions.`, "⚠️");
   }
 
-  // Handle MCP configuration
+  // Handle MCP configuration. PAI profile files use Claude's mcpServers shape;
+  // setMcpCustom projects that shape into the active framework's native config.
   if (options.mcp) {
     const mcpNames = options.mcp.split(",").map((s) => s.trim());
     setMcpCustom(mcpNames);
   }
 
-  // Add flags
-  // NOTE: We no longer use --dangerously-skip-permissions by default.
-  // The settings.json permission system (allow/deny/ask) provides proper security.
-  // Use --dangerous flag explicitly if you really need to skip all permission checks.
+  // Add framework-native flags.
   if (options.resume) {
-    args.push("--resume");
+    if (activeFramework === "claude") {
+      args.push("--resume");
+    } else if (activeFramework === "codex") {
+      args.push("resume", "--last");
+    } else {
+      args.push("--continue");
+    }
   }
 
-  // Change to PAI directory unless --local flag is set
-  if (!options.local) {
-    process.chdir(CLAUDE_DIR);
+  if (options.dangerous) {
+    if (activeFramework === "claude" || activeFramework === "opencode") {
+      args.push("--dangerously-skip-permissions");
+    } else {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    }
   }
+
+  // Keep the framework session in the caller's current directory. The active
+  // framework home is supplied through env, so PAI config still resolves there.
 
   // Voice notification (using focused marker for calmer tone).
   // Reads daidentity.startupCatchphrase from settings.json so the user's
@@ -428,26 +1314,28 @@ async function cmdLaunch(options: { mcp?: string; resume?: boolean; skipPerms?: 
   // historical "<name> here, ready to go." default when unset.
   notifyVoice(`[🎯 focused] ${getStartupCatchphrase()}`);
 
-  // Launch Claude
+  // Launch the active framework CLI.
   // BILLING: subscription, not API. Strip ANTHROPIC_API_KEY before spawn so the
   // interactive session uses OAuth (`claude /login`) instead of API-key billing.
   // Mirrors the protection in cmdPrompt() — same hazard, same fix.
   const launchEnv = { ...process.env };
+  Object.assign(launchEnv, frameworkEnv(activeRoot, activeFramework));
   delete launchEnv.ANTHROPIC_API_KEY;
-  const proc = spawn(args, {
+  const proc = spawn(frameworkSpawnArgs(args), {
     stdio: ["inherit", "inherit", "inherit"],
     env: launchEnv,
   });
 
-  // Wait for Claude to exit
+  // Wait for the active framework CLI to exit.
   await proc.exited;
 }
 
 async function cmdUpdate() {
   log("Checking for updates...", "🔍");
 
+  const activeFramework = getActiveFramework();
   const current = getCurrentVersion();
-  const latest = await getLatestVersion();
+  const latest = await getLatestVersion(activeFramework);
 
   if (!current) {
     error("Could not detect current version");
@@ -464,7 +1352,7 @@ async function cmdUpdate() {
     return;
   }
 
-  log("Updating Claude Code...", "🔄");
+  log(`Updating ${frameworkName(activeFramework)}...`, "🔄");
 
   // Step 1: Update Bun
   log("Step 1/2: Updating Bun...", "📦");
@@ -475,13 +1363,18 @@ async function cmdUpdate() {
     log("Bun updated", "✅");
   }
 
-  // Step 2: Update Claude Code
-  log("Step 2/2: Installing latest Claude Code...", "🤖");
-  const claudeResult = spawnSync(["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"]);
-  if (claudeResult.exitCode !== 0) {
-    error("Claude Code installation failed");
+  // Step 2: Update selected framework CLI
+  log(`Step 2/2: Installing latest ${frameworkName(activeFramework)}...`, "🤖");
+  const command = activeFramework === "codex"
+    ? "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
+    : activeFramework === "opencode"
+      ? "curl -fsSL https://opencode.ai/install | bash"
+      : "curl -fsSL https://claude.ai/install.sh | bash";
+  const frameworkResult = spawnSync(["bash", "-c", command]);
+  if (frameworkResult.exitCode !== 0) {
+    error(`${frameworkName(activeFramework)} installation failed`);
   }
-  log("Claude Code updated", "✅");
+  log(`${frameworkName(activeFramework)} updated`, "✅");
 
   // Show final version
   const newVersion = getCurrentVersion();
@@ -493,8 +1386,9 @@ async function cmdUpdate() {
 async function cmdVersion() {
   log("Checking versions...", "🔍");
 
+  const activeFramework = getActiveFramework();
   const current = getCurrentVersion();
-  const latest = await getLatestVersion();
+  const latest = await getLatestVersion(activeFramework);
 
   if (!current) {
     error("Could not detect current version");
@@ -510,7 +1404,7 @@ async function cmdVersion() {
       log("Update available (run 'k update')", "⚠️");
     }
   } else {
-    log("Could not fetch latest version", "⚠️");
+    log(`Latest-version lookup is not mapped for ${frameworkName(activeFramework)} yet`, "⚠️");
   }
 }
 
@@ -564,18 +1458,47 @@ function cmdMcpList() {
   console.log("  k mcp set research  # Full research profile");
 }
 
+function cmdFramework(subCommand?: string, subArg?: string) {
+  if (!subCommand || subCommand === "status") {
+    const active = getActiveFramework();
+    console.log(`Active framework: ${frameworkName(active)} (${active})`);
+    console.log(`Framework root: ${frameworkRoot(active)}`);
+    console.log(`Global data: ${DATA_DIR}`);
+    console.log("");
+    console.log("Available frameworks:");
+    console.log("  claude    Claude Code");
+    console.log("  codex     Codex");
+    console.log("  opencode  OpenCode");
+    return;
+  }
+
+  if (subCommand === "switch" || subCommand === "set") {
+    const target = normalizeFramework(subArg);
+    if (!target) error("Usage: k framework switch claude|codex|opencode");
+    setActiveFramework(target);
+    return;
+  }
+
+  error("Usage: k framework status | k framework switch claude|codex|opencode");
+}
+
 async function cmdPrompt(prompt: string) {
   // One-shot prompt execution
   // NOTE: No --dangerously-skip-permissions - rely on settings.json permissions
   // BILLING: subscription, not API. Removed --bare (forces ANTHROPIC_API_KEY),
   // strip the key from inherited env.
-  const args = ["claude", "-p", prompt];
-
-  process.chdir(CLAUDE_DIR);
+  const activeFramework = getActiveFramework();
+  const activeRoot = ensureFrameworkInstall(activeFramework);
+  const args = activeFramework === "claude"
+    ? ["claude", "-p", prompt]
+    : activeFramework === "codex"
+      ? ["codex", "exec", prompt]
+      : ["opencode", "run", prompt];
 
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
+  Object.assign(env, frameworkEnv(activeRoot, activeFramework));
   delete env.ANTHROPIC_API_KEY;
-  const proc = spawn(args, {
+  const proc = spawn(frameworkSpawnArgs(args), {
     stdio: ["inherit", "inherit", "inherit"],
     env,
   });
@@ -589,16 +1512,19 @@ function cmdHelp() {
 pai - Personal AI CLI Tool (v2.0.0)
 
 USAGE:
-  k                        Launch Claude (no MCPs, max performance)
+  k                        Launch active framework (Claude/Codex/OpenCode)
   k -m <mcp>               Launch with specific MCP(s)
   k -m bd,ap               Launch with multiple MCPs
   k -r, --resume           Resume last session
-  k -s, --system-prompt    System prompt file to append (default: PAI_SYSTEM_PROMPT.md)
-  k -l, --local            Stay in current directory (don't cd to ~/.claude)
+  k -d, --dangerous        Use the active CLI's permission-bypass flag
+  k -s, --system-prompt    Claude-only system prompt file to append
+  k -l, --local            Compatibility flag; current directory is already preserved
 
 COMMANDS:
-  k update                 Update Claude Code to latest version
+  k update                 Update active framework CLI
   k version, -v            Show version information
+  k framework status       Show active framework and global memory path
+  k framework switch codex Switch framework (claude|codex|opencode)
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
@@ -622,8 +1548,10 @@ EXAMPLES:
   k -m bd                  Start with Bright Data
   k -m bd,ap               Start with multiple MCPs
   k -r                     Resume last session
+  k -d                     Start with native permission bypass enabled
   k mcp set research       Switch to research profile
-  k update                 Update Claude Code
+  k framework switch codex Switch to Codex while keeping ~/.pai/MEMORY
+  k update                 Update active framework CLI
   k prompt "What time is it?"   One-shot prompt
   k -w                     List available wallpapers
   k -w circuit-board       Switch wallpaper (Kitty + macOS)
@@ -646,7 +1574,7 @@ async function main() {
   // Parse arguments
   let mcp: string | undefined;
   let resume = false;
-  let skipPerms = true;
+  let dangerous = false;
   let local = false;
   let systemPrompt: string | undefined;
   let command: string | undefined;
@@ -674,8 +1602,9 @@ async function main() {
       case "--resume":
         resume = true;
         break;
-      case "--safe":
-        skipPerms = false;
+      case "-d":
+      case "--dangerous":
+        dangerous = true;
         break;
       case "-s":
       case "--system-prompt":
@@ -700,6 +1629,12 @@ async function main() {
         break;
       case "profiles":
         command = "profiles";
+        break;
+      case "framework":
+      case "fw":
+        command = "framework";
+        subCommand = args[++i];
+        subArg = args[++i];
         break;
       case "mcp":
         command = "mcp";
@@ -740,6 +1675,9 @@ async function main() {
     case "profiles":
       cmdProfiles();
       break;
+    case "framework":
+      cmdFramework(subCommand, subArg);
+      break;
     case "mcp":
       if (subCommand === "list") {
         cmdMcpList();
@@ -760,7 +1698,7 @@ async function main() {
       break;
     default:
       // Launch with options
-      await cmdLaunch({ mcp, resume, skipPerms, local, systemPrompt });
+      await cmdLaunch({ mcp, resume, dangerous, local, systemPrompt });
   }
 }
 

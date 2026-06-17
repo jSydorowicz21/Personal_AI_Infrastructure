@@ -18,11 +18,10 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import { userPath } from "./lib/paths";
 
-const HOME = process.env.HOME || "";
-const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
-const QUEUE_FILE = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE", "proposals.jsonl");
-const CURRENT_STATE_DIR = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE");
+const QUEUE_FILE = userPath("TELOS", "CURRENT_STATE", "proposals.jsonl");
+const CURRENT_STATE_DIR = userPath("TELOS", "CURRENT_STATE");
 
 type Proposal = {
   id: string;

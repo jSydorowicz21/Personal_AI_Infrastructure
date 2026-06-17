@@ -3,12 +3,14 @@
  * Verifies installation completeness after all steps run.
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
 import type { InstallState, ValidationCheck, InstallSummary, EngineEventHandler } from "./types";
 import { PAI_VERSION } from "./types";
-import { homedir } from "os";
+import { homedir, tmpdir } from "os";
+import { getPaiDataDir } from "./frameworks";
+import type { FrameworkTarget } from "./types";
 
 /**
  * Check if Pulse is running. PAI 5.0 absorbed the standalone voice server
@@ -30,6 +32,71 @@ async function checkPulseHealth(): Promise<boolean> {
   }
 }
 
+function checkWindowsPulseTask(): boolean {
+  if (process.platform !== "win32") return false;
+  const res = spawnSync("powershell", [
+    "-NoProfile",
+    "-Command",
+    "if (Get-ScheduledTask -TaskName 'PAI Pulse' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+  ], {
+    encoding: "utf-8",
+    timeout: 5000,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return res.status === 0;
+}
+
+function shellRcFile(): { path: string; display: string; sourceCommand: string } {
+  if (process.platform === "win32" && process.env.PAI_POWERSHELL_PROFILE) {
+    return {
+      path: process.env.PAI_POWERSHELL_PROFILE,
+      display: "$PROFILE",
+      sourceCommand: ". $PROFILE",
+    };
+  }
+
+  const userShell = process.env.SHELL || "";
+  if (process.platform === "win32" && !userShell) {
+    const candidates = [
+      process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
+      join(homedir(), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(homedir(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+    ].filter(Boolean);
+    const path = candidates.find((candidate) => existsSync(candidate)) || candidates[0];
+    return {
+      path,
+      display: "$PROFILE",
+      sourceCommand: ". $PROFILE",
+    };
+  }
+  if (userShell.includes("fish")) {
+    return {
+      path: join(homedir(), ".config", "fish", "config.fish"),
+      display: "~/.config/fish/config.fish",
+      sourceCommand: "source ~/.config/fish/config.fish",
+    };
+  }
+  if (userShell.includes("bash")) {
+    return {
+      path: join(homedir(), ".bashrc"),
+      display: "~/.bashrc",
+      sourceCommand: "source ~/.bashrc",
+    };
+  }
+  return {
+    path: join(homedir(), ".zshrc"),
+    display: "~/.zshrc",
+    sourceCommand: "source ~/.zshrc",
+  };
+}
+
+function pulseManualStartCommand(paiDir: string): string {
+  const pulseDir = join(paiDir, "PAI", "PULSE");
+  return process.platform === "win32"
+    ? `powershell -NoProfile -ExecutionPolicy Bypass -File ${JSON.stringify(join(pulseDir, "manage.ps1"))} start`
+    : `bash ${join(pulseDir, "manage.sh")} install`;
+}
+
 /**
  * Run the SecurityPipeline.hook.ts as Claude Code would, with a benign Bash
  * payload. The hook MUST exit 0 (allow) and MUST NOT print "patterns file
@@ -40,40 +107,101 @@ async function checkPulseHealth(): Promise<boolean> {
  * Returns { passed, detail }. `passed=false` is CRITICAL: every Bash call
  * the user makes will be denied until this is fixed.
  */
-function checkSecurityHookSmoke(paiDir: string): { passed: boolean; detail: string } {
-  const hookPath = join(paiDir, "hooks", "SecurityPipeline.hook.ts");
+function checkSecurityHookSmoke(
+  paiDir: string,
+  framework?: FrameworkTarget,
+  throughAdapter = false
+): { passed: boolean; detail: string } {
+  const hooksDir = join(paiDir, "hooks");
+  const hookPath = throughAdapter
+    ? join(hooksDir, "FrameworkHookAdapter.ts")
+    : join(hooksDir, "SecurityPipeline.hook.ts");
   if (!existsSync(hookPath)) {
-    return { passed: false, detail: "Hook not found at hooks/SecurityPipeline.hook.ts" };
+    return { passed: false, detail: `Hook not found at ${throughAdapter ? "hooks/FrameworkHookAdapter.ts" : "hooks/SecurityPipeline.hook.ts"}` };
   }
-  const patternsPath = join(paiDir, "PAI", "USER", "SECURITY", "PATTERNS.yaml");
+  const patternsPath = join(getPaiDataDir(), "USER", "SECURITY", "PATTERNS.yaml");
   if (!existsSync(patternsPath)) {
     return { passed: false, detail: `PATTERNS.yaml not found at ${patternsPath} — hook will fail-close on every Bash call` };
   }
   // Synthetic benign payload that should ALWAYS be allowed. Mirrors Claude Code's hook input shape.
   const payload = JSON.stringify({
-    session_id: "smoke-test",
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: "echo pai-smoke-test" },
+    sessionId: "smoke-test",
+    hookEventName: "PreToolUse",
+    toolName: "Bash",
+    toolInput: { command: "echo pai-smoke-test" },
   });
   try {
-    const res = spawnSync(process.execPath, [hookPath], {
+    const args = throughAdapter
+      ? [hookPath, "--framework", framework?.id || "codex", "--target", "SecurityPipeline.hook.ts"]
+      : [hookPath];
+    const res = spawnSync(process.execPath, args, {
       input: payload,
       encoding: "utf-8",
-      timeout: 8000,
+      timeout: process.platform === "win32" ? 20000 : 8000,
       // Match Claude Code: no inherited zshrc, minimal env. HOME and PATH only.
-      env: { HOME: homedir(), PATH: process.env.PATH || "" },
+      env: {
+        HOME: homedir(),
+        PATH: process.env.PATH || "",
+        PAI_DIR: join(paiDir, "PAI"),
+        PAI_DATA_DIR: getPaiDataDir(),
+        PAI_FRAMEWORK: framework?.id || "claude",
+        PAI_FRAMEWORK_DIR: paiDir,
+        PAI_SETTINGS_PATH: join(paiDir, "settings.json"),
+        PAI_CONFIG_DIR: stateConfigDirFallback(paiDir),
+      },
     });
     const stderr = (res.stderr || "").toString();
     if (res.status !== 0) {
-      return { passed: false, detail: `Hook exited ${res.status}: ${stderr.trim().slice(0, 160) || "no stderr"}` };
+      const failureParts = [
+        `status=${res.status}`,
+        res.signal ? `signal=${res.signal}` : "",
+        res.error ? `error=${res.error.message}` : "",
+        stderr.trim() ? `stderr=${stderr.trim().slice(0, 160)}` : "",
+      ].filter(Boolean);
+      return { passed: false, detail: `Hook failed: ${failureParts.join("; ") || "no failure detail"}` };
     }
     if (/patterns file missing|fail-closed/i.test(stderr)) {
       return { passed: false, detail: `Hook printed fail-closed message: ${stderr.trim().slice(0, 160)}` };
     }
-    return { passed: true, detail: "echo allowed; PATTERNS.yaml loaded; no fail-closed message" };
+    return {
+      passed: true,
+      detail: throughAdapter
+        ? "adapter normalized payload; echo allowed; PATTERNS.yaml loaded"
+        : "echo allowed; PATTERNS.yaml loaded; no fail-closed message",
+    };
   } catch (err: any) {
     return { passed: false, detail: `Hook execution threw: ${err?.message || String(err)}` };
+  }
+}
+
+function stateConfigDirFallback(_paiDir: string): string {
+  return process.env.PAI_CONFIG_DIR || join(homedir(), ".config", "PAI");
+}
+
+function checkOpenCodePluginBuild(paiDir: string): { passed: boolean; detail: string } {
+  const pluginPath = join(paiDir, "plugins", "pai-opencode.ts");
+  if (!existsSync(pluginPath)) {
+    return { passed: false, detail: "Plugin not found at plugins/pai-opencode.ts" };
+  }
+
+  const outPath = join(tmpdir(), `pai-opencode-plugin-${Date.now()}.js`);
+  try {
+    const res = spawnSync(process.execPath, ["build", pluginPath, "--outfile", outPath, "--target", "bun"], {
+      encoding: "utf-8",
+      timeout: 10000,
+      env: { HOME: homedir(), PATH: process.env.PATH || "" },
+    });
+    if (res.status !== 0) {
+      const stderr = (res.stderr || "").toString().trim();
+      return { passed: false, detail: `Plugin build failed: ${stderr.slice(0, 180) || "no stderr"}` };
+    }
+    return { passed: true, detail: "Plugin builds successfully" };
+  } catch (err: any) {
+    return { passed: false, detail: `Plugin build threw: ${err?.message || String(err)}` };
+  } finally {
+    try {
+      rmSync(outPath, { force: true });
+    } catch {}
   }
 }
 
@@ -94,6 +222,8 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
 
   const paiDir = state.detection?.paiDir || join(homedir(), ".claude");
   const configDir = state.detection?.configDir || join(homedir(), ".config", "PAI");
+  const framework = state.detection?.framework;
+  const dataDir = getPaiDataDir();
   const checks: ValidationCheck[] = [];
 
   // 1. settings.json exists and is valid JSON
@@ -121,6 +251,100 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         : "File not found",
     critical: true,
   });
+
+  if (framework) {
+    const instructionPath = join(paiDir, framework.instructionFile);
+    checks.push({
+      name: `${framework.displayName} instructions`,
+      passed: existsSync(instructionPath),
+      detail: existsSync(instructionPath) ? `Present at ${instructionPath}` : `${framework.instructionFile} missing`,
+      critical: true,
+    });
+
+    if (framework.id === "codex") {
+      const codexConfigPath = join(paiDir, "config.toml");
+      const codexHooksPath = join(paiDir, "hooks.json");
+      const codexPromptPath = join(paiDir, "prompts", "cs.md");
+      const codexAgentPath = join(paiDir, "agents", "engineer.toml");
+      const codexSkillPath = join(homedir(), ".agents", "skills", "ContextSearch", "SKILL.md");
+      const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
+      checks.push({
+        name: "Codex config.toml",
+        passed: existsSync(codexConfigPath),
+        detail: existsSync(codexConfigPath) ? "Present" : "Missing",
+        critical: true,
+      });
+      checks.push({
+        name: "Codex hooks.json",
+        passed: existsSync(codexHooksPath),
+        detail: existsSync(codexHooksPath) ? "Present" : "Missing",
+        critical: true,
+      });
+      checks.push({
+        name: "Codex skill link",
+        passed: existsSync(codexSkillPath),
+        detail: existsSync(codexSkillPath) ? "ContextSearch present in ~/.agents/skills" : "ContextSearch missing from ~/.agents/skills",
+        critical: false,
+      });
+      checks.push({
+        name: "Codex command prompts",
+        passed: existsSync(codexPromptPath) && !codexPromptContent.includes('Skill("'),
+        detail: existsSync(codexPromptPath)
+          ? !codexPromptContent.includes('Skill("')
+            ? "PAI commands generated as Codex prompts"
+            : "prompts/cs.md still contains Claude-style Skill(...) redirect"
+          : "prompts/cs.md missing",
+        critical: false,
+      });
+      checks.push({
+        name: "Codex native agents",
+        passed: existsSync(codexAgentPath),
+        detail: existsSync(codexAgentPath) ? "PAI agents generated as TOML" : "agents/engineer.toml missing",
+        critical: false,
+      });
+    } else if (framework.id === "opencode") {
+      const openCodeConfigPath = join(paiDir, "opencode.json");
+      const openCodePluginPath = join(paiDir, "plugins", "pai-opencode.ts");
+      const openCodeCommandPath = join(paiDir, "commands", "cs.md");
+      const openCodeAgentPath = join(paiDir, "agents", "Engineer.md");
+      const openCodeAgentContent = existsSync(openCodeAgentPath) ? readFileSync(openCodeAgentPath, "utf-8") : "";
+      const openCodeCommandContent = existsSync(openCodeCommandPath) ? readFileSync(openCodeCommandPath, "utf-8") : "";
+      checks.push({
+        name: "OpenCode config",
+        passed: existsSync(openCodeConfigPath),
+        detail: existsSync(openCodeConfigPath) ? "Present" : "Missing",
+        critical: true,
+      });
+      checks.push({
+        name: "OpenCode PAI plugin",
+        passed: existsSync(openCodePluginPath),
+        detail: existsSync(openCodePluginPath) ? "Present in plugins/pai-opencode.ts" : "Missing from plugins/",
+        critical: true,
+      });
+      checks.push({
+        name: "OpenCode commands",
+        passed: existsSync(openCodeCommandPath)
+          && !openCodeCommandContent.includes("argument-hint:")
+          && !openCodeCommandContent.includes('Skill("'),
+        detail: existsSync(openCodeCommandPath)
+          ? !openCodeCommandContent.includes("argument-hint:") && !openCodeCommandContent.includes('Skill("')
+            ? "PAI commands generated as OpenCode markdown"
+            : "commands/cs.md still contains Claude-only frontmatter or Skill(...) redirect"
+          : "commands/cs.md missing",
+        critical: false,
+      });
+      checks.push({
+        name: "OpenCode native agents",
+        passed: existsSync(openCodeAgentPath) && !openCodeAgentContent.includes("initialPrompt:"),
+        detail: existsSync(openCodeAgentPath)
+          ? !openCodeAgentContent.includes("initialPrompt:")
+            ? "PAI agents generated as OpenCode markdown"
+            : "agents/Engineer.md still contains Claude-only frontmatter"
+          : "agents/Engineer.md missing",
+        critical: false,
+      });
+    }
+  }
 
   // 2. Required settings fields
   if (settings) {
@@ -173,12 +397,44 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
     });
   }
 
-  // 4. PAI skill present
-  const skillPath = join(paiDir, "skills", "PAI", "SKILL.md");
+  const globalMemoryPath = join(dataDir, "MEMORY");
   checks.push({
-    name: "PAI core skill",
+    name: "Global memory store",
+    passed: existsSync(globalMemoryPath),
+    detail: existsSync(globalMemoryPath) ? `Present at ${globalMemoryPath}` : "Missing",
+    critical: true,
+  });
+
+  const globalUserPath = join(dataDir, "USER");
+  checks.push({
+    name: "Global USER context store",
+    passed: existsSync(globalUserPath),
+    detail: existsSync(globalUserPath) ? `Present at ${globalUserPath}` : "Missing",
+    critical: true,
+  });
+
+  const frameworkMemoryPath = join(paiDir, "PAI", "MEMORY");
+  checks.push({
+    name: "Framework memory path",
+    passed: existsSync(frameworkMemoryPath),
+    detail: existsSync(frameworkMemoryPath) ? `Available at ${frameworkMemoryPath}` : "Missing PAI/MEMORY",
+    critical: true,
+  });
+
+  const frameworkUserPath = join(paiDir, "PAI", "USER");
+  checks.push({
+    name: "Framework USER context path",
+    passed: existsSync(frameworkUserPath),
+    detail: existsSync(frameworkUserPath) ? `Available at ${frameworkUserPath}` : "Missing PAI/USER",
+    critical: true,
+  });
+
+  // 4. Representative PAI skill present
+  const skillPath = join(paiDir, "skills", "ContextSearch", "SKILL.md");
+  checks.push({
+    name: "PAI skill library",
     passed: existsSync(skillPath),
-    detail: existsSync(skillPath) ? "Present" : "Not found — clone PAI repo to enable",
+    detail: existsSync(skillPath) ? "ContextSearch present" : "ContextSearch missing — install PAI skills to enable",
     critical: false,
   });
 
@@ -224,16 +480,18 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
 
   // 7. Pulse running — embeds voice + dashboard + observability (PAI 5.0)
   const pulseHealthy = await checkPulseHealth();
+  const pulseInstallCommand = pulseManualStartCommand(paiDir);
 
   checks.push({
     name: "Pulse (voice + dashboard)",
     passed: pulseHealthy,
     detail: pulseHealthy
       ? "Running on localhost:31337"
-      : "Not reachable — install via: bash ~/.claude/PAI/PULSE/manage.sh install",
+      : `Not reachable — install via: ${pulseInstallCommand}`,
     critical: false,
   });
 
+  if (process.platform === "darwin") {
   // 7b. Pulse launchd plist present (auto-start on login)
   const pulsePlist = join(homedir(), "Library", "LaunchAgents", "com.pai.pulse.plist");
   const pulsePlistInstalled = existsSync(pulsePlist);
@@ -245,21 +503,41 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       : "Not installed — Pulse will not auto-start on login",
     critical: false,
   });
+  } else if (process.platform === "win32") {
+    const taskInstalled = checkWindowsPulseTask();
+    checks.push({
+      name: "Pulse startup task",
+      passed: taskInstalled,
+      detail: taskInstalled
+        ? "Installed as scheduled task: PAI Pulse"
+        : `Not installed — install via: powershell -NoProfile -ExecutionPolicy Bypass -File ${JSON.stringify(join(paiDir, "PAI", "PULSE", "manage.ps1"))} install`,
+      critical: false,
+    });
+  } else {
+    checks.push({
+      name: "Pulse auto-start",
+      passed: true,
+      detail: "Skipped on this OS; launchd auto-start is macOS-only",
+      critical: false,
+    });
+  }
 
-  // 8. Zsh alias configured
-  const zshrcPath = join(homedir(), ".zshrc");
+  // 8. Shell alias configured
+  const rcFile = shellRcFile();
   let aliasConfigured = false;
-  if (existsSync(zshrcPath)) {
+  if (existsSync(rcFile.path)) {
     try {
-      const zshContent = readFileSync(zshrcPath, "utf-8");
-      aliasConfigured = zshContent.includes("# PAI alias") && zshContent.includes("alias pai=");
+      const rcContent = readFileSync(rcFile.path, "utf-8");
+      const paiConfigured = rcContent.includes("alias pai") || rcContent.includes("function pai");
+      const kConfigured = rcContent.includes("alias k") || rcContent.includes("function k");
+      aliasConfigured = rcContent.includes("# PAI alias") && paiConfigured && kConfigured;
     } catch {}
   }
 
   checks.push({
-    name: "Shell alias (pai)",
+    name: "Shell aliases (k, pai)",
     passed: aliasConfigured,
-    detail: aliasConfigured ? "Configured in .zshrc" : "Not found — run: source ~/.zshrc",
+    detail: aliasConfigured ? `Configured in ${rcFile.display}` : `Not found — run: ${rcFile.sourceCommand}`,
     critical: true,
   });
 
@@ -267,13 +545,46 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
   // payload. Catches the v5.0 fail-closed regression where PATTERNS.yaml was
   // missing from the public template, leaving every fresh install unable to
   // execute Bash commands. CRITICAL — if this fails, the install is broken.
-  const securitySmoke = checkSecurityHookSmoke(paiDir);
-  checks.push({
-    name: "SecurityPipeline hook (smoke test)",
-    passed: securitySmoke.passed,
-    detail: securitySmoke.detail,
-    critical: true,
-  });
+  if (!framework || framework.id === "claude") {
+    const securitySmoke = checkSecurityHookSmoke(paiDir, framework);
+    checks.push({
+      name: "SecurityPipeline hook (smoke test)",
+      passed: securitySmoke.passed,
+      detail: securitySmoke.detail,
+      critical: true,
+    });
+  } else if (framework.id === "codex") {
+    const securitySmoke = checkSecurityHookSmoke(paiDir, framework, true);
+    checks.push({
+      name: "Codex SecurityPipeline adapter (smoke test)",
+      passed: securitySmoke.passed,
+      detail: securitySmoke.detail,
+      critical: true,
+    });
+  } else if (framework.id === "opencode") {
+    const pluginBuild = checkOpenCodePluginBuild(paiDir);
+    checks.push({
+      name: "OpenCode PAI plugin (build)",
+      passed: pluginBuild.passed,
+      detail: pluginBuild.detail,
+      critical: true,
+    });
+
+    const securitySmoke = checkSecurityHookSmoke(paiDir, framework, true);
+    checks.push({
+      name: "OpenCode SecurityPipeline adapter (smoke test)",
+      passed: securitySmoke.passed,
+      detail: securitySmoke.detail,
+      critical: true,
+    });
+  } else {
+    checks.push({
+      name: "SecurityPipeline hook (framework adaptation)",
+      passed: false,
+      detail: `${framework.displayName} hook/plugin adapter is not enabled yet`,
+      critical: false,
+    });
+  }
 
   return checks;
 }
@@ -282,13 +593,23 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
  * Generate install summary from state.
  */
 export function generateSummary(state: InstallState): InstallSummary {
+  const framework = state.detection?.framework;
+  const hasVoiceKey = !!state.collected.elevenLabsKey;
+  const voiceEnabled = hasVoiceKey || (state.completedSteps.includes("voice") && process.platform === "darwin");
+  const voiceMode = hasVoiceKey
+    ? "elevenlabs"
+    : state.completedSteps.includes("voice") && process.platform === "darwin"
+      ? "macos-say"
+      : "disabled";
   return {
     paiVersion: PAI_VERSION,
+    framework: framework?.id || state.collected.framework || "claude",
+    frameworkName: framework?.displayName || "Claude Code",
     principalName: state.collected.principalName || "User",
     aiName: state.collected.aiName || "PAI",
     timezone: state.collected.timezone || "UTC",
-    voiceEnabled: state.completedSteps.includes("voice"),
-    voiceMode: state.collected.elevenLabsKey ? "elevenlabs" : state.completedSteps.includes("voice") ? "macos-say" : "none",
+    voiceEnabled,
+    voiceMode,
     catchphrase: state.collected.catchphrase || "",
     installType: state.installType || "fresh",
     completedSteps: state.completedSteps.length,
