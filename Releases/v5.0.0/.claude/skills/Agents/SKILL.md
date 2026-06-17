@@ -1,6 +1,6 @@
 ---
 name: Agents
-description: "Compose CUSTOM agents from Base Traits + Voice + Specialization, and manage predefined functional TEAMS. Traits combine expertise (security, technical, research), personality (skeptical, analytical, enthusiastic), and approach (thorough, rapid, systematic). ComposeAgent.ts merges base + user config, outputs unique prompt + ElevenLabs voice + prosody. Predefined teams: engineering, architecture, marketing, design, security, research, content, strategy — each YAML-configured with roles, tensions, and specialist members. Observer team variant: read-only oversight agents that vote continue/halt/escalate against the tool-activity audit log (high-blast-radius or unattended runs only). USE WHEN create custom agents, spin up agents, specialized agents, agent personalities, available traits, list traits, agent voices, compose agent, spawn parallel agents, launch agents, engineering team, architecture team, marketing team, design team, security team, research team, content team, strategy team, get the team on this, observer team, audit agents. NOT FOR ad-hoc swarms or TeamCreate coordination (use Delegation). NOT FOR single-threaded delegation without unique identities (use Delegation Task)."
+description: "Compose, customize, and manage PAI agents, traits, observer roles, and team definitions. USE WHEN creating an agent, updating agent traits, composing specialist personas, spawning observer/team patterns, or reviewing agent system behavior. NOT FOR ordinary task delegation without changing agent definitions (use Delegation)."
 effort: medium
 ---
 
@@ -62,7 +62,7 @@ The Agents skill uses the standard PAI SYSTEM/USER two-tier pattern:
 
 Create your customizations at:
 ```
-~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Agents/
+$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Agents/
 ├── Traits.yaml       # Your traits, voices, prosody settings
 ├── NamedAgents.md    # Your named agent backstories (optional)
 └── VoiceConfig.json  # Voice server configuration (optional)
@@ -364,7 +364,7 @@ Alex is a strategic thinker who sees patterns others miss...
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Agents","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Agents","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

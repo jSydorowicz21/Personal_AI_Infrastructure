@@ -1,13 +1,13 @@
 ---
 name: CreateSkill
-description: "Complete PAI skill development lifecycle across two tracks. Structure track: scaffold new skills (TitleCase dirs, flat 2-level max, Workflows/ + Tools/ + References/ only), validate against canonical format, canonicalize existing skills. Effectiveness track (Anthropic methodology): TestSkill spawns with-skill vs baseline agents in parallel and compares outputs, ImproveSkill diagnoses root causes and rewrites instructions with reasoning over rigid constraints, OptimizeDescription generates 20 should/shouldn't-trigger test queries and rewrites for accuracy. Guides from Thariq Shihipar (Mar 2026): Gotchas section mandatory, BPE check before finalizing, progressive disclosure (frontmatter → SKILL.md body → reference files), on-demand hooks. USE WHEN create skill, new skill, validate skill, test skill, improve skill, optimize description, skill not triggering, skill overtriggering, canonicalize, scaffold skill, skill quality. NOT FOR TypeScript CLI generation (use CreateCLI)."
+description: "Create, validate, canonicalize, test, improve, and optimize PAI skills. USE WHEN creating a new skill, fixing skill structure, shortening descriptions, validating SKILL.md, improving trigger accuracy, or testing whether a skill works."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/CreateSkill/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/CreateSkill/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -123,7 +123,7 @@ If none of the above apply and the skill is fully generic — it can be `TitleCa
 
 ### Where Personal Layering Goes for Public Skills
 
-A public skill can be made user-specific at runtime via `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/PREFERENCES.md`. The skill body stays generic; the user's customization file overlays per-instance context. Use this when a skill is fundamentally generic but benefits from per-user tweaks (preferred voice, default formats, personal taste).
+A public skill can be made user-specific at runtime via `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/<SkillName>/PREFERENCES.md`. The skill body stays generic; the user's customization file overlays per-instance context. Use this when a skill is fundamentally generic but benefits from per-user tweaks (preferred voice, default formats, personal taste).
 
 **Do not use SKILLCUSTOMIZATIONS to smuggle private content into a public skill.** If the skill *requires* private context to function (real customer name, real API account, real internal infra), it is a private skill — name it `_ALLCAPS` and stop.
 
@@ -472,7 +472,7 @@ User: "The research skill output is too verbose — improve it"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"CreateSkill","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"CreateSkill","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

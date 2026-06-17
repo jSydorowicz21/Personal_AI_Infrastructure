@@ -1,6 +1,6 @@
 ---
 name: Migrate
-description: "Intakes existing content from external sources, classifies each chunk against the PAI destination taxonomy, and commits approved chunks with provenance. Sources: .md/.markdown/.txt, stdin, PAI TELOS/MEMORY/KNOWLEDGE dirs, CLAUDE.md/.cursorrules/OpenAI Custom Instructions, Obsidian/Notion/Apple Notes exports, journal dumps. MigrateScan.ts chunks and classifies, producing a routing table with per-target counts and confidence %. MigrateApprove.ts approval loop: --approve-all, --approve-target, --review, --dry-run. UNCLEAR never bulk-approved. Phase 6 delivers summary and /interview recommendation for sparse areas. Confidence: ≥70% auto-approve; 40-70% confirm; <40% walk-through. Destinations: TELOS (MISSION/GOALS/PROBLEMS/STRATEGIES/CHALLENGES/BELIEFS/WISDOM/MODELS/FRAMES/NARRATIVES/SPARKS), IDEAL_STATE (per-dimension explicit call), preferences (BOOKS/AUTHORS/MOVIES/BANDS/RESTAURANTS/FOOD_PREFERENCES/LEARNING/MEETUPS/CIVIC), Identity (PRINCIPAL_IDENTITY.md — always prompts), Knowledge (MEMORY/KNOWLEDGE/{Ideas,People,Companies,Research}), AI rules (memory/feedback_*.md — new file per chunk), UNCLEAR. Provenance HTML comment on every commit. Dedup via substring match. USE WHEN /migrate, migrate content, import from other PAI, bring in old notes, import Cursor rules, import CLAUDE.md, import Custom Instructions, bulk import, Obsidian/Notion/Apple Notes import. NOT FOR single-file edits (use Telos Update), conversational interviews (use Interview), Knowledge Archive (use Knowledge), identity edits (use _PROFILE)."
+description: "Move, normalize, approve, and reconcile PAI user/memory content across schemas or locations. USE WHEN migrating files, approving migration queues, converting old memory formats, or safely moving user context into shared PAI data."
 ---
 
 # Migrate — external-content intake and classification
@@ -57,9 +57,9 @@ Collect the source path. If content is pasted, write it to a temp file first.
 Run the scanner:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/MigrateScan.ts --source <path>
+bun $PAI_DIR/TOOLS/MigrateScan.ts --source <path>
 # or
-echo "$CONTENT" | bun ~/.claude/PAI/TOOLS/MigrateScan.ts --stdin
+echo "$CONTENT" | bun $PAI_DIR/TOOLS/MigrateScan.ts --stdin
 ```
 
 Scanner output includes:
@@ -96,19 +96,19 @@ Based on the user's preference:
 
 **Fast path** (he says "approve all trusted"):
 ```bash
-bun ~/.claude/PAI/TOOLS/MigrateApprove.ts --approve-all
+bun $PAI_DIR/TOOLS/MigrateApprove.ts --approve-all
 ```
 Commits everything non-UNCLEAR. Then walk through UNCLEAR chunks conversationally.
 
 **Category path** (he says "approve goals and wisdom, skip knowledge"):
 ```bash
-bun ~/.claude/PAI/TOOLS/MigrateApprove.ts --approve-target TELOS/GOALS.md
-bun ~/.claude/PAI/TOOLS/MigrateApprove.ts --approve-target TELOS/WISDOM.md
+bun $PAI_DIR/TOOLS/MigrateApprove.ts --approve-target TELOS/GOALS.md
+bun $PAI_DIR/TOOLS/MigrateApprove.ts --approve-target TELOS/WISDOM.md
 ```
 
 **Walk-through path** (he wants careful review):
 ```bash
-bun ~/.claude/PAI/TOOLS/MigrateApprove.ts --review
+bun $PAI_DIR/TOOLS/MigrateApprove.ts --review
 ```
 Show each pending chunk. For each:
 - Show preview + proposed target + confidence + alternatives

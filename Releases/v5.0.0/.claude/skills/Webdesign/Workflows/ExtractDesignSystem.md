@@ -26,7 +26,7 @@ Optional:
 ### 1. Preflight
 
 ```bash
-interceptor --version || echo "ABORT: Interceptor not installed"
+interceptor --version || echo "ABORT: Claude Design extraction requires the interceptor CLI. On Codex, use the Codex-native lane for normal app inspection and implementation."
 ls "$INPUT_PATH" || echo "ABORT: input path not readable"
 ```
 

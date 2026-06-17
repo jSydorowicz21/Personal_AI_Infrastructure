@@ -313,8 +313,8 @@ The Verification Doctrine is the bridge between "ran the code" and "trusted the 
 
 **Cold-start (new session on existing work):**
 
-1. Read ISA from `<project>/ISA.md` if persistent, else from `~/.claude/PAI/MEMORY/WORK/{slug}/ISA.md`.
-2. `~/.claude/PAI/MEMORY/STATE/work.json` has the session registry.
+1. Read ISA from `<project>/ISA.md` if persistent, else from `$PAI_DATA_DIR/MEMORY/WORK/{slug}/ISA.md`.
+2. `$PAI_DATA_DIR/MEMORY/STATE/work.json` has the session registry.
 3. If ephemeral feature files exist under `_ephemeral/`, reconcile before resuming.
 
 ---

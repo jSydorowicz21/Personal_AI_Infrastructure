@@ -14,11 +14,11 @@
  *   ideate      — Evolutionary ideation with tunable parameters. Launches an
  *                 interactive session with parameter configuration controlling
  *                 creativity vs. focus. Supports --preset, --focus, --param flags.
- *                 See ~/.claude/PAI/ALGORITHM/ideate-loop.md for the protocol.
+ *                 See $PAI_DIR/ALGORITHM/ideate-loop.md for the protocol.
  *   optimize    — Autonomous hill-climbing against a measurable metric. Launches
  *                 an interactive session with /optimize context loaded. The agent
  *                 runs an autonomous experiment loop (modify → measure → keep/discard).
- *                 See ~/.claude/PAI/ALGORITHM/optimize-loop.md for the protocol.
+ *                 See $PAI_DIR/ALGORITHM/optimize-loop.md for the protocol.
  *
  * DASHBOARD INTEGRATION (v0.5.9):
  *   - Creates a persistent algorithm state entry in MEMORY/STATE/algorithms/
@@ -38,7 +38,7 @@
  *   algorithm stop -p <ISA>                     Stop a loop
  *
  * EXAMPLES:
- *   algorithm -m loop -p ~/.claude/PAI/MEMORY/WORK/auth/ISA-20260207-auth.md
+ *   algorithm -m loop -p $PAI_DATA_DIR/MEMORY/WORK/auth/ISA-20260207-auth.md
  *   algorithm -m loop -p /path/to/project/.prd/ISA-20260213-feature.md -n 20
  *   algorithm -m interactive -p ISA-20260213-surface
  *   algorithm new -t "Build auth system" -e Extended
@@ -50,14 +50,14 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, append
 import { resolve, basename, join, dirname } from "path";
 import { spawnSync, spawn } from "child_process";
 import { randomUUID } from "crypto";
-import { generateISATemplate } from "../../../.claude/hooks/lib/isa-template";
+import { generateISATemplate } from "../../hooks/lib/isa-template";
+import { memoryPath } from "./lib/paths";
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
 const HOME = process.env.HOME || "~";
-const BASE_DIR = process.env.PAI_DIR || join(HOME, ".claude");
-const ALGORITHMS_DIR = join(BASE_DIR, "MEMORY", "STATE", "algorithms");
-const SESSION_NAMES_PATH = join(BASE_DIR, "MEMORY", "STATE", "session-names.json");
+const ALGORITHMS_DIR = memoryPath("STATE", "algorithms");
+const SESSION_NAMES_PATH = memoryPath("STATE", "session-names.json");
 const PROJECTS_DIR = process.env.PROJECTS_DIR || join(HOME, "Projects");
 const VOICE_URL = "http://localhost:31337/notify";
 const VOICE_ID = "fTtv3eikoepIosk8dTZ5";
@@ -362,7 +362,7 @@ Optimize Presets:
   aggressive            Large steps, accepts regression — for prototypes
 
 ISA Resolution:
-  Full path     ~/.claude/PAI/MEMORY/WORK/auth/ISA-20260207-auth.md
+  Full path     $PAI_DATA_DIR/MEMORY/WORK/auth/ISA-20260207-auth.md
   ISA ID        ISA-20260207-auth (searches MEMORY/WORK/ and ~/Projects/*/.prd/)
   Project path  /path/to/project/.prd/ISA-20260213-feature.md
 
@@ -1537,7 +1537,7 @@ function createNewISA(title: string, effortLevel: string = "Standard", outputDir
   } else {
     // Default: create in MEMORY/WORK session directory
     const sessionSlug = `${y}${m}${d}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}_${slug}`;
-    targetDir = join(BASE_DIR, "MEMORY", "WORK", sessionSlug);
+    targetDir = memoryPath("WORK", sessionSlug);
   }
   mkdirSync(targetDir, { recursive: true });
 
@@ -1560,7 +1560,7 @@ function findAllISAs(): string[] {
   const files: string[] = [];
 
   // 1. Scan MEMORY/WORK directory (flat ISA.md + legacy task-level ISAs)
-  const workDir = join(BASE_DIR, "MEMORY", "WORK");
+  const workDir = memoryPath("WORK");
   if (existsSync(workDir)) {
     try {
       for (const session of readdirSync(workDir)) {

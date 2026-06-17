@@ -17,7 +17,7 @@
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
 interface TeammateIdleInput {
@@ -30,7 +30,7 @@ interface TeammateIdleInput {
   team_name: string;
 }
 
-const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
+const OBS_DIR = memoryPath('OBSERVABILITY');
 const LOG_FILE = join(OBS_DIR, 'teammate-events.jsonl');
 
 async function readStdin(): Promise<string> {

@@ -5,9 +5,15 @@
  */
 import { join } from "path"
 import { readFileSync } from "fs"
+import { getFrameworkDir, getPaiDataDir, getPaiDir } from "../TOOLS/lib/paths"
 
 // Load .env
-const envPath = join(process.env.HOME ?? "~", ".claude", ".env")
+const FRAMEWORK_DIR = getFrameworkDir()
+process.env.PAI_DIR ??= getPaiDir()
+process.env.PAI_FRAMEWORK_DIR ??= FRAMEWORK_DIR
+process.env.PAI_DATA_DIR ??= getPaiDataDir()
+
+const envPath = join(FRAMEWORK_DIR, ".env")
 try {
   const envContent = readFileSync(envPath, "utf-8")
   for (const line of envContent.split("\n")) {
@@ -31,7 +37,7 @@ if (!jobName) {
   process.exit(1)
 }
 
-const PULSE_DIR = join(process.env.HOME ?? "~", ".claude", "PAI", "PULSE")
+const PULSE_DIR = join(getPaiDir(), "PULSE")
 const config = await loadConfig(PULSE_DIR)
 const job = config.jobs.find((j) => j.name === jobName)
 if (!job) {

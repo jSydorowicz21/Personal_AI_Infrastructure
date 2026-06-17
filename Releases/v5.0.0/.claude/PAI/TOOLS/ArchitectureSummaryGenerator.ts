@@ -14,18 +14,22 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { getFrameworkDir, getPaiDir } from "./lib/paths";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const HOME = process.env.HOME!;
-const PAI_DIR = process.env.PAI_DIR || path.join(HOME, ".claude", "PAI");
+const HOME = process.env.HOME || process.env.USERPROFILE || "";
+const PAI_DIR = getPaiDir();
+const FRAMEWORK_DIR = getFrameworkDir();
+const INSTRUCTIONS_MD = fs.existsSync(path.join(FRAMEWORK_DIR, "AGENTS.md"))
+  ? path.join(FRAMEWORK_DIR, "AGENTS.md")
+  : path.join(FRAMEWORK_DIR, "CLAUDE.md");
 const ARCH_SOURCE = path.join(PAI_DIR, "DOCUMENTATION", "PAISystemArchitecture.md");
 const SUMMARY_OUTPUT = path.join(PAI_DIR, "DOCUMENTATION", "ARCHITECTURE_SUMMARY.md");
 const ALGORITHM_DIR = path.join(PAI_DIR, "ALGORITHM");
 const MEMORY_SYSTEM_DOC = path.join(PAI_DIR, "DOCUMENTATION", "Memory", "MemorySystem.md");
-const CLAUDE_MD = path.join(HOME, ".claude", "CLAUDE.md");
 
 // ============================================================================
 // Version detection (source-of-truth lookups — no hardcoded versions)
@@ -68,10 +72,10 @@ function detectMemoryVersion(): string {
   return match?.[1] ?? "unknown";
 }
 
-/** Detect PAI version from the first `# PAI X.Y.Z` heading in global CLAUDE.md */
+/** Detect PAI version from the first `# PAI X.Y.Z` heading in the active instruction file */
 function detectPaiVersion(): string {
-  if (!fs.existsSync(CLAUDE_MD)) return "unknown";
-  const content = fs.readFileSync(CLAUDE_MD, "utf-8");
+  if (!fs.existsSync(INSTRUCTIONS_MD)) return "unknown";
+  const content = fs.readFileSync(INSTRUCTIONS_MD, "utf-8");
   const match = content.match(/^#\s*PAI\s+([\d.]+)/m);
   return match?.[1] ?? "unknown";
 }
@@ -117,10 +121,9 @@ function extractSections(content: string): Array<{ heading: string; level: numbe
  * PAI/DOCUMENTATION/. The downstream `USER/` filter then correctly drops them.
  */
 function extractSubsystems(): Array<{ name: string; description: string; docPath: string }> {
-  const claudeMdPath = path.join(HOME, ".claude", "CLAUDE.md");
-  if (!fs.existsSync(claudeMdPath)) return [];
+  if (!fs.existsSync(INSTRUCTIONS_MD)) return [];
 
-  const content = fs.readFileSync(claudeMdPath, "utf-8");
+  const content = fs.readFileSync(INSTRUCTIONS_MD, "utf-8");
   const entries: Array<{ name: string; description: string; docPath: string; sectionRoot: string }> = [];
 
   const tableLegacy1 = /^\| \*\*(.+?)\*\* \| `(.+?)` .*/;
@@ -246,8 +249,10 @@ function generate(): string {
       ? sub.docPath
       : sub.docPath.startsWith("~")
         ? sub.docPath.replace(/^~/, HOME)
-        : path.join(HOME, ".claude", sub.docPath);
-    const shortPath = sub.docPath.replace("~/.claude/", "");
+        : sub.docPath.startsWith("PAI/")
+          ? path.join(FRAMEWORK_DIR, sub.docPath)
+          : path.join(PAI_DIR, sub.docPath);
+    const shortPath = sub.docPath.replace(/^~\/\.claude\//, "").replace(FRAMEWORK_DIR + path.sep, "");
     if (!fs.existsSync(resolved)) missing.push(shortPath);
     tableRows.push(`| ${sub.name} | ${shortPath} |`);
   }
@@ -289,7 +294,7 @@ function generate(): string {
     "## Instruction Hierarchy",
     "",
     "1. **System Prompt** — PAI_SYSTEM_PROMPT.md, constitutional, survives compaction",
-    "2. **CLAUDE.md** — operational procedures, format templates, context routing",
+    "2. **CLAUDE.md / AGENTS.md** — operational procedures, format templates, context routing",
     "3. **@Imported files** — PRINCIPAL_IDENTITY, DA_IDENTITY, PROJECTS, PRINCIPAL_TELOS, this file",
     "4. **Dynamic context** — LoadContext hook output, ephemeral",
     "",
@@ -334,9 +339,9 @@ function cmdCheck(): void {
 
   const sourceMtime = getMtime(ARCH_SOURCE);
   const summaryMtime = getMtime(SUMMARY_OUTPUT);
-  const claudeMdMtime = getMtime(path.join(HOME, ".claude", "CLAUDE.md"));
+  const instructionMtime = getMtime(INSTRUCTIONS_MD);
 
-  if (sourceMtime > summaryMtime || claudeMdMtime > summaryMtime) {
+  if (sourceMtime > summaryMtime || instructionMtime > summaryMtime) {
     console.log("STALE: Source files are newer than summary");
     process.exit(1);
   }

@@ -1,6 +1,6 @@
 ---
 name: Research
-description: "Comprehensive research and content extraction with 4 depth modes: Quick (1 Perplexity agent, ~10-15s), Standard (4 agents — Claude + Gemini + Grok + Perplexity, cross-checked, ~30-60s), Extensive (7 explorers + 2 independent verifiers, ~60-90s), Deep Investigation (progressive iteration with persistent MEMORY/RESEARCH/ vault, loop-compatible, ~3-60min). Every URL verified before delivery — hallucinated links are a catastrophic failure. Verification architecture: per-agent self-verification, cross-check synthesis, and independent verifier agents (Extensive/Deep). Confidence-tagged output: [HIGH] [MED] [LOW] [CONFLICT]. Additional workflows: ExtractAlpha (highest-signal insights), Retrieve (CAPTCHA/bot-blocked content), YoutubeExtraction (fabric -y), WebScraping, InterviewResearch (Tyler Cowen style), AnalyzeAiTrends, Fabric (242+ patterns), Enhance, ExtractKnowledge. USE WHEN research, do research, quick research, extensive research, deep investigation, find information, investigate, extract alpha, analyze content, retrieve content, AI trends, enhance content, extract knowledge, interview research, web scraping, YouTube extraction, map landscape, competitive analysis. NOT FOR people/company/entity deep background (use OSINT), academic paper search (use ArXiv), or structured JSON parsing (use Parser)."
+description: "Perform research and content extraction at quick, standard, extensive, or deep-investigation depth with source verification. USE WHEN researching topics, finding information, investigating claims, extracting alpha, scraping content, mapping landscapes, or competitive analysis. NOT FOR academic paper search (use ArXiv)."
 effort: high
 context: fork
 ---
@@ -21,7 +21,7 @@ context: fork
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Research/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Research/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -158,7 +158,7 @@ See `Workflows/Verify.md` for full verification protocol.
 → Exit: When all CRITICAL/HIGH entities researched + all categories covered
 ```
 
-**Artifacts persist** at `~/.claude/PAI/MEMORY/RESEARCH/{date}_{topic}/` — the vault survives across sessions.
+**Artifacts persist** at `$PAI_DATA_DIR/MEMORY/RESEARCH/{date}_{topic}/` — the vault survives across sessions.
 
 See `Workflows/DeepInvestigation.md` for full workflow details.
 
@@ -166,7 +166,7 @@ See `Workflows/DeepInvestigation.md` for full workflow details.
 
 ## File Organization
 
-**Working files (temporary work artifacts):** `~/.claude/PAI/MEMORY/WORK/{current_work}/`
+**Working files (temporary work artifacts):** `$PAI_DATA_DIR/MEMORY/WORK/{current_work}/`
 - Read `~/.claude/` to get the `work_dir` value
 - All iterative work artifacts go in the current work item directory
 - This ties research artifacts to the work item for learning and context
@@ -215,7 +215,7 @@ User: "do a deep investigation of the AI agent market"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Research","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Research","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

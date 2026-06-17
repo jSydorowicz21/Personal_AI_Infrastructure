@@ -6,8 +6,9 @@
  */
 
 import { parse } from "smol-toml"
-import { join } from "path"
-import { rename } from "fs/promises"
+import { dirname, join } from "path"
+import { mkdir, rename } from "fs/promises"
+import { getPaiDataDir, getPaiDir } from "../TOOLS/lib/paths"
 
 // ── Types ──
 
@@ -57,7 +58,7 @@ export async function loadConfig(daemonDir: string): Promise<DaemonConfig> {
     schedule: j.schedule as string,
     type: (j.type as "script" | "claude") ?? "script",
     command: j.command ? resolveEnvVars(j.command as string) : undefined,
-    prompt: j.prompt as string | undefined,
+    prompt: j.prompt ? resolveEnvVars(j.prompt as string) : undefined,
     model: (j.model as string) ?? "sonnet",
     output: (j.output ?? "log") as OutputTarget | OutputTarget[],
     enabled: (j.enabled as boolean) ?? true,
@@ -136,6 +137,7 @@ export async function readState(path: string): Promise<DaemonState> {
 }
 
 export async function writeState(path: string, state: DaemonState): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
   const tmp = path + ".tmp"
   await Bun.write(tmp, JSON.stringify(state, null, 2))
   await rename(tmp, path)
@@ -246,8 +248,8 @@ export async function spawnScript(command: string, timeoutMs = 60_000): Promise<
   const proc = Bun.spawn(["bash", "-c", command], {
     stdout: "pipe",
     stderr: "pipe",
-    cwd: join(process.env.HOME ?? "~", ".claude", "PAI", "PULSE"),
-    env: { ...process.env },
+    cwd: join(getPaiDir(), "PULSE"),
+    env: { ...process.env, PAI_DIR: getPaiDir(), PAI_DATA_DIR: getPaiDataDir() },
   })
 
   const timer = setTimeout(() => proc.kill("SIGTERM"), timeoutMs)
@@ -269,7 +271,7 @@ export async function spawnClaude(prompt: string, opts: { model: string; timeout
   //      OAuth/keychain entirely. That was the root cause of the Apr 2026 Haiku
   //      $22.66 line item on the Anthropic invoice (heartbeat + tasks + memory
   //      consolidation all used --bare, all billed API).
-  //   2. Strip ANTHROPIC_API_KEY from env — bun auto-loads ~/.claude/.env, and if the
+  //   2. Strip ANTHROPIC_API_KEY from env — bun auto-loads the framework .env, and if the
   //      key is present `claude` CLI prefers it over subscription even without
   //      --bare. Mirrors PAI/TOOLS/Inference.ts:114.
   // Flag set mirrors Inference.ts: --tools '' and --setting-sources '' keep the

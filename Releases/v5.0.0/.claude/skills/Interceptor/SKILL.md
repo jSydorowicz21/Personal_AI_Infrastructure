@@ -1,6 +1,6 @@
 ---
 name: Interceptor
-description: "Real Chrome browser automation via Interceptor extension — controls the actual browser from inside (zero CDP fingerprint, passes all major bot detection checks including BrowserScan, Pixelscan, CreepJS, Fingerprint.com). Stays logged in, uses your real sessions. Compound commands (open, read, act, inspect) collapse multi-step flows into single calls. Unique capabilities: monitor/replay system (record user actions → export replayable plan scripts for regression), network log (auto-captures all fetch/XHR), scene graph for rich editors (Google Docs, Canva, Slides). Workflows: VerifyDeploy, Reproduce (open affected page BEFORE code analysis — mandatory per rules), RecordFlow, ReplayFlow, TestForm, Update. MANDATORY for all visual verification — never use agent-browser for deploy confirmation. USE WHEN verify deploy, confirm UI, check page, screenshot verification, interceptor, debug web, troubleshoot, visual check, authenticated page, bot detection bypass, agent-browser failing, reproduce bug, record flow, replay flow, test form, QA test, regression check. NOT FOR batch headless automation (use Browser). NOT FOR multi-page crawling or scraping at scale with residential proxy needs (use BrightData)."
+description: "Drive and inspect authenticated browser sessions through the interceptor workflow. USE WHEN automating Claude Design or other web UIs through an existing authenticated session, capturing requests, or programmatically controlling browser-backed workflows."
 version: 2.0.0
 effort: medium
 ---
@@ -8,7 +8,7 @@ effort: medium
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Interceptor/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Interceptor/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -318,5 +318,5 @@ Passes all major bot detection:
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Interceptor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Interceptor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

@@ -1,13 +1,13 @@
 ---
 name: Daemon
-description: "Manage the public daemon profile — a living digital representation of what you're working on, thinking about, reading, and building. DaemonAggregator.ts reads PAI sources (TELOS missions/goals/books/wisdom, KNOWLEDGE/Ideas titles, PROJECTS.md, MEMORY/WORK themes, PRINCIPAL_IDENTITY bio) and writes to daemon-data.json. SecurityFilter.ts applies deterministic pattern-matching (NOT LLM judgment) to strip names, paths, credentials, and internal refs. Structurally excludes CONTACTS, FINANCES, HEALTH, OUR_STORY, OPINIONS. deploy.sh builds the VitePress static site and deploys to Cloudflare Pages. Two-repo pattern: public framework (danielmiessler/Daemon, forkable) + private content (daemon-dm). Workflows: UpdateDaemon, ReadDaemon, PreviewDaemon, DeployDaemon. USE WHEN daemon, update daemon, daemon profile, deploy daemon, preview daemon, read daemon, check daemon, daemon status, public profile, digital presence. NOT FOR internal PAI system management (use _PAI)."
+description: "Manage the public daemon profile and static site that summarizes current work, interests, and public-facing activity. USE WHEN updating, reading, previewing, or deploying the daemon profile or checking its public data pipeline."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Daemon/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Daemon/`
 
 If this directory exists, load and apply any SecurityOverrides.md or PREFERENCES.md found there. These override default security classification. If the directory does not exist, proceed with skill defaults.
 
@@ -171,5 +171,5 @@ User: "preview daemon"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Daemon","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Daemon","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

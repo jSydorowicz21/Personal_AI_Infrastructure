@@ -19,13 +19,13 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
+import { memoryPath } from "./lib/paths";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const CLAUDE_DIR = path.join(process.env.HOME!, ".claude");
-const LEARNING_DIR = path.join(CLAUDE_DIR, "PAI", "MEMORY", "LEARNING");
+const LEARNING_DIR = memoryPath("LEARNING");
 const RATINGS_FILE = path.join(LEARNING_DIR, "SIGNALS", "ratings.jsonl");
 const SYNTHESIS_DIR = path.join(LEARNING_DIR, "SYNTHESIS");
 

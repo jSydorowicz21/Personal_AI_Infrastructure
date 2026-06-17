@@ -17,14 +17,19 @@
 import { join } from "path"
 import { readFileSync, existsSync } from "fs"
 import { parse } from "smol-toml"
+import { getFrameworkDir, getPaiDataDir, getPaiDir, memoryPath } from "../TOOLS/lib/paths"
 
 // ── Load .env before anything else ──
 
 const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
+const PAI_DIR = getPaiDir()
+const FRAMEWORK_DIR = getFrameworkDir()
 const PULSE_DIR = join(PAI_DIR, "PULSE")
+process.env.PAI_DIR ??= PAI_DIR
+process.env.PAI_FRAMEWORK_DIR ??= FRAMEWORK_DIR
+process.env.PAI_DATA_DIR ??= getPaiDataDir()
 
-const envPath = join(HOME, ".claude", ".env")
+const envPath = join(FRAMEWORK_DIR, ".env")
 try {
   const envContent = readFileSync(envPath, "utf-8")
   for (const line of envContent.split("\n")) {
@@ -140,7 +145,7 @@ async function loadPulseConfig(): Promise<PulseConfig> {
 
 // ── Constants ──
 
-const STATE_PATH = join(PULSE_DIR, "state", "state.json")
+const STATE_PATH = memoryPath("STATE", "pulse", "state.json")
 const PID_PATH = join(PULSE_DIR, "state", "pulse.pid")
 const MAX_FAILURES = 3
 const MAX_SLEEP_MS = 60_000

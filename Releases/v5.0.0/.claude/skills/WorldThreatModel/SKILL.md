@@ -1,6 +1,6 @@
 ---
 name: WorldThreatModel
-description: "Persistent world-model harness that stress-tests ideas, strategies, and investments against 11 time horizons from 6 months to 50 years. Each horizon model is a deep (~10 page) analysis of geopolitics, technology, economics, society, environment, security, and wildcards stored at PAI_DIR/MEMORY/RESEARCH/WorldModels/. Three execution tiers: Fast (~2 min, single synthesizing agent), Standard (~10 min, 11 parallel horizon agents + RedTeam + FirstPrinciples), Deep (up to 1hr, adds per-horizon Research + Council). Four workflows: TestIdea (test any input across all 11 horizons, returns probability-weighted scenario matrix), UpdateModels (refresh model content with new research), ViewModels (read and summarize current state), TestScenario (test against alternative future models like great-correction-2027). Context files: ModelTemplate.md (structure for horizon model documents), OutputFormat.md (template for TestIdea results). Scenario models stored at WorldModels/Scenarios/. Orchestrates RedTeam, FirstPrinciples, Council, and Research internally. USE WHEN threat model, world model, test idea, test strategy, future analysis, test investment, time horizon analysis, update models, stress test against future, how does this hold up, long-term risk, what could go wrong over time, horizon analysis, crash scenario, view models, model status."
+description: "Track and reason about global risks, geopolitical threats, technology risk, and strategic scenarios. USE WHEN modeling world threats, updating risk views, testing geopolitical ideas, or comparing global security scenarios."
 effort: high
 ---
 
@@ -88,7 +88,7 @@ curl -s -X POST http://localhost:31337/notify \
 ## Customization Check
 
 Before execution, check for user customizations at:
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/WorldThreatModelHarness/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/WorldThreatModelHarness/`
 
 ## Gotchas
 
@@ -118,7 +118,7 @@ User: "what could go wrong with our newsletter business model?"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"WorldThreatModel","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"WorldThreatModel","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

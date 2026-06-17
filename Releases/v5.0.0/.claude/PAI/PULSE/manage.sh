@@ -2,7 +2,10 @@
 # PAI Pulse — Process Management
 # Usage: manage.sh {start|stop|restart|status|install|uninstall}
 
-PULSE_DIR="$HOME/.claude/PAI/PULSE"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PAI_DIR="${PAI_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+PAI_DATA_DIR="${PAI_DATA_DIR:-$HOME/.pai}"
+PULSE_DIR="$PAI_DIR/PULSE"
 PLIST_NAME="com.pai.pulse"
 PLIST_SRC="$PULSE_DIR/$PLIST_NAME.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
@@ -31,9 +34,14 @@ fi
 case "$1" in
   start)
     if [ ! -f "$PLIST_DST" ]; then
-      # Substitute __HOME__ + __BUN_PATH__ placeholders (public template);
+      # Substitute public template placeholders;
       # no-op on plists that already have literal paths.
-      sed -e "s|__HOME__|$HOME|g" -e "s|__BUN_PATH__|$BUN_PATH|g" "$PLIST_SRC" > "$PLIST_DST"
+      sed \
+        -e "s|__HOME__|$HOME|g" \
+        -e "s|__PAI_DIR__|$PAI_DIR|g" \
+        -e "s|__PAI_DATA_DIR__|$PAI_DATA_DIR|g" \
+        -e "s|__BUN_PATH__|$BUN_PATH|g" \
+        "$PLIST_SRC" > "$PLIST_DST"
     fi
     launchctl load "$PLIST_DST" 2>/dev/null
     echo "PAI Pulse started"

@@ -1,6 +1,6 @@
 ---
 name: Optimize
-description: "Autonomous optimization loop — hill-climb any target. Code with metrics, or skills/prompts/agents with LLM-as-judge eval. USE WHEN optimize, autoresearch, hill climb, improve metric, reduce latency, improve performance, benchmark optimization, bundle size, page speed, autonomous improvement loop, optimize skill, optimize prompt, improve quality, eval mode."
+description: "Run autonomous optimization loops with metrics, benchmarks, and hill-climbing. USE WHEN optimizing performance, quality, latency, bundle size, prompts, skills, or measurable outputs through repeated experiments."
 disable-model-invocation: true
 effort: medium
 ---
@@ -108,9 +108,9 @@ When `/optimize` is invoked, the Algorithm enters with `mode: optimize` in the I
 ISC criteria become **guard rails** — assertions that must hold true across ALL experiments. Guard rails must REMAIN satisfied perpetually. A violation triggers automatic revert regardless of score improvement.
 
 **Reference files:**
-- `~/.claude/PAI/ALGORITHM/optimize-loop.md` — the full loop protocol
-- `~/.claude/PAI/ALGORITHM/eval-guide.md` — how to write good eval criteria
-- `~/.claude/PAI/ALGORITHM/target-types.md` — target detection and ISC generation
+- `$PAI_DIR/ALGORITHM/optimize-loop.md` — the full loop protocol
+- `$PAI_DIR/ALGORITHM/eval-guide.md` — how to write good eval criteria
+- `$PAI_DIR/ALGORITHM/target-types.md` — target detection and ISC generation
 
 ## Examples
 

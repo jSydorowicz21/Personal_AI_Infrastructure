@@ -15,15 +15,27 @@ import { homedir } from "os";
 
 const OUTPUT_PATH = join(import.meta.dir, "public", "assets", "welcome.mp3");
 
+function frameworkDir(): string {
+  return process.env.PAI_FRAMEWORK_DIR || dirname(dirname(import.meta.dir));
+}
+
+function configDir(): string {
+  return process.env.PAI_CONFIG_DIR || join(homedir(), ".config", "PAI");
+}
+
+function settingsPath(): string {
+  return process.env.PAI_SETTINGS_PATH || join(frameworkDir(), "settings.json");
+}
+
 // Voice ID — check env var, then settings.json voices, then default
 function getVoiceId(): string {
   // Environment variable takes priority
   if (process.env.ELEVENLABS_VOICE_ID) return process.env.ELEVENLABS_VOICE_ID;
 
-  const settingsPath = join(homedir(), ".claude", "settings.json");
-  if (existsSync(settingsPath)) {
+  const activeSettingsPath = settingsPath();
+  if (existsSync(activeSettingsPath)) {
     try {
-      const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      const settings = JSON.parse(readFileSync(activeSettingsPath, "utf-8"));
       // Use principal's voice clone (the installer speaks in the user's voice)
       const clone = settings.principal?.voiceClone;
       if (typeof clone === "string") return clone;
@@ -41,17 +53,24 @@ async function generateWelcome() {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
     // Try to read from config
-    const envPath = join(homedir(), ".config", "PAI", ".env");
-    if (existsSync(envPath)) {
-      const envContent = readFileSync(envPath, "utf-8");
-      const match = envContent.match(/ELEVENLABS_API_KEY=(.+)/);
-      if (match) {
-        process.env.ELEVENLABS_API_KEY = match[1].trim();
+    const envPaths = [
+      join(configDir(), ".env"),
+      join(frameworkDir(), ".env"),
+      join(homedir(), ".env"),
+    ];
+    for (const envPath of envPaths) {
+      if (existsSync(envPath)) {
+        const envContent = readFileSync(envPath, "utf-8");
+        const match = envContent.match(/ELEVENLABS_API_KEY=(.+)/);
+        if (match) {
+          process.env.ELEVENLABS_API_KEY = match[1].trim();
+          break;
+        }
       }
     }
 
     if (!process.env.ELEVENLABS_API_KEY) {
-      console.error("Error: ELEVENLABS_API_KEY not found in environment or ~/.claude/PAI/.env");
+      console.error(`Error: ELEVENLABS_API_KEY not found in environment, ${join(configDir(), ".env")}, ${join(frameworkDir(), ".env")}, or ~/.env`);
       console.error("Set it with: export ELEVENLABS_API_KEY=your-key-here");
       process.exit(1);
     }

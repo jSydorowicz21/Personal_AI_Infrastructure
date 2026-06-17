@@ -1,13 +1,13 @@
 ---
 name: PrivateInvestigator
-description: "Ethical people-finding and identity verification using 15 parallel research agents (5 types x 3 each = 45 concurrent search threads) across people search aggregators, social media, public records, and reverse lookups. Covers TruePeopleSearch, FastPeopleSearch, Spokeo, voter registration, county property records, court portals (PACER, CourtListener), professional licenses, Facebook/LinkedIn/Instagram x-ray searches, and username enumeration (Sherlock, WhatsMyName). Phone reverse lookup via CallerID, NumLookup, carrier lookup. Email reverse lookup via Epieos, Holehe, Hunter.io. Image reverse search via PimEyes, TinEye, Google/Yandex Images. Google dorking (site:linkedin.com, filetype:pdf resume) across foundation, primary, deep, and verification tiers. Produces confidence-scored results (HIGH/MEDIUM/LOW/POSSIBLE) requiring 3+ matching identifiers before acting. Workflows: FindPerson, SocialMediaSearch, PublicRecordsSearch, ReverseLookup, VerifyIdentity. Stops immediately if purpose shifts toward harassment or stalking. USE WHEN: find person, locate person, reconnect, lost contact, old friend, reverse phone lookup, who owns this email, reverse image search, find by username, verify identity, people search, background check public data only, who is this caller, who owns this address. NOT FOR structured due-diligence or company/entity intelligence investigations (use OSINT)."
+description: "Investigate people, companies, entities, and public footprints with careful sourcing and privacy boundaries. USE WHEN doing background research, entity investigation, due diligence, OSINT-style lookup, or reputation/context mapping. NOT FOR general topic research (use Research)."
 effort: high
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/PrivateInvestigator/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/PrivateInvestigator/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -237,7 +237,7 @@ User: "Find Jane Doe's social media, she's a marketing professional in Denver"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"PrivateInvestigator","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"PrivateInvestigator","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

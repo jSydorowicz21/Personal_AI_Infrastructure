@@ -1,13 +1,13 @@
 ---
 name: IterativeDepth
-description: "Structured multi-angle exploration that runs 2-8 sequential passes through the same problem, each from a systematically different scientific lens, to surface requirements and edge cases invisible from any single angle. Grounded in 20 established techniques across cognitive science (Hermeneutic Circle, Triangulation), AI/ML (Self-Consistency, Ensemble Methods), requirements engineering (Viewpoint-Oriented RE), and design thinking (Six Thinking Hats, Causal Layered Analysis). Each pass outputs new ISC criteria; passes stop when yields repeat. Best used in the OBSERVE phase at Extended+ effort — the default question should be why NOT to use it, not why to use it. A 4-lens pass routinely discovers 30-50% more criteria than direct analysis. Single workflow: Workflows/Explore.md (supports Fast mode with 2 lenses for quick depth). Reference files: ScientificFoundation.md (research grounding for all 20 techniques), TheLenses.md (full definitions for all 8 lenses). BPE-fragile — quarterly test recommended. NOT FOR scope/zoom analysis (use ApertureOscillation) or hypothesis-test cycles (use Science). USE WHEN iterative depth, explore deeper, multi-angle analysis, multiple perspectives, surface hidden requirements, all angles, blind spot check, deep dive before building, what am I missing, Extended or Deep effort, quick depth, fast angles."
+description: "Deepen an answer through repeated passes from surface summary to nuanced analysis. USE WHEN asking to go deeper, add layers, revisit a topic, improve rigor, or progressively refine an explanation or plan."
 effort: high
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/IterativeDepth/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/IterativeDepth/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -82,7 +82,7 @@ User: "use iterative depth on this API redesign"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"IterativeDepth","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"IterativeDepth","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

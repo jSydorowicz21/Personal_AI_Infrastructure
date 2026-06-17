@@ -14,21 +14,14 @@
 
 import { createSocket, type Socket } from "dgram"
 import { appendFileSync, mkdirSync, existsSync, statSync, readFileSync } from "fs"
-import { dirname, join } from "path"
+import { dirname } from "path"
+import { memoryPath } from "../../TOOLS/lib/paths"
 
-const HOME = process.env.HOME ?? ""
 const MODULE_NAME = "syslog"
 const DEFAULT_PORT = 5514
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB rotation threshold
 
-const LOG_PATH = join(
-  HOME,
-  ".claude",
-  "PAI",
-  "MEMORY",
-  "OBSERVABILITY",
-  "unifi-syslog.jsonl",
-)
+const LOG_PATH = memoryPath("OBSERVABILITY", "unifi-syslog.jsonl")
 
 type Severity = "emerg" | "alert" | "crit" | "err" | "warn" | "notice" | "info" | "debug"
 

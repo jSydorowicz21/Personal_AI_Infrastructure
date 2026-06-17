@@ -6,7 +6,7 @@
 
 1. **Load Art preferences:**
    ```
-   ~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md
+   $PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md
    ```
 
 2. **Apply the PAI Theme** derived from Art preferences:

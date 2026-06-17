@@ -25,7 +25,7 @@ async function main(): Promise<void> {
 
   try {
     const { readFileSync } = await import('fs');
-    const raw = readFileSync('/dev/stdin', 'utf-8');
+    const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return;
     input = JSON.parse(raw);
   } catch {

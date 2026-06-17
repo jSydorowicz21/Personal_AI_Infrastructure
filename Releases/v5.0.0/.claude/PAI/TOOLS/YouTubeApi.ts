@@ -3,7 +3,7 @@
  * YouTubeApi.ts - YouTube Data API v3 client
  *
  * Usage:
- *   bun ~/.claude/skills/YouTube/Tools/YouTubeApi.ts <command> [options]
+ *   bun $PAI_FRAMEWORK_DIR/skills/YouTube/Tools/YouTubeApi.ts <command> [options]
  *
  * Commands:
  *   channel              Get channel statistics
@@ -20,8 +20,7 @@
  */
 
 import { readFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
+import { getEnvPath } from './lib/paths'
 
 // ANSI colors
 const colors = {
@@ -37,7 +36,7 @@ const colors = {
 
 // Load environment
 function loadEnv(): Record<string, string> {
-  const envPath = process.env.PAI_CONFIG_DIR ? join(process.env.PAI_CONFIG_DIR, '.env') : join(homedir(), '.claude', '.env')
+  const envPath = getEnvPath()
   const env: Record<string, string> = {}
   try {
     const content = readFileSync(envPath, 'utf-8')

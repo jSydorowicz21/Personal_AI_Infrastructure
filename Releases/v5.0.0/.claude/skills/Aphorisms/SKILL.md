@@ -1,13 +1,13 @@
 ---
 name: Aphorisms
-description: "Manages a curated aphorism collection with full CRUD — content-based matching, themed search, thinker research, and database maintenance. Organizes quotes by author, theme, context, and newsletter usage history to prevent repetition. Four workflows: FindAphorism (analyze newsletter content, match themes, return 3-5 ranked recommendations with rationale), AddAphorism (parse quote + author, extract themes, validate uniqueness, update theme index), ResearchThinker (deep research on philosopher, add sourced quotes to database), SearchAphorisms (search by theme, keyword, or author). Database at ~/.claude/skills/aphorisms/Database/aphorisms.md — stores full quote text, author attribution, theme tags, context/background, source reference, and usage history per entry. Theme index supports 12+ categories: Work Ethic, Resilience, Learning, Stoicism, Risk, Wisdom, Truth-seeking, Excellence, Curiosity, Freedom, Rationality, Clarity. Supported thinkers: Hitchens, Feynman, Deutsch, Sam Harris, Spinoza, plus any requested author. Newsletter integration: tracks which quotes used in which issues to enforce variety; content theme extraction drives automated matching. USE WHEN: aphorism, quote, saying, find a quote, research thinker, add aphorism, search aphorisms, quote for newsletter, what did X say about, quotes about [topic], quote bank, find matching quote, quote collection, add this quote, check usage history. NOT FOR general creative writing or social media post generation — those go through dedicated writing/social skills."
+description: "Create, extract, refine, and score compact aphorisms or memorable one-line ideas. USE WHEN writing aphorisms, turning notes into quotable lines, compressing wisdom, improving punchiness, or generating concise philosophical statements."
 effort: low
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Aphorisms/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Aphorisms/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -381,7 +381,7 @@ Last Updated: 2025-11-20
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Aphorisms","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Aphorisms","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

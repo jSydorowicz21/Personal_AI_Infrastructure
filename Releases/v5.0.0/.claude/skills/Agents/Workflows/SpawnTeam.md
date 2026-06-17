@@ -67,7 +67,7 @@ Extract:
 Check if the team has accumulated expertise:
 
 ```bash
-cat ~/.claude/PAI/MEMORY/TEAMS/{team}/expertise.md
+cat $PAI_DATA_DIR/MEMORY/TEAMS/{team}/expertise.md
 ```
 
 If it exists, include relevant past context in each member's prompt. This is what makes teams better over time.
@@ -169,7 +169,7 @@ echo "## Session: YYYY-MM-DD - {task summary}
 - Key decision: {what was decided}
 - Tension resolved: {which tension, how}
 - Pattern noted: {reusable insight}
-" >> ~/.claude/PAI/MEMORY/TEAMS/{team}/expertise.md
+" >> $PAI_DATA_DIR/MEMORY/TEAMS/{team}/expertise.md
 ```
 
 ## Subset Selection
@@ -284,6 +284,6 @@ Task({ ... }) // Member 3
 ## References
 
 - Team configs: `~/.claude/skills/Agents/Data/Teams/*.yaml`
-- Team expertise: `~/.claude/PAI/MEMORY/TEAMS/*/expertise.md`
+- Team expertise: `$PAI_DATA_DIR/MEMORY/TEAMS/*/expertise.md`
 - ComposeAgent: `~/.claude/skills/Agents/Tools/ComposeAgent.ts`
 - Traits: `~/.claude/skills/Agents/Data/Traits.yaml`

@@ -14,9 +14,10 @@ import { ConversationStore } from "../lib/conversation"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import { join } from "path"
 import { appendFile, mkdir } from "fs/promises"
+import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
 
 // BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Bun auto-loads
-// ~/.claude/.env into this process; if the key is present, @anthropic-ai/claude-agent-sdk
+// the framework .env into this process; if the key is present, @anthropic-ai/claude-agent-sdk
 // bills the API key directly instead of the CLAUDE_CODE_OAUTH_TOKEN subscription.
 // This was the root cause of the April 2026 Sonnet 4.5 $353.89 + Web Search $72.48
 // invoice — every Telegram message was a 25-turn SDK session billed to the API.
@@ -35,10 +36,9 @@ export interface TelegramConfig {
 
 // ── Constants ──
 
-const HOME = process.env.HOME ?? ""
-const CWD = join(HOME, ".claude")
-const STATE_DIR = join(HOME, ".claude", "PAI", "PULSE", "state", "telegram")
-const LOGS_DIR = join(HOME, ".claude", "PAI", "PULSE", "logs", "telegram")
+const CWD = getFrameworkDir()
+const STATE_DIR = memoryPath("STATE", "pulse", "telegram")
+const LOGS_DIR = memoryPath("OBSERVABILITY", "pulse", "telegram")
 const MAX_TELEGRAM_LENGTH = 4096
 const CURSOR = " ▌"
 

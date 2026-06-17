@@ -18,9 +18,10 @@
 import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
+import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 
 const HOME = process.env.HOME!;
-const CLAUDE_DIR = join(HOME, ".claude");
+const CLAUDE_DIR = getFrameworkDir();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Terminal Width Detection
@@ -333,7 +334,7 @@ function countSkills(): number {
 }
 
 function countUserFiles(): number {
-  const userDir = join(CLAUDE_DIR, "PAI/USER");
+  const userDir = userPath();
   if (!existsSync(userDir)) return 0;
   let count = 0;
   const countRecursive = (dir: string) => {
@@ -361,7 +362,7 @@ function countHooks(): number {
 }
 
 function countWorkItems(): number {
-  const workDir = join(CLAUDE_DIR, "PAI/MEMORY/WORK");
+  const workDir = memoryPath("WORK");
   if (!existsSync(workDir)) return 0;
   try {
     return readdirSync(workDir, { withFileTypes: true })
@@ -372,7 +373,7 @@ function countWorkItems(): number {
 }
 
 function countLearnings(): number {
-  const learningDir = join(CLAUDE_DIR, "PAI/MEMORY/LEARNING");
+  const learningDir = memoryPath("LEARNING");
   if (!existsSync(learningDir)) return 0;
   let count = 0;
   const countRecursive = (dir: string) => {

@@ -1,6 +1,6 @@
 ---
 name: Ideate
-description: "Evolutionary ideation engine — loop-controlled multi-cycle idea generation through 9 phases (CONSUME, DREAM at noise=0.9, DAYDREAM at noise=0.5, CONTEMPLATE at noise=0.1, STEAL cross-domain borrowing, MATE recombination via Fisher-Yates shuffle, TEST fitness scoring, EVOLVE selection, META-LEARN Lamarckian strategy adjustment). Loop Controller drives adaptive continue/pivot/stop logic with mid-cycle quality checkpoints; strategies evolve across cycles based on what worked. Produces ranked novel solution candidates with full provenance and fitness landscape. Six workflows: FullCycle (all 9 phases adaptive — default), QuickCycle (compressed CONSUME+STEAL+MATE+TEST single cycle), Dream (DREAM phase only), Steal (cross-domain transfer only), Mate (recombination only), Test (fitness evaluation only). Integrates IterativeDepth in CONTEMPLATE, RedTeam in TEST, Council optionally in MATE. NOT FOR quick single-pass brainstorming (use BeCreative). USE WHEN ideate, id8, novel ideas, generate ideas, ideation engine, evolve ideas, dream up solutions, innovate, breakthrough ideas, idea evolution, creative solutions to hard problems, multi-cycle creativity, need genuinely new approaches."
+description: "Run structured ideation workflows for quick ideas, full cycles, dream/mate/steal/test modes, and concept development. USE WHEN brainstorming products, features, strategies, names, experiments, or multiple solution directions."
 effort: high
 context: fork
 ---
@@ -8,7 +8,7 @@ context: fork
 ## Customization
 
 Before executing, check for user customizations at:
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Ideate/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Ideate/`
 
 # Ideate — The Cognitive Progress Engine
 
@@ -132,7 +132,7 @@ Loop Controller decides actual cycle count adaptively, not a fixed count.
 
 ## State Persistence
 
-Each run persists to `~/.claude/PAI/MEMORY/WORK/{slug}/ideate/`:
+Each run persists to `$PAI_DATA_DIR/MEMORY/WORK/{slug}/ideate/`:
 
 ```
 ideate/
@@ -262,5 +262,5 @@ When the PAI Algorithm sets `mode: ideate` (via `PAI/ALGORITHM/ideate-loop.md`),
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Ideate","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Ideate","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

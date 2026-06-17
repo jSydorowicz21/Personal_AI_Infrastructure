@@ -1,13 +1,13 @@
 ---
 name: BeCreative
-description: "Divergent ideation and corpus expansion using Verbalized Sampling + extended thinking. Single-shot mode generates 5 internally diverse candidates (p<0.10 each) and surfaces the strongest. Multi-turn mode expands a small seed corpus (5-20 examples) into a diverse N-example dataset for evals, training, or test sets. Research-backed: Zhang et al. 2025 (arXiv:2510.01171) — 1.6-2.1x diversity increase on creative writing, 25.7% quality improvement, and synthetic-data downstream accuracy lift 30.6% → 37.5% on math benchmarks. Seven workflows: StandardCreativity, MaximumCreativity, IdeaGeneration, TreeOfThoughts, DomainSpecific, TechnicalCreativityGemini3 for algorithmic/architecture work, and SyntheticDataExpansion for VS-Multi corpus growth. Single-shot output is one best response, not a ranked list; SyntheticDataExpansion writes a JSONL corpus to MEMORY/WORK/{slug}/synthetic-data/. Integrates with XPost, LinkedInPost, Blogging (creative angles), Art (diverse image prompt ideas), Business (offer frameworks), Research (creative synthesis), Evals and _PROMPTINJECTION (consume expanded corpora). Reference files: ResearchFoundation.md (why it works, activation triggers), Principles.md (core philosophy), Templates.md (quick reference for all modes), Examples.md. NOT FOR multi-cycle evolutionary ideation with Lamarckian meta-learning (use Ideate for that). NOT FOR factually-constrained tasks with one right answer — paper §3.2 shows VS provides no lift there. USE WHEN be creative, think outside the box, brainstorm, divergent ideas, creative solutions, maximum creativity, tree of thoughts, radically different, most creative option, creative angle on, unconventional approach, name this, creative framing, narrative angle, artistic direction, expand this corpus, synthetic data, generate diverse examples, expand seed set, create test set from these examples."
+description: "Expand the option space with unusual ideas, analogies, synthetic examples, and creative reframes. USE WHEN brainstorming, escaping conventional answers, generating variants, inventing concepts, creating synthetic data, or deliberately seeking novelty."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/BeCreative/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/BeCreative/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -137,7 +137,7 @@ User: "deep thinking this architecture problem"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"BeCreative","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"BeCreative","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

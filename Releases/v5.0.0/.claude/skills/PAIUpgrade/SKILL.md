@@ -1,13 +1,13 @@
 ---
 name: PAIUpgrade
-description: "Generate prioritized PAI upgrade recommendations via 4 parallel threads: Thread 0 (prior-work audit — reads current Algorithm, PATTERNS.yaml, hooks, settings, recent ISAs, and KNOWLEDGE to assign Prior Status tags), Thread 1 (user context — TELOS goals, active projects, PAI system state), Thread 2 (source collection — Anthropic releases, YouTube channels, GitHub trending, custom sources), Thread 3 (internal reflections — Algorithm execution Q1/Q2 patterns). Output format: Discoveries table ranked by interestingness, then tiered Recommendations (CRITICAL/HIGH/MEDIUM/LOW) each with Prior Status (NEW/PARTIAL/DISCUSSED/REJECTED/DONE), then full Technique Details with before/after code. Every recommendation cites file:line evidence from Thread 0 — already-implemented items go to Skipped, never re-surfaced. Workflows: Upgrade, MineReflections, AlgorithmUpgrade, ResearchUpgrade, FindSources, TwitterBookmarks. USE WHEN upgrade, system upgrade, check Anthropic, new Claude features, algorithm upgrade, PAI upgrade, check bookmarks, scan bookmarks, twitter bookmarks, X bookmarks, bookmarks for upgrades, what have I bookmarked, mine reflections."
+description: "Upgrade PAI algorithms, skills, docs, and release assets using source mining and structured recommendations. USE WHEN improving PAI itself, mining reflections, finding upgrade sources, updating algorithm doctrine, or preparing release changes."
 effort: high
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/PAIUpgrade/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/PAIUpgrade/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -94,7 +94,7 @@ Section order: Discoveries → Recommendations → Technique Details → Interna
 - `State/github-trending.json` — GitHub trending state (seen repos)
 - `State/twitter-bookmarks-seen.json` — Previously processed bookmark URLs
 
-**User Customizations** (`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/PAIUpgrade/`):
+**User Customizations** (`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/PAIUpgrade/`):
 - `EXTEND.yaml` — Extension manifest
 - `youtube-channels.json` — User's personal YouTube channels
 - `user-sources.json` — Additional source definitions (e.g., `github_trending` block)
@@ -156,7 +156,7 @@ These output patterns are **FAILURES**:
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"PAIUpgrade","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"PAIUpgrade","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

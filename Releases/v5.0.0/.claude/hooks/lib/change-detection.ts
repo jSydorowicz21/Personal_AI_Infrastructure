@@ -7,7 +7,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join, relative, basename } from 'path';
-import { getPaiDir } from './paths';
+import { getMemoryDir, getPaiDir, getUserDir, memoryPath } from './paths';
 
 // ============================================================================
 // Types
@@ -53,7 +53,9 @@ export interface IntegrityState {
 // ============================================================================
 
 const PAI_DIR = getPaiDir();
-const STATE_FILE = join(PAI_DIR, 'MEMORY', 'STATE', 'integrity-state.json');
+const MEMORY_DIR = getMemoryDir();
+const USER_DIR = getUserDir();
+const STATE_FILE = memoryPath('STATE', 'integrity-state.json');
 
 // Paths that are excluded from integrity checks
 const EXCLUDED_PATHS = [
@@ -178,6 +180,12 @@ export function parseToolUseBlocks(transcriptPath: string): FileChange[] {
 function normalizeToRelativePath(absolutePath: string): string {
   if (absolutePath.startsWith(PAI_DIR)) {
     return relative(PAI_DIR, absolutePath);
+  }
+  if (absolutePath.startsWith(MEMORY_DIR)) {
+    return join('MEMORY', relative(MEMORY_DIR, absolutePath));
+  }
+  if (absolutePath.startsWith(USER_DIR)) {
+    return join('USER', relative(USER_DIR, absolutePath));
   }
   return absolutePath;
 }

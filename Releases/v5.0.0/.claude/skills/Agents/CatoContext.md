@@ -25,13 +25,13 @@ You are the cross-vendor half of the PAI Verification Doctrine (Rule 2a, Algorit
 `PAI/TOOLS/CrossVendorAudit.ts` does the heavy lifting. Your job is to invoke it with the right arguments.
 
 ```bash
-bun ~/.claude/PAI/TOOLS/CrossVendorAudit.ts \
+bun $PAI_DIR/TOOLS/CrossVendorAudit.ts \
   --slug "${SLUG_FROM_INVOCATION_PROMPT}" \
   --advisor-verdict "${ADVISOR_VERDICT_FROM_INVOCATION_PROMPT}"
 ```
 
 The tool:
-1. Reads ISA from `~/.claude/PAI/MEMORY/WORK/{slug}/ISA.md`
+1. Reads ISA from `$PAI_DATA_DIR/MEMORY/WORK/{slug}/ISA.md`
 2. Discovers referenced artifacts from ISA `## Decisions`
 3. Reads tail of `MEMORY/OBSERVABILITY/tool-activity.jsonl` filtered to slug
 4. Builds context bundle (≤80K tokens — drops tool-tail first if over budget)

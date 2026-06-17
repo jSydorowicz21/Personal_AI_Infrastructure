@@ -16,10 +16,10 @@
  * - Single source of truth in settings.json
  */
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
-import { getPaiDir, getSettingsPath, getClaudeDir } from '../lib/paths';
+import { getPaiDir, getSettingsPath, getClaudeDir, getMemoryDir, getUserDir, memoryPath } from '../lib/paths';
 
 
 interface Counts {
@@ -162,7 +162,7 @@ function countSubdirs(dir: string): number {
  * Get all counts
  */
 function getCounts(paiDir: string): Counts {
-  const ratingsPath = join(paiDir, 'MEMORY/LEARNING/SIGNALS/ratings.jsonl');
+  const ratingsPath = memoryPath('LEARNING', 'SIGNALS', 'ratings.jsonl');
   const sk = countSkills(paiDir);
   return {
     skills: sk.total,
@@ -170,12 +170,12 @@ function getCounts(paiDir: string): Counts {
     skillsPrivate: sk.priv,
     workflows: countWorkflowFiles(join(getClaudeDir(), 'skills')),
     hooks: countHooks(paiDir),
-    signals: countFilesRecursive(join(paiDir, 'MEMORY/LEARNING'), '.md'),
-    files: countFilesRecursive(join(paiDir, 'PAI/USER')),
-    work: countSubdirs(join(paiDir, 'MEMORY/WORK')),
-    sessions: countFilesRecursive(join(paiDir, 'MEMORY'), '.jsonl'),
-    research: countFilesRecursive(join(paiDir, 'MEMORY/RESEARCH'), '.md') +
-              countFilesRecursive(join(paiDir, 'MEMORY/RESEARCH'), '.json'),
+    signals: countFilesRecursive(memoryPath('LEARNING'), '.md'),
+    files: countFilesRecursive(getUserDir()),
+    work: countSubdirs(memoryPath('WORK')),
+    sessions: countFilesRecursive(getMemoryDir(), '.jsonl'),
+    research: countFilesRecursive(memoryPath('RESEARCH'), '.md') +
+              countFilesRecursive(memoryPath('RESEARCH'), '.json'),
     ratings: countRatingsLines(ratingsPath),
     updatedAt: new Date().toISOString(),
   };
@@ -185,8 +185,10 @@ function getCounts(paiDir: string): Counts {
  * Refresh usage cache from Anthropic OAuth API.
  * Called by stop hook so status line never needs to make this 700ms API call.
  */
-async function refreshUsageCache(paiDir: string): Promise<void> {
-  const usageCachePath = join(paiDir, 'MEMORY/STATE/usage-cache.json');
+async function refreshUsageCache(): Promise<void> {
+  if ((process.env.PAI_FRAMEWORK || 'claude') !== 'claude') return;
+
+  const usageCachePath = memoryPath('STATE', 'usage-cache.json');
 
   try {
     // Extract OAuth token — macOS Keychain or Linux credentials file
@@ -258,6 +260,7 @@ async function refreshUsageCache(paiDir: string): Promise<void> {
       }
     }
 
+    mkdirSync(memoryPath('STATE'), { recursive: true });
     writeFileSync(usageCachePath, JSON.stringify(data, null, 2) + '\n');
     console.error(`[UpdateCounts] Usage cache refreshed: 5H=${(data.five_hour as any)?.utilization}% 7D=${(data.seven_day as any)?.utilization}%`);
   } catch {
@@ -276,7 +279,7 @@ export async function handleUpdateCounts(): Promise<void> {
     // Run counts + usage refresh in parallel
     const [counts] = await Promise.all([
       Promise.resolve(getCounts(paiDir)),
-      refreshUsageCache(paiDir),
+      refreshUsageCache(),
     ]);
 
     // Read current settings

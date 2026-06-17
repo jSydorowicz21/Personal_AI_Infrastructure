@@ -22,14 +22,13 @@
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
+import { memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME || "";
-const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
-const IDEAL_DIR = join(PAI_DIR, "USER", "TELOS", "IDEAL_STATE");
-const CURRENT_DIR = join(PAI_DIR, "USER", "TELOS", "CURRENT_STATE");
-const HEALTH_DIR = join(PAI_DIR, "USER", "HEALTH");
-const FINANCES_DIR = join(PAI_DIR, "USER", "FINANCES");
-const HISTORY_FILE = join(PAI_DIR, "MEMORY", "OBSERVABILITY", "gap-history.jsonl");
+const IDEAL_DIR = userPath("TELOS", "IDEAL_STATE");
+const CURRENT_DIR = userPath("TELOS", "CURRENT_STATE");
+const HEALTH_DIR = userPath("HEALTH");
+const FINANCES_DIR = userPath("FINANCES");
+const HISTORY_FILE = memoryPath("OBSERVABILITY", "gap-history.jsonl");
 
 const METRIC_DIMENSIONS = ["health", "money", "freedom"] as const;
 type MetricDimension = (typeof METRIC_DIMENSIONS)[number];

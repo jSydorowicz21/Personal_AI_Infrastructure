@@ -54,12 +54,11 @@ import { join, dirname } from 'path';
 import { getISOTimestamp, getPSTDate } from './lib/time';
 import { getLearningCategory } from './lib/learning-utils';
 import { findArtifactPath } from './lib/isa-utils';
+import { memoryPath } from './lib/paths';
 
-const BASE_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
-const MEMORY_DIR = join(BASE_DIR, 'MEMORY');
-const STATE_DIR = join(MEMORY_DIR, 'STATE');
-const WORK_DIR = join(MEMORY_DIR, 'WORK');
-const LEARNING_DIR = join(MEMORY_DIR, 'LEARNING');
+const STATE_DIR = memoryPath('STATE');
+const WORK_DIR = memoryPath('WORK');
+const LEARNING_DIR = memoryPath('LEARNING');
 
 // Session-scoped state file lookup with legacy fallback
 function findStateFile(sessionId?: string): string | null {

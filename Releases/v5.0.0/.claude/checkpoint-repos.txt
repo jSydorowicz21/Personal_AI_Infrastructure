@@ -9,7 +9,7 @@
 #
 # Default = ~/.claude only. Adding an active-WIP repo will start auto-committing
 # your in-flight work alongside ISA progress (Hankweave-style whole-repo snapshots).
-# Inspection: bun ~/.claude/PAI/TOOLS/Checkpoint.ts list <slug>
-# Rollback (preview only): bun ~/.claude/PAI/TOOLS/Checkpoint.ts rollback <slug> <isc-id>
+# Inspection: bun $PAI_DIR/TOOLS/Checkpoint.ts list <slug>
+# Rollback (preview only): bun $PAI_DIR/TOOLS/Checkpoint.ts rollback <slug> <isc-id>
 
 ~/.claude

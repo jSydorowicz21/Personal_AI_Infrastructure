@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "releaseRoot": "Releases/v5.0.0/.claude",
+  "description": "Managed files safe to overlay into an existing PAI install without touching USER, MEMORY, settings, auth, hooks state, or framework config.",
+  "entries": [
+    {
+      "source": "CLAUDE.md",
+      "targets": {
+        "claude": "CLAUDE.md",
+        "codex": "AGENTS.md",
+        "opencode": "AGENTS.md"
+      },
+      "transformInstructions": true
+    },
+    {
+      "source": "PAI/PAI_SYSTEM_PROMPT.md",
+      "target": "PAI/PAI_SYSTEM_PROMPT.md"
+    },
+    {
+      "source": "PAI/TOOLS/pai.ts",
+      "target": "PAI/TOOLS/pai.ts"
+    },
+    {
+      "source": "skills/Webdesign",
+      "target": "skills/Webdesign",
+      "mirrorToCodexAgentsSkills": true
+    }
+  ]
+}

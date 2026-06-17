@@ -1,6 +1,6 @@
 ---
 name: AudioEditor
-description: "AI-powered audio and video editing pipeline: Whisper word-level transcription (insanely-fast-whisper on MPS) → Claude segment classification (KEEP / CUT_FILLER / CUT_FALSE_START / CUT_STUTTER / CUT_DEAD_AIR / CUT_EDIT_MARKER) → ffmpeg execution with 40ms qsin crossfades and room-tone gap fill → optional Cleanvoice API cloud polish for mouth sounds and loudness normalization. Distinguishes rhetorical pauses from accidental ones. Breaths attenuated to 50% volume (not removed). Preview mode (--preview flag) shows proposed cuts without modifying audio. Aggressive mode (--aggressive flag) applies tighter filler detection thresholds. Polish step (--polish flag) uploads to Cleanvoice API for mouth sound removal and loudness normalization — confirm before cloud upload of sensitive content. Pipeline tools: Transcribe.ts, Analyze.ts, Edit.ts, Polish.ts, Pipeline.ts. Single workflow: Clean.md. Requires ANTHROPIC_API_KEY; CLEANVOICE_API_KEY optional for polish step. USE WHEN: clean audio, edit audio, remove filler words, clean podcast, remove ums, cut dead air, polish audio, trim recording, audio cleanup, cut stutters, edit interview recording, preview edits, aggressive clean. NOT FOR video composition or animation (use Remotion)."
+description: "Edit, clean, assemble, and transform audio assets with repeatable commands and quality checks. USE WHEN trimming audio, normalizing levels, converting formats, removing silence/noise, preparing clips, or producing audio deliverables."
 effort: medium
 ---
 
@@ -11,7 +11,7 @@ AI-powered audio/video editing — transcription, intelligent cut detection, aut
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/AudioEditor/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/AudioEditor/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -118,7 +118,7 @@ User: "aggressively clean this audio and polish it"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"AudioEditor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"AudioEditor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

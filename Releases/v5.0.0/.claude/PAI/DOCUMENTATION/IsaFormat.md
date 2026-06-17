@@ -165,7 +165,7 @@ algorithm_config:
 - `started`: Set once at creation. Never modified.
 - `updated`: Set on every Edit/Write. Use current ISO 8601 timestamp.
 - `iteration`: Omitted on first run. Set to `2` on first continuation, incremented thereafter.
-- `algorithm_config`: Omitted for interactive mode. Written during OBSERVE when mode is ideate, optimize, or loop. Contains resolved parameter values (after preset → focus → overrides resolution). The `params` section always contains the RESOLVED values, not raw user input. Full parameter schema: `~/.claude/PAI/ALGORITHM/parameter-schema.md`.
+- `algorithm_config`: Omitted for interactive mode. Written during OBSERVE when mode is ideate, optimize, or loop. Contains resolved parameter values (after preset → focus → overrides resolution). The `params` section always contains the RESOLVED values, not raw user input. Full parameter schema: `$PAI_DIR/ALGORITHM/parameter-schema.md`.
 
 ## Body Sections (v2.7)
 
@@ -352,7 +352,7 @@ Evidence for each criterion. Written during VERIFY phase.
 ## File Location
 
 ```
-~/.claude/PAI/MEMORY/WORK/{slug}/ISA.md
+$PAI_DATA_DIR/MEMORY/WORK/{slug}/ISA.md
 ```
 
 Directory created with `mkdir -p MEMORY/WORK/{slug}/` during OBSERVE. Legacy `PRD.md` files in this path are inert — the fallback was removed at Algorithm v4.2.0 and the system is now at v6.3.0.

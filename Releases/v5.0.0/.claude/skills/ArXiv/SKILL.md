@@ -1,13 +1,13 @@
 ---
 name: ArXiv
-description: "Search and retrieve arXiv academic papers by topic, category, or paper ID — with AlphaXiv-enriched AI-generated overviews. Uses arXiv Atom API (no auth) for discovery and search across cs.AI, cs.LG, cs.CL (NLP/LLMs), cs.CR (security), cs.MA (multi-agent), cs.SE, and cs.IR. Supports title (ti:), abstract (abs:), author (au:), and category (cat:) search fields with boolean operators (AND, OR, ANDNOT); sorts by lastUpdatedDate or relevance; paginates up to 2,000 results per call with 3s rate limit between calls. AlphaXiv enrichment fetches markdown summaries from alphaxiv.org/overview/{ID}.md; full text from alphaxiv.org/abs/{ID}.md as fallback; 404 means summary not yet generated. Workflows: Latest (new papers by category), Search (topic/keyword search), Paper (single paper deep-dive by ID or URL). API returns Atom XML — parse with text processing, not jq. HTTPS required with -L flag; check published date not lastUpdatedDate for truly new submissions. Output: paper title, authors, abstract, AlphaXiv summary, and direct arXiv URL. USE WHEN arxiv, papers, latest papers, research papers, new papers, what's new in AI research, recent ML papers, paper lookup, arxiv search, find paper by ID, summarize paper, latest NLP research, latest LLM papers, multi-agent papers, cs.AI latest, AI safety papers, software engineering papers, information retrieval papers. NOT FOR general web research (use Research), extracting content from arbitrary URLs (use Parser), or cybersecurity annual report analysis (use AnnualReports)."
+description: "Find, retrieve, summarize, and analyze academic papers from arXiv and related scholarly sources. USE WHEN searching papers, reviewing literature, comparing research claims, extracting methods/results, or grounding technical work in academic sources."
 effort: low
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/ArXiv/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/ArXiv/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -62,5 +62,5 @@ Search arXiv for latest papers by topic or category. Uses arXiv's Atom API for s
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ArXiv","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ArXiv","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

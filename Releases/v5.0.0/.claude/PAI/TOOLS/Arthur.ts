@@ -5,11 +5,9 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
-import YAML from "yaml";
+import { memoryPath, userPath } from "./lib/paths";
 
-const PAI_DIR = process.env.PAI_DIR ?? join(homedir(), ".claude", "PAI");
-const POLICIES_PATH = join(PAI_DIR, "USER", "ARTHUR", "policies.yaml");
+const POLICIES_PATH = userPath("ARTHUR", "policies.yaml");
 const GCP_PROJECT = process.env.PAI_GCP_PROJECT ?? "";
 
 // ───────────────────────── Types ─────────────────────────
@@ -50,7 +48,7 @@ function securityLogPath(kind: string): string {
   const year = String(now.getFullYear());
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  const dir = join(PAI_DIR, "MEMORY", "SECURITY", year, month);
+  const dir = memoryPath("SECURITY", year, month);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return join(dir, `arthur-${kind}-${year}${month}${day}.jsonl`);
 }
@@ -75,7 +73,7 @@ function loadPolicies(): Policies {
   const now = Date.now();
   if (policiesCache && now - policiesLoadedAt < POLICIES_CACHE_MS) return policiesCache;
   const text = readFileSync(POLICIES_PATH, "utf8");
-  policiesCache = YAML.parse(text) as Policies;
+  policiesCache = Bun.YAML.parse(text) as Policies;
   policiesLoadedAt = now;
   return policiesCache;
 }
@@ -210,7 +208,8 @@ async function fetchFromGCP(key: string): Promise<string> {
     throw new Error("PAI_GCP_PROJECT env var not set; Arthur cannot reach the vault");
   }
 
-  const { SecretManagerServiceClient } = await import("@google-cloud/secret-manager");
+  const importRuntime = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
+  const { SecretManagerServiceClient } = await importRuntime("@google-cloud/secret-manager");
   const client = new SecretManagerServiceClient();
   const [version] = await client.accessSecretVersion({
     name: `projects/${GCP_PROJECT}/secrets/${key}/versions/latest`,
@@ -333,7 +332,7 @@ if (import.meta.main) {
     const policy = getPolicy(key);
     console.log(JSON.stringify({ key, policy: policy ?? "default-allow" }, null, 2));
   } else if (cmd === "policies") {
-    console.log(YAML.stringify(loadPolicies()));
+    console.log(readFileSync(POLICIES_PATH, "utf8"));
   } else {
     console.error("Arthur CLI commands: get KEY | status KEY | policies");
     process.exit(1);

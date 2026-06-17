@@ -158,7 +158,7 @@ rg -i "danielmiessler|unsupervised|ULAdmin|thesurface|human3|ul\.live|/Users/[a-
 - User-specific absolute paths (`/Users/<name>/...`) — use `~/` instead
 - Personal domain names (<author>.example, <product>.example, <brand>.example) — unless the skill is specifically about operating that domain
 
-**Zero matches = PASS.** Any match = FAIL, recommend moving to `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/` or rewriting in generic language.
+**Zero matches = PASS.** Any match = FAIL, recommend moving to `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/<SkillName>/` or rewriting in generic language.
 
 ---
 

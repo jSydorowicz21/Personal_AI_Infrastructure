@@ -1,6 +1,6 @@
 ---
 name: Remotion
-description: "Creates programmatic video with React via Remotion — builds compositions, sequences, and motion graphics rendered to MP4. Uses useCurrentFrame() for all animation (no CSS animations). Integrates PAI_THEME constants from Theme.ts and Art skill aesthetic preferences for visual consistency. Render command: bunx remotion render {composition-id} ~/Downloads/{name}.mp4. Output always to ~/Downloads/ for preview first. Tools: Render.ts (render, list compositions, create projects) and Theme.ts (PAI theme constants derived from Art). Reference docs: ArtIntegration.md (theme constants, color mapping), Patterns.md (code examples, presets), CriticalRules.md (what not to do), Tools/Ref-*.md (31 pattern files covering core Remotion, Lambda, ElevenLabs captions, AI pipeline). Supports ElevenLabs captions, Lambda rendering, and AI pipeline integration. Rendering is CPU-intensive — use run_in_background. Two primary workflows: ContentToAnimation (animate existing content) and GeneratedContentVideo (AI content to video / make a short). USE WHEN: video, animation, motion graphics, video rendering, React video, render video, animate content, make a short, create animations, video overlay, explainer video, animated explainer, content to video, programmatic video. NOT FOR static images, diagrams, or illustrations (use Art). NOT FOR audio cleanup (use AudioEditor)."
+description: "Create video, animation, motion graphics, and Remotion-based visual sequences. USE WHEN generating videos, animated explainers, motion graphics, scripted visual scenes, or code-driven animations. NOT FOR static images (use Art)."
 effort: medium
 ---
 
@@ -30,7 +30,7 @@ Create professional videos programmatically with React.
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Remotion/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Remotion/`
 
 ## Workflow Routing
 
@@ -94,7 +94,7 @@ User: "create a video showing how the Algorithm works"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Remotion","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Remotion","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

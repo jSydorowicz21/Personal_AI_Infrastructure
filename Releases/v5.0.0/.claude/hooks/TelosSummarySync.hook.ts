@@ -4,7 +4,7 @@
  *
  * TRIGGER: PostToolUse (Write, Edit)
  *
- * When any file in ~/.claude/PAI/USER/TELOS/ is written or edited (except
+ * When any file in $PAI_DATA_DIR/USER/TELOS/ is written or edited (except
  * PRINCIPAL_TELOS.md itself and Backups/), regenerates the summary by running
  * GenerateTelosSummary.ts.
  *
@@ -15,10 +15,14 @@
 
 import { readFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { paiPath } from './lib/paths';
+import { paiPath, userPath } from './lib/paths';
 
-const TELOS_DIR = paiPath('USER', 'TELOS');
+const TELOS_DIR = userPath('TELOS');
 const GENERATOR = paiPath("TOOLS", 'GenerateTelosSummary.ts');
+
+function slash(path: string): string {
+  return path.replace(/\\/g, '/');
+}
 
 let input: any;
 try {
@@ -30,7 +34,7 @@ try {
 const filePath: string = input.tool_input?.file_path || '';
 
 // Only trigger for TELOS source files
-if (!filePath.includes('/USER/TELOS/')) process.exit(0);
+if (!slash(filePath).startsWith(slash(TELOS_DIR) + '/')) process.exit(0);
 
 // Don't trigger for the summary itself or backups
 if (filePath.endsWith('PRINCIPAL_TELOS.md')) process.exit(0);

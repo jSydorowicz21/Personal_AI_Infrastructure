@@ -26,6 +26,8 @@ OUT=~/Downloads/webdesign/redesign/$(date +%Y%m%d-%H%M%S)
 mkdir -p "$OUT"
 
 # Full-page screenshot
+# Claude Design lane: use Interceptor when rebuilding through claude.ai/design.
+# Codex-native lane: use the Codex chrome/browser plugin for capture instead.
 bun ~/.claude/skills/Interceptor/Tools/Open.ts "$URL"
 bun ~/.claude/skills/Interceptor/Tools/Screenshot.ts --full-page "$OUT/original.png"
 

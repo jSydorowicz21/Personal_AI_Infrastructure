@@ -2,7 +2,7 @@
 /**
  * ReferenceCheck.ts — Full-surface reference validator for the PAI system.
  *
- * Walks every file under ~/.claude (excluding noise dirs), extracts every
+ * Walks every file under the active framework home (excluding noise dirs), extracts every
  * reference from .md/.ts/.json files, validates each against the filesystem,
  * and emits three categories: missing, stale, orphan.
  *
@@ -27,16 +27,17 @@
 import { readFileSync, statSync, existsSync, readdirSync, realpathSync } from 'fs';
 import { join, resolve, dirname, relative, extname, sep } from 'path';
 import { execSync } from 'child_process';
+import { getFrameworkDir, getPaiDir } from './lib/paths';
 
 const HOME = process.env.HOME || '';
-const CLAUDE_DIR = join(HOME, '.claude');
-const PAI_DIR = join(CLAUDE_DIR, 'PAI');
+const CLAUDE_DIR = getFrameworkDir();
+const PAI_DIR = getPaiDir();
 
 // ── Arg parsing (manual, zero deps) ──
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
-  console.log(`ReferenceCheck — validate every reference across ~/.claude
+  console.log(`ReferenceCheck — validate every reference across the active framework home
 
 Usage: bun ReferenceCheck.ts [flags]
 

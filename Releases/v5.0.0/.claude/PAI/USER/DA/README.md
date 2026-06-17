@@ -19,9 +19,9 @@ The installer's voice step launches the DA interview. If you skipped it,
 or want to add another DA later:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/DAInterview.ts                  # Quick mode
-bun ~/.claude/PAI/TOOLS/DAInterview.ts --depth standard # More detail
-bun ~/.claude/PAI/TOOLS/DAInterview.ts --depth deep     # Every phase
+bun $PAI_DIR/TOOLS/DAInterview.ts                  # Quick mode
+bun $PAI_DIR/TOOLS/DAInterview.ts --depth standard # More detail
+bun $PAI_DIR/TOOLS/DAInterview.ts --depth deep     # Every phase
 ```
 
 The interview asks for:
@@ -46,8 +46,8 @@ diary.jsonl        # The DA's session-by-session reflections
 ## Updating later
 
 ```bash
-bun ~/.claude/PAI/TOOLS/DAInterview.ts --update            # Update primary DA
-bun ~/.claude/PAI/TOOLS/DAInterview.ts --update --da kai   # Update specific DA
+bun $PAI_DIR/TOOLS/DAInterview.ts --update            # Update primary DA
+bun $PAI_DIR/TOOLS/DAInterview.ts --update --da kai   # Update specific DA
 ```
 
 ## Privacy
