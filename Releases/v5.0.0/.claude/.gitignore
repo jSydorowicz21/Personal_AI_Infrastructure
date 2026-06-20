@@ -119,6 +119,7 @@ PAI/PAIWorker/
 **/.wrangler/
 **/.playwright-cli/
 **/bun.lock
+!PAI/PULSE/bun.lock
 
 # PAI Release builds
 PAI_RELEASES/

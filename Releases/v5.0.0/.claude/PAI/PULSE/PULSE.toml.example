@@ -1,7 +1,6 @@
 # PAI Pulse Configuration
 # Copy this file to PULSE.toml and customize for your setup
 
-[pulse]
 port = 31337
 host = "localhost"
 

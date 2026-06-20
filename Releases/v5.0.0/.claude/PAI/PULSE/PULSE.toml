@@ -8,6 +8,8 @@
 # output = voice | telegram | ntfy | email | log
 # Sentinels: NO_ACTION, NO_URGENT, NO_EVENTS → suppress dispatch
 
+port = 31337
+
 # ── Module Configuration ──
 
 [voice]

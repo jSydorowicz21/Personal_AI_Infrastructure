@@ -10,9 +10,9 @@
 
 import { join } from "path"
 import { readFileSync } from "fs"
-import { parse } from "smol-toml"
 import { SignJWT, importPKCS8 } from "jose"
 import { getPaiDir, memoryPath } from "../../TOOLS/lib/paths"
+import { parseToml } from "../toml"
 
 const PULSE_DIR = join(getPaiDir(), "PULSE")
 const STATE_FILE = memoryPath("STATE", "pulse", "work-token.json")
@@ -32,7 +32,7 @@ interface WorkerConfig {
 function loadWorkerConfig(): WorkerConfig | null {
   try {
     const raw = readFileSync(join(PULSE_DIR, "PULSE.toml"), "utf-8")
-    const parsed = parse(raw) as { worker?: Record<string, unknown> }
+    const parsed = parseToml(raw) as { worker?: Record<string, unknown> }
     const w = parsed.worker
     if (!w?.name) return null
 

@@ -76,10 +76,11 @@ enabled = true
   installOutput = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
 
   const config = readFileSync(join(codexHome, "config.toml"), "utf-8");
-  if (!existsSync(profilePath)) {
-    throw new Error(`PowerShell profile was not written at ${profilePath}; temp=${tempRoot}\n${installerTail()}`);
+  const shellProfilePath = process.platform === "win32" ? profilePath : join(tempRoot, ".zshrc");
+  if (!existsSync(shellProfilePath)) {
+    throw new Error(`Shell profile was not written at ${shellProfilePath}; temp=${tempRoot}\n${installerTail()}`);
   }
-  const profile = readFileSync(profilePath, "utf-8");
+  const profile = readFileSync(shellProfilePath, "utf-8");
   const backupExists = readdirSync(tempRoot, { withFileTypes: true })
     .some((entry) => entry.isDirectory() && entry.name.startsWith(".codex.backup-"));
 
@@ -87,12 +88,17 @@ enabled = true
   assert("Codex profile preserved", config.includes("[profiles.keepme]"));
   assert("Codex provider preserved", config.includes("[model_providers.keepme]"));
   assert("Codex plugin preserved", config.includes("[plugins.\"browser@openai-bundled\"]"));
-  assert("PowerShell k alias", profile.includes("function k"));
-  assert("PowerShell pai alias", profile.includes("function pai"));
+  assert("Shell k alias", profile.includes("function k") || profile.includes("alias k"));
+  assert("Shell pai alias", profile.includes("function pai") || profile.includes("alias pai"));
   assert("Backup created", backupExists);
   assert("Pulse Windows manager installed", existsSync(join(codexHome, "PAI", "PULSE", "manage.ps1")));
+  assert("Pulse Assistant module installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "module.ts")));
+  assert("Pulse Assistant checks installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "checks", "tasks.ts")));
   assert("Codex agents generated", existsSync(join(codexHome, "agents")));
   assert("Codex hooks generated", existsSync(join(codexHome, "hooks.json")));
+  const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
+  assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
+  assert("Codex ContextReduction hook", hooks.includes("ContextReduction.hook.sh"));
 } catch (err) {
   keepTemp = true;
   console.error(err instanceof Error ? err.message : String(err));

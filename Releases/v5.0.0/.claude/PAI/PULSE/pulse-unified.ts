@@ -16,8 +16,8 @@
 
 import { join } from "path"
 import { readFileSync, existsSync } from "fs"
-import { parse } from "smol-toml"
 import { getFrameworkDir, getPaiDataDir, getPaiDir, memoryPath } from "../TOOLS/lib/paths"
+import { parseToml } from "./toml"
 
 // ── Load .env before anything else ──
 
@@ -114,7 +114,7 @@ interface PulseConfig {
   jobs: Array<{
     name: string
     schedule: string
-    type: "script" | "claude"
+    type: "script" | "claude" | "ai"
     command?: string
     prompt?: string
     model?: string
@@ -127,12 +127,12 @@ interface PulseConfig {
 
 async function loadPulseConfig(): Promise<PulseConfig> {
   const raw = await Bun.file(join(PULSE_DIR, "PULSE.toml")).text()
-  const parsed = parse(raw) as Record<string, unknown>
+  const parsed = parseToml(raw) as Record<string, unknown>
 
   const daemonConfig = await loadConfig(PULSE_DIR)
 
   return {
-    port: (parsed.port as number) ?? parseInt(process.env.PULSE_PORT || "8686", 10),
+    port: (parsed.port as number) ?? parseInt(process.env.PULSE_PORT || "31337", 10),
     voice: (parsed.voice as PulseConfig["voice"]) ?? { enabled: true },
     telegram: (parsed.telegram as PulseConfig["telegram"]) ?? { enabled: false },
     imessage: (parsed.imessage as PulseConfig["imessage"]) ?? { enabled: false },
@@ -151,6 +151,15 @@ const MAX_FAILURES = 3
 const MAX_SLEEP_MS = 60_000
 const MIN_SLEEP_MS = 1_000
 
+async function sleepInterruptibly(ms: number, shuttingDown: () => boolean): Promise<void> {
+  const until = Date.now() + ms
+  while (!shuttingDown()) {
+    const remaining = until - Date.now()
+    if (remaining <= 0) return
+    await Bun.sleep(Math.min(remaining, 250))
+  }
+}
+
 // ── Supervisor: restart crashed subsystems without killing the process ──
 
 async function supervise(name: string, fn: () => Promise<void>, shuttingDown: () => boolean) {
@@ -160,12 +169,12 @@ async function supervise(name: string, fn: () => Promise<void>, shuttingDown: ()
       // If fn returns normally, the subsystem exited cleanly
       if (!shuttingDown()) {
         log("info", `${name} exited cleanly, restarting in 10s`)
-        await Bun.sleep(10_000)
+        await sleepInterruptibly(10_000, shuttingDown)
       }
     } catch (err) {
       if (shuttingDown()) return
       log("error", `${name} crashed, restarting in 30s`, { error: String(err) })
-      await Bun.sleep(30_000)
+      await sleepInterruptibly(30_000, shuttingDown)
     }
   }
 }
@@ -375,7 +384,7 @@ async function main() {
       try {
         let output: string
 
-        if (job.type === "claude") {
+        if (job.type === "claude" || job.type === "ai") {
           output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
         } else {
           output = await spawnScript(job.command!)
@@ -417,7 +426,7 @@ async function main() {
     const sleepMs = Math.max(MIN_SLEEP_MS, Math.min(nextDueMs - elapsed, MAX_SLEEP_MS))
 
     if (!shuttingDown) {
-      await Bun.sleep(sleepMs)
+      await sleepInterruptibly(sleepMs, isShuttingDown)
     }
   }
 

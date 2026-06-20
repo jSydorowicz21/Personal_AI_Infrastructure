@@ -3,8 +3,7 @@
  *
  * Absorbed from standalone iMessageBot into Pulse module system.
  * Polls ~/Library/Messages/chat.db for incoming iMessages, processes them
- * through claude-agent-sdk (full Claude Code session with tools, hooks, CLAUDE.md),
- * and sends replies back via AppleScript.
+ * through the active PAI inference backend and sends replies back via AppleScript.
  *
  * Architecture: SQLite poll -> auth -> SDK session -> AppleScript reply
  *
@@ -16,7 +15,6 @@
  * Does NOT create its own HTTP server — health is exposed via Pulse's hook server.
  */
 
-import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ConversationStore } from "../lib/conversation"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import {
@@ -26,7 +24,9 @@ import {
 } from "../lib/messages-db"
 import { sendMessage } from "../lib/imessage-send"
 import { appendFile, mkdir, rename } from "fs/promises"
+import { join } from "path"
 import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
+import { inference } from "../../TOOLS/Inference"
 
 // BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Same rationale
 // as modules/telegram.ts — prevents API billing when the module is re-enabled.
@@ -61,6 +61,14 @@ export interface IMessageHealth {
 const CWD = getFrameworkDir()
 const STATE_DIR = memoryPath("STATE", "pulse", "imessage")
 const LOGS_DIR = memoryPath("OBSERVABILITY", "pulse", "imessage")
+const IMESSAGE_SYSTEM_PROMPT = `You are {{DA_NAME}}, responding via iMessage. {{PRINCIPAL_NAME}} is messaging you from his phone.
+
+CRITICAL RULES FOR IMESSAGE MODE:
+- Keep responses concise, under 200 words, and plain text.
+- No markdown headers, Algorithm format, Native format, Minimal format, or voice notification curls.
+- Speak naturally.
+- When doing tasks, do them and confirm briefly what you did.
+- You have access to PAI capabilities through the active framework.`
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let running = false
@@ -151,6 +159,26 @@ async function processMessage(
     prompt = `Previous conversation:\n${historyText}\n\nPrincipal's new message: ${sanitized}`
   }
 
+  if ((process.env.PAI_FRAMEWORK || "").toLowerCase() === "codex") {
+    const result = await inference({
+      systemPrompt: IMESSAGE_SYSTEM_PROMPT,
+      userPrompt: prompt,
+      level: "standard",
+      timeout: sdkTimeoutMs,
+    })
+
+    if (result.success) {
+      log("info", "Codex inference complete", {
+        latencyMs: result.latencyMs,
+      })
+      return result.output || "Sorry, I wasn't able to generate a response. Try again?"
+    }
+
+    log("error", "Codex inference failed", { error: result.error })
+    return "Sorry, I wasn't able to generate a response. Try again?"
+  }
+
+  const { query } = await import("@anthropic-ai/claude-agent-sdk")
   const sdkOptions: Record<string, unknown> = {
     cwd: CWD,
     tools: { type: "preset", preset: "claude_code" },
@@ -161,10 +189,7 @@ async function processMessage(
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: `\n\nYou are responding via iMessage. Keep responses concise — under 200 words, plain text.
-No markdown headers. No algorithm format. Just natural conversation.
-You have ALL PAI capabilities — skills, email, calendar, everything.
-When asked to check email, use the _INBOX skill. When asked about calendar, use the _CALENDAR skill.`,
+      append: `\n\n## IMESSAGE MODE OVERRIDE\n\n${IMESSAGE_SYSTEM_PROMPT}`,
     },
   }
 

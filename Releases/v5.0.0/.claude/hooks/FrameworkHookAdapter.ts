@@ -8,7 +8,7 @@
 
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
-import { join, resolve } from "path";
+import { extname, join, resolve } from "path";
 import { isSubagentSession } from "./lib/session";
 
 type JsonObject = Record<string, any>;
@@ -182,7 +182,16 @@ async function main() {
     }
   }
 
-  const child = spawnSync(process.execPath, [targetPath], {
+  const extension = extname(targetPath);
+  const runner = extension === ".sh" ? (Bun.which("bash") || "") : process.execPath;
+  if (!runner) {
+    // Shell-only hooks are optional quality-of-life adapters. Do not break a
+    // Windows Codex install just because Git Bash is unavailable.
+    process.exit(0);
+  }
+  const childArgs = extension === ".sh" ? [targetPath] : [targetPath];
+
+  const child = spawnSync(runner, childArgs, {
     input: JSON.stringify(normalize(input, framework)),
     stdio: ["pipe", "inherit", "inherit"],
     env: {

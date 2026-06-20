@@ -40,6 +40,22 @@ function Get-PulseProcess {
   return Get-Process -Id ([int]$raw) -ErrorAction SilentlyContinue
 }
 
+function Ensure-PulseDeps {
+  $packageJson = Join-Path $PulseDir "package.json"
+  if (-not (Test-Path -LiteralPath $packageJson)) { return }
+  $bun = Get-BunPath
+  $previous = Get-Location
+  try {
+    Set-Location -LiteralPath $PulseDir
+    & $bun install
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host "Pulse dependency install failed with exit code $LASTEXITCODE; continuing with core modules"
+    }
+  } finally {
+    Set-Location $previous
+  }
+}
+
 function Test-PulseHttp {
   try {
     $res = Invoke-WebRequest -Uri "http://127.0.0.1:31337/healthz" -Method GET -UseBasicParsing -TimeoutSec 2
@@ -60,6 +76,7 @@ function Wait-Pulse {
 
 function Start-Pulse {
   Ensure-Dirs
+  Ensure-PulseDeps
   if (Test-PulseHttp) {
     Write-Host "PAI Pulse already running on port 31337"
     return $true
