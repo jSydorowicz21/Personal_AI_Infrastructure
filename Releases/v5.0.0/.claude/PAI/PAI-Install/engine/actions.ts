@@ -905,6 +905,10 @@ async function ensureGlobalPaiDataLinks(
     ];
 
     let copied = 0;
+    const bundledUserDir = join(paiDir, "PAI", "USER");
+    if (existsSync(bundledUserDir)) {
+      copied += copyMissing(bundledUserDir, userDir);
+    }
     for (const local of memoryLinks) {
       copied += ensureLinkedDirectory(local, memoryDir).copied;
     }
@@ -2977,6 +2981,7 @@ export async function runTelegramSetup(
   try {
     writeEnvKey(envPath, "TELEGRAM_BOT_TOKEN", token);
     writeEnvKey(envPath, "TELEGRAM_ALLOWED_USERS", allowedUsers);
+    writeEnvKey(envPath, "TELEGRAM_PRINCIPAL_CHAT_ID", allowedUsers.split(",")[0]?.trim() || allowedUsers);
     await emit({ event: "message", content: `Telegram credentials written to ${envPath}.` });
   } catch (err: any) {
     await emit({ event: "message", content: `Could not write .env: ${err?.message || err}. Telegram bot will not start.` });

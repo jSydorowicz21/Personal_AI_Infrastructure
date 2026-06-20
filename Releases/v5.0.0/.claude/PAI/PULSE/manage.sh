@@ -31,8 +31,15 @@ else
   BUN_PATH="$(command -v bun || echo "$HOME/.bun/bin/bun")"
 fi
 
+ensure_deps() {
+  if [ -f "$PULSE_DIR/package.json" ]; then
+    (cd "$PULSE_DIR" && "$BUN_PATH" install)
+  fi
+}
+
 case "$1" in
   start)
+    ensure_deps
     if [ ! -f "$PLIST_DST" ]; then
       # Substitute public template placeholders;
       # no-op on plists that already have literal paths.
@@ -93,6 +100,7 @@ case "$1" in
 
   install)
     mkdir -p "$PULSE_DIR/state" "$PULSE_DIR/logs"
+    ensure_deps
 
     # Cleanup any prior pulse before installing fresh — prevents the stale-PID
     # / unbound-port half-dead state where a previous launchd-managed pulse is

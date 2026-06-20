@@ -211,9 +211,13 @@ function commandHook(config: PAIConfig, hookFile: string, timeout = 10): Record<
 }
 
 /**
- * Codex supports command hooks. This maps the synchronous command-hook subset
- * of PAI's Claude hooks through FrameworkHookAdapter; HTTP hooks and async
- * command hooks are intentionally omitted because Codex does not execute them.
+ * Codex supports command hooks. This maps PAI's command-compatible hooks
+ * through FrameworkHookAdapter so Codex/OpenCode-shaped payloads are normalized
+ * before reaching the existing Claude-oriented hook implementations.
+ *
+ * HTTP hooks remain Pulse-owned for Claude. Codex gets the command equivalents
+ * where they exist; Pulse-only routes such as skill-guard/agent-guard are not
+ * emitted here because Codex does not execute HTTP hook entries.
  */
 export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
   return {
@@ -229,9 +233,28 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
       ],
       PreToolUse: [
         {
-          matcher: "Bash|Shell|Write|Edit|MultiEdit|Read|apply_patch",
+          matcher: "Bash|Shell",
           hooks: [
             commandHook(config, "SecurityPipeline.hook.ts"),
+            commandHook(config, "ContextReduction.hook.sh"),
+          ],
+        },
+        {
+          matcher: "Write|Edit|MultiEdit|Read|apply_patch",
+          hooks: [
+            commandHook(config, "SecurityPipeline.hook.ts"),
+          ],
+        },
+        {
+          matcher: "AskUserQuestion|request_user_input",
+          hooks: [
+            commandHook(config, "SetQuestionTab.hook.ts", 5),
+          ],
+        },
+        {
+          matcher: "Agent",
+          hooks: [
+            commandHook(config, "AgentInvocation.hook.ts", 5),
           ],
         },
       ],
@@ -243,9 +266,23 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           ],
         },
         {
+          matcher: "AskUserQuestion|request_user_input",
+          hooks: [
+            commandHook(config, "QuestionAnswered.hook.ts", 5),
+          ],
+        },
+        {
           matcher: "Write|Edit|MultiEdit|apply_patch",
           hooks: [
             commandHook(config, "TelosSummarySync.hook.ts", 5),
+            commandHook(config, "ISASync.hook.ts", 10),
+            commandHook(config, "CheckpointPerISC.hook.ts", 10),
+          ],
+        },
+        {
+          matcher: "Agent",
+          hooks: [
+            commandHook(config, "AgentInvocation.hook.ts", 5),
           ],
         },
         {
@@ -259,6 +296,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           hooks: [
             commandHook(config, "PromptGuard.hook.ts", 5),
             commandHook(config, "RepeatDetection.hook.ts", 5),
+            commandHook(config, "PromptProcessing.hook.ts", 20),
           ],
         },
       ],

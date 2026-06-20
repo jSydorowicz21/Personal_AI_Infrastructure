@@ -141,12 +141,17 @@ function frameworkRoot(id: FrameworkId): string {
   const state = readFrameworkState();
   const stateFramework = state?.active || state?.framework;
   if (state?.root && stateFramework === id) return state.root;
+  if (id === "codex" && process.env.CODEX_HOME) return process.env.CODEX_HOME;
+  if (id === "opencode" && process.env.OPENCODE_CONFIG_DIR) return process.env.OPENCODE_CONFIG_DIR;
+  if (id === "claude" && (process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME)) {
+    return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME!;
+  }
   const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
   const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
   if (frameworkDirOverride && envFramework === id) return frameworkDirOverride;
-  if (id === "codex") return process.env.CODEX_HOME || join(HOME, ".codex");
-  if (id === "opencode") return process.env.OPENCODE_CONFIG_DIR || join(HOME, ".config", "opencode");
-  return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || join(HOME, ".claude");
+  if (id === "codex") return join(HOME, ".codex");
+  if (id === "opencode") return join(HOME, ".config", "opencode");
+  return join(HOME, ".claude");
 }
 
 function frameworkCommand(id: FrameworkId): string {

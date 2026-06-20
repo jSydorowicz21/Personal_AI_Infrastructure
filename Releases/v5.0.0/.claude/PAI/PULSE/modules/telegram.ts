@@ -9,12 +9,12 @@
  */
 
 import { Bot } from "grammy"
-import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ConversationStore } from "../lib/conversation"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import { join } from "path"
 import { appendFile, mkdir } from "fs/promises"
 import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
+import { inference } from "../../TOOLS/Inference"
 
 // BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Bun auto-loads
 // the framework .env into this process; if the key is present, @anthropic-ai/claude-agent-sdk
@@ -41,6 +41,14 @@ const STATE_DIR = memoryPath("STATE", "pulse", "telegram")
 const LOGS_DIR = memoryPath("OBSERVABILITY", "pulse", "telegram")
 const MAX_TELEGRAM_LENGTH = 4096
 const CURSOR = " ▌"
+const TELEGRAM_SYSTEM_PROMPT = `You are {{DA_NAME}}, responding via Telegram. {{PRINCIPAL_NAME}} is messaging you from his phone.
+
+CRITICAL RULES FOR TELEGRAM MODE:
+- Ignore terminal-only Algorithm, Native, and Minimal format templates.
+- No format headers, no emoji prefixes, and no voice notification curls.
+- Speak naturally and keep responses under 200 words.
+- No code blocks unless specifically asked for code.
+- When doing tasks, do them and confirm briefly what you did.`
 
 // ── Module State ──
 
@@ -187,112 +195,114 @@ export async function startTelegram(config: TelegramConfig): Promise<void> {
         prompt = `Previous conversation:\n${historyText}\n\nPrincipal's new message: ${sanitized}`
       }
 
-      const sdkOptions: Record<string, unknown> = {
-        cwd: CWD,
-        tools: { type: "preset", preset: "claude_code" },
-        settingSources: ["user", "project"],  // NO "local" — skip CLAUDE.md to avoid Algorithm/format/voice curls
-        maxTurns,
-        includePartialMessages: true,
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
-        systemPrompt: {
-          type: "preset",
-          preset: "claude_code",
-          append: `\n\n## TELEGRAM MODE OVERRIDE (highest priority — overrides CLAUDE.md format rules)
-
-You are {{DA_NAME}}, responding via Telegram. {{PRINCIPAL_NAME}} is messaging you from his phone.
-
-CRITICAL RULES FOR TELEGRAM MODE:
-- IGNORE all ALGORITHM/NATIVE/MINIMAL format templates from CLAUDE.md. Those are for terminal sessions only.
-- NO format headers (no ════, no 🗒️, no ━━━, no ISC criteria, no phase markers)
-- NO emoji prefixes, NO bullet formatting
-- Speak as {{DA_NAME}} — first person, natural, conversational, like talking to a friend
-- Keep responses under 200 words
-- No code blocks unless {{PRINCIPAL_NAME}} specifically asks for code
-- NEVER use voice notification curls (no http://localhost:31337/notify calls)
-- You have ALL PAI capabilities — skills, email, calendar, lights, everything
-- When doing tasks, do them and confirm briefly what you did`,
-        },
-      }
-
-      // Resume previous session for context continuity
-      if (lastSessionId) {
-        sdkOptions.resume = lastSessionId
-      }
-
-      const conversation = query({ prompt, options: sdkOptions as any })
-
       // Collect response with timeout
       let fullText = ""
       let messageId: number | null = null
       let lastEditTime = 0
 
-      const timeoutController = new AbortController()
-      const timeout = setTimeout(() => timeoutController.abort(), sdkTimeoutMs)
-
-      try {
-        for await (const message of conversation) {
-          if (timeoutController.signal.aborted) break
-
-          const msg = message as any
-
-          // Capture session ID for resume
-          if (msg.type === "system" && msg.subtype === "init" && msg.session_id) {
-            lastSessionId = msg.session_id
-            log("info", "Session initialized", { sessionId: lastSessionId })
-          }
-
-          // Streaming text deltas (progressive updates)
-          if (msg.type === "stream_event" && msg.event?.type === "content_block_delta" &&
-              msg.event?.delta?.type === "text_delta" && msg.event.delta.text) {
-            fullText += msg.event.delta.text
-          }
-
-          // Full assistant message (fallback if streaming not available)
-          if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
-            for (const block of msg.message.content) {
-              if (block.type === "text" && block.text) {
-                if (!fullText) fullText = block.text
-              }
-            }
-          }
-
-          // Final result
-          if (msg.type === "result") {
-            if (msg.subtype === "success" && msg.result) {
-              fullText = msg.result
-            }
-            if (msg.session_id) lastSessionId = msg.session_id
-            log("info", "SDK session complete", {
-              durationMs: Date.now() - startTime,
-              numTurns: msg.num_turns,
-              cost: msg.total_cost_usd,
-              sessionId: lastSessionId,
-            })
-          }
-
-          // Live edit updates in Telegram
-          const now = Date.now()
-          if (fullText && now - lastEditTime >= editIntervalMs) {
-            const displayText = fullText.slice(0, MAX_TELEGRAM_LENGTH - 10) + CURSOR
-            try {
-              if (!messageId) {
-                const sent = await ctx.reply(displayText)
-                messageId = sent.message_id
-              } else {
-                await ctx.api.editMessageText(chatId, messageId, displayText).catch(() => {})
-              }
-              lastEditTime = now
-            } catch { /* edit failures are non-critical */ }
-          }
+      if ((process.env.PAI_FRAMEWORK || "").toLowerCase() === "codex") {
+        const result = await inference({
+          systemPrompt: TELEGRAM_SYSTEM_PROMPT,
+          userPrompt: prompt,
+          level: "standard",
+          timeout: sdkTimeoutMs,
+        })
+        if (result.success) {
+          fullText = result.output
+          log("info", "Codex inference complete", { durationMs: Date.now() - startTime })
+        } else {
+          log("error", "Codex inference failed", { error: result.error })
         }
-      } finally {
-        clearTimeout(timeout)
+      } else {
+        const { query } = await import("@anthropic-ai/claude-agent-sdk")
+        const sdkOptions: Record<string, unknown> = {
+          cwd: CWD,
+          tools: { type: "preset", preset: "claude_code" },
+          settingSources: ["user", "project"],  // NO "local" — skip CLAUDE.md to avoid Algorithm/format/voice curls
+          maxTurns,
+          includePartialMessages: true,
+          permissionMode: "bypassPermissions",
+          allowDangerouslySkipPermissions: true,
+          systemPrompt: {
+            type: "preset",
+            preset: "claude_code",
+            append: `\n\n## TELEGRAM MODE OVERRIDE\n\n${TELEGRAM_SYSTEM_PROMPT}`,
+          },
+        }
+
+        // Resume previous session for context continuity
+        if (lastSessionId) {
+          sdkOptions.resume = lastSessionId
+        }
+
+        const conversation = query({ prompt, options: sdkOptions as any })
+        const timeoutController = new AbortController()
+        const timeout = setTimeout(() => timeoutController.abort(), sdkTimeoutMs)
+
+        try {
+          for await (const message of conversation) {
+            if (timeoutController.signal.aborted) break
+
+            const msg = message as any
+
+            // Capture session ID for resume
+            if (msg.type === "system" && msg.subtype === "init" && msg.session_id) {
+              lastSessionId = msg.session_id
+              log("info", "Session initialized", { sessionId: lastSessionId })
+            }
+
+            // Streaming text deltas (progressive updates)
+            if (msg.type === "stream_event" && msg.event?.type === "content_block_delta" &&
+                msg.event?.delta?.type === "text_delta" && msg.event.delta.text) {
+              fullText += msg.event.delta.text
+            }
+
+            // Full assistant message (fallback if streaming not available)
+            if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
+              for (const block of msg.message.content) {
+                if (block.type === "text" && block.text) {
+                  if (!fullText) fullText = block.text
+                }
+              }
+            }
+
+            // Final result
+            if (msg.type === "result") {
+              if (msg.subtype === "success" && msg.result) {
+                fullText = msg.result
+              }
+              if (msg.session_id) lastSessionId = msg.session_id
+              log("info", "SDK session complete", {
+                durationMs: Date.now() - startTime,
+                numTurns: msg.num_turns,
+                cost: msg.total_cost_usd,
+                sessionId: lastSessionId,
+              })
+            }
+
+            // Live edit updates in Telegram
+            const now = Date.now()
+            if (fullText && now - lastEditTime >= editIntervalMs) {
+              const displayText = fullText.slice(0, MAX_TELEGRAM_LENGTH - 10) + CURSOR
+              try {
+                if (!messageId) {
+                  const sent = await ctx.reply(displayText)
+                  messageId = sent.message_id
+                } else {
+                  await ctx.api.editMessageText(chatId, messageId, displayText).catch(() => {})
+                }
+                lastEditTime = now
+              } catch { /* edit failures are non-critical */ }
+            }
+          }
+        } finally {
+          clearTimeout(timeout)
+        }
       }
 
       if (!fullText) {
         fullText = "Sorry, I wasn't able to generate a response. Try again?"
-        log("error", "Empty response from SDK")
+        log("error", "Empty response from AI backend")
       }
 
       // Final clean message
