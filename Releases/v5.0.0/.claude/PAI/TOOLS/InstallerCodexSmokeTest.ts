@@ -85,6 +85,7 @@ enabled = true
     .some((entry) => entry.isDirectory() && entry.name.startsWith(".codex.backup-"));
 
   assert("Codex managed block", config.includes("PAI MANAGED ROOT CONFIG"));
+  assert("Codex RTK doc configured", config.includes('project_doc_fallback_filenames = ["AGENTS.md", "RTK.md", "CLAUDE.md"]'));
   assert("Codex profile preserved", config.includes("[profiles.keepme]"));
   assert("Codex provider preserved", config.includes("[model_providers.keepme]"));
   assert("Codex plugin preserved", config.includes("[plugins.\"browser@openai-bundled\"]"));

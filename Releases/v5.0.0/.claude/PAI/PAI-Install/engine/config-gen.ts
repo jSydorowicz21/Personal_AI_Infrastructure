@@ -77,9 +77,9 @@ export function generateCodexConfigToml(config: PAIConfig): string {
     "# BEGIN PAI MANAGED ROOT CONFIG",
     `# PAI root: ${config.paiDir}/PAI`,
     `# PAI config: ${config.configDir}`,
-    "# PAI uses AGENTS.md for Codex instructions.",
+    "# PAI uses AGENTS.md plus RTK.md for Codex instructions.",
     "# PAI hooks are written to hooks.json.",
-    "project_doc_fallback_filenames = [\"AGENTS.md\", \"CLAUDE.md\"]",
+    "project_doc_fallback_filenames = [\"AGENTS.md\", \"RTK.md\", \"CLAUDE.md\"]",
     "project_doc_max_bytes = 65536",
     "# END PAI MANAGED ROOT CONFIG",
     "",
@@ -120,11 +120,11 @@ function generateCodexRootBlock(config: PAIConfig, existing = ""): string {
     CODEX_ROOT_BEGIN,
     `# PAI root: ${config.paiDir}/PAI`,
     `# PAI config: ${config.configDir}`,
-    "# PAI uses AGENTS.md for Codex instructions.",
+    "# PAI uses AGENTS.md plus RTK.md for Codex instructions.",
     "# PAI hooks are written to hooks.json.",
   ];
   if (!rootTomlHasKey(existing, "project_doc_fallback_filenames")) {
-    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"CLAUDE.md\"]");
+    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"RTK.md\", \"CLAUDE.md\"]");
   }
   if (!rootTomlHasKey(existing, "project_doc_max_bytes")) {
     lines.push("project_doc_max_bytes = 65536");
