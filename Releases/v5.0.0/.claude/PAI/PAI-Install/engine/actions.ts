@@ -996,12 +996,7 @@ function pathLooksLikeExistingPaiRoot(paiDir: string, settingsFile = "settings.j
   const settingsPath = join(paiDir, settingsFile);
   if (existsSync(settingsPath)) {
     if (settingsFile !== "config.toml") return true;
-    try {
-      const settings = readFileSync(settingsPath, "utf-8");
-      if (settings.includes("# BEGIN PAI MANAGED ROOT CONFIG") || settings.includes("PAI root:")) {
-        return true;
-      }
-    } catch {}
+    return true;
   }
 
   return existsSync(join(paiDir, "skills", "ContextSearch", "SKILL.md")) || existsSync(join(paiDir, "PAI", "USER"));
@@ -1599,6 +1594,10 @@ export async function runRepository(
   );
   const target = state.detection?.framework || getFrameworkTarget(state.collected.framework);
   const paiDir = state.detection?.paiDir || target.installRoot;
+  const preservedCodexConfigPath = target.id === "codex" ? join(paiDir, "config.toml") : "";
+  const preservedCodexConfig = preservedCodexConfigPath && existsSync(preservedCodexConfigPath)
+    ? readFileSync(preservedCodexConfigPath, "utf-8")
+    : "";
 
   await moveExistingClaudeToBackup(state, emit);
 
@@ -1634,6 +1633,9 @@ export async function runRepository(
     });
     try {
       const stats = await installFromLocalBundle(localBundle, paiDir, emit);
+      if (preservedCodexConfigPath && preservedCodexConfig) {
+        writeFileSync(preservedCodexConfigPath, preservedCodexConfig);
+      }
       await emit({
         event: "message",
         content: `Installed ${stats.files} files from local bundle (${(stats.bytes / 1024 / 1024).toFixed(1)} MB).`,

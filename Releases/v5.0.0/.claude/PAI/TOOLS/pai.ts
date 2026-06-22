@@ -581,7 +581,14 @@ function generateCodexHooks(root: string): Record<string, any> {
       ],
       PreToolUse: [
         {
-          matcher: "Bash|Shell|Write|Edit|MultiEdit|Read|apply_patch",
+          matcher: "Bash|Shell",
+          hooks: [
+            codexCommandHook(root, "SecurityPipeline.hook.ts"),
+            codexCommandHook(root, "ContextReduction.hook.sh"),
+          ],
+        },
+        {
+          matcher: "Write|Edit|MultiEdit|Read|apply_patch",
           hooks: [codexCommandHook(root, "SecurityPipeline.hook.ts")],
         },
       ],
@@ -693,11 +700,11 @@ function isLegacyPaiOnlyCodexConfig(content: string): boolean {
 function codexRootConfigToml(existing = ""): string {
   const lines = [
     CODEX_ROOT_BEGIN,
-    "# PAI uses AGENTS.md for Codex instructions.",
+    "# PAI uses AGENTS.md plus RTK.md for Codex instructions.",
     "# PAI hooks are written to hooks.json.",
   ];
   if (!rootTomlHasKey(existing, "project_doc_fallback_filenames")) {
-    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"CLAUDE.md\"]");
+    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"RTK.md\", \"CLAUDE.md\"]");
   }
   if (!rootTomlHasKey(existing, "project_doc_max_bytes")) {
     lines.push("project_doc_max_bytes = 65536");
