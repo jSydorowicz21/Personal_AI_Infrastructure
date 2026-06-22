@@ -1526,6 +1526,27 @@ function cmdMemory(args: string[]) {
   process.exit(result.exitCode ?? 1);
 }
 
+function cmdDoctor() {
+  const activeFramework = getActiveFramework();
+  const activeRoot = frameworkRoot(activeFramework);
+  const tool = join(CURRENT_PAI_DIR, "TOOLS", "PaiDoctor.ts");
+  const result = spawnSync([process.execPath, tool], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      PAI_DIR: CURRENT_PAI_DIR,
+      PAI_DATA_DIR: DATA_DIR,
+      PAI_FRAMEWORK: activeFramework,
+      PAI_FRAMEWORK_DIR: activeRoot,
+      PAI_SETTINGS_PATH: join(activeRoot, "settings.json"),
+      PAI_CONFIG_DIR: CONFIG_DIR,
+    },
+  });
+  process.exit(result.exitCode ?? 1);
+}
+
 async function cmdPrompt(prompt: string) {
   // One-shot prompt execution
   // NOTE: No --dangerously-skip-permissions - rely on settings.json permissions
@@ -1571,6 +1592,7 @@ COMMANDS:
   k framework switch codex Switch framework (claude|codex|opencode)
   k memory delete          Delete a memory file and redact cache/log copies
   k memory redact          Redact exact literals from PAI cache/log files
+  k doctor                 Verify Codex PAI runtime, hooks, Pulse, MCPs
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
@@ -1598,6 +1620,7 @@ EXAMPLES:
   k mcp set research       Switch to research profile
   k framework switch codex Switch to Codex while keeping ~/.pai/MEMORY
   k memory delete --path MEMORY/RELATIONSHIP/note.md --patterns-file /tmp/patterns.txt
+  k doctor                 Run full local PAI runtime diagnostics
   k update                 Update active framework CLI
   k prompt "What time is it?"   One-shot prompt
   k -w                     List available wallpapers
@@ -1694,6 +1717,9 @@ async function main() {
         passthroughArgs = args.slice(i + 1);
         i = args.length; // Exit loop
         break;
+      case "doctor":
+        command = "doctor";
+        break;
       case "prompt":
       case "-p":
         command = "prompt";
@@ -1742,6 +1768,9 @@ async function main() {
       break;
     case "memory":
       cmdMemory(passthroughArgs);
+      break;
+    case "doctor":
+      cmdDoctor();
       break;
     case "prompt":
       if (!promptText) {

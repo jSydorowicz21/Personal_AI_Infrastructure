@@ -121,6 +121,29 @@ export APIFY_TOKEN="..."     # Apify MCP
 
 ---
 
+## Runtime Doctor
+
+After install or after returning to PAI later, run:
+
+```bash
+k doctor
+```
+
+The doctor verifies Codex config, instructions, MCP profile files, hook adapter behavior, hook-trigger observability, a temp-HOME Codex fresh-install smoke test, and Pulse health routes.
+
+If the doctor reports optional warnings, add the relevant credentials before using that feature:
+
+```bash
+export ELEVENLABS_API_KEY="..."  # real TTS audio
+export TELEGRAM_BOT_TOKEN="..."  # Telegram chat/alerts
+export API_TOKEN="..."           # Bright Data MCP
+export APIFY_TOKEN="..."         # Apify MCP
+```
+
+These are deliberately not committed into PAI profile files. They belong in your shell/session secret store or framework `.env`.
+
+---
+
 ## Installation Steps
 
 The installer runs 9 steps in dependency order:

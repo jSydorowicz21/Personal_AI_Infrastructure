@@ -21,6 +21,26 @@
       "target": "PAI/TOOLS/pai.ts"
     },
     {
+      "source": "PAI/TOOLS/PaiDoctor.ts",
+      "target": "PAI/TOOLS/PaiDoctor.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
+      "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HookSharedPathSmokeTest.ts",
+      "target": "PAI/TOOLS/HookSharedPathSmokeTest.ts"
+    },
+    {
       "source": "PAI/PAI-Install/README.md",
       "target": "PAI/PAI-Install/README.md"
     },

@@ -135,6 +135,29 @@ export APIFY_TOKEN="..."     # Apify MCP
 
 ---
 
+## Runtime doctor
+
+Run this any time you come back to PAI and want to verify the local Codex runtime:
+
+```bash
+k doctor
+```
+
+The doctor checks Codex config, `AGENTS.md`/`RTK.md`, MCP profile packaging, hook adapter smoke tests, hook-trigger log deltas, a temp-HOME Codex fresh-install smoke test, and Pulse `/health`, `/voice/health`, `/notify`, and `/assistant/health`.
+
+Optional reminders are warnings, not runtime failures:
+
+```bash
+export ELEVENLABS_API_KEY="..."  # real TTS audio
+export TELEGRAM_BOT_TOKEN="..."  # Telegram chat/alerts
+export API_TOKEN="..."           # Bright Data MCP
+export APIFY_TOKEN="..."         # Apify MCP
+```
+
+Pulse is considered healthy if it starts with PAI/your WSL user session and `k doctor` reports its service and routes as passing.
+
+---
+
 ## Architecture at a glance
 
 ```
