@@ -260,6 +260,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     writeFileSync(join(root, "config.toml"), [
       'model = "gpt-5.5"',
       'model_reasoning_effort = "high"',
+      'plan_mode_reasoning_effort = "high"',
       "",
       "[model_providers.custom_local]",
       'name = "Custom Local Provider"',
@@ -361,7 +362,9 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
       const configText = readFileSync(join(root, "config.toml"), "utf-8");
       checks.push({
         name: "codex config preserves existing model",
-        passed: configText.includes('model = "gpt-5.5"') && configText.includes('model_reasoning_effort = "high"'),
+        passed: configText.includes('model = "gpt-5.5"')
+          && configText.includes('model_reasoning_effort = "high"')
+          && configText.includes('plan_mode_reasoning_effort = "high"'),
         detail: "model settings",
       });
       checks.push({

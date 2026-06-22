@@ -720,6 +720,15 @@ function codexRootConfigToml(existing = ""): string {
   if (!rootTomlHasKey(existing, "project_doc_max_bytes")) {
     lines.push("project_doc_max_bytes = 65536");
   }
+  if (!rootTomlHasKey(existing, "model")) {
+    lines.push('model = "gpt-5.5"');
+  }
+  if (!rootTomlHasKey(existing, "model_reasoning_effort")) {
+    lines.push('model_reasoning_effort = "high"');
+  }
+  if (!rootTomlHasKey(existing, "plan_mode_reasoning_effort")) {
+    lines.push('plan_mode_reasoning_effort = "high"');
+  }
   lines.push(CODEX_ROOT_END);
   return lines.join("\n");
 }
