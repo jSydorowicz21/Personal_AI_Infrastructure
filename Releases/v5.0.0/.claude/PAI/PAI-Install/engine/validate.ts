@@ -267,6 +267,7 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const codexPromptPath = join(paiDir, "prompts", "cs.md");
       const codexAgentPath = join(paiDir, "agents", "engineer.toml");
       const codexSkillPath = join(homedir(), ".agents", "skills", "ContextSearch", "SKILL.md");
+      const memoryDeletePath = join(paiDir, "PAI", "TOOLS", "MemoryDelete.ts");
       const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
       checks.push({
         name: "Codex config.toml",
@@ -301,6 +302,12 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         passed: existsSync(codexAgentPath),
         detail: existsSync(codexAgentPath) ? "PAI agents generated as TOML" : "agents/engineer.toml missing",
         critical: false,
+      });
+      checks.push({
+        name: "Codex memory deletion",
+        passed: existsSync(memoryDeletePath),
+        detail: existsSync(memoryDeletePath) ? "MemoryDelete.ts installed" : "PAI/TOOLS/MemoryDelete.ts missing",
+        critical: true,
       });
     } else if (framework.id === "opencode") {
       const openCodeConfigPath = join(paiDir, "opencode.json");

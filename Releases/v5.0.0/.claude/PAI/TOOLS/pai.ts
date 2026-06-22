@@ -592,6 +592,14 @@ function generateCodexHooks(root: string): Record<string, any> {
           matcher: "Write|Edit|MultiEdit|Read|apply_patch",
           hooks: [codexCommandHook(root, "SecurityPipeline.hook.ts")],
         },
+        {
+          matcher: "AskUserQuestion|request_user_input",
+          hooks: [codexCommandHook(root, "SetQuestionTab.hook.ts", 5)],
+        },
+        {
+          matcher: "Agent",
+          hooks: [codexCommandHook(root, "AgentInvocation.hook.ts", 5)],
+        },
       ],
       PostToolUse: [
         {

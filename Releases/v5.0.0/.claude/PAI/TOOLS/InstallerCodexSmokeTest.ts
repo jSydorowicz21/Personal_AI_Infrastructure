@@ -101,6 +101,8 @@ enabled = true
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
   assert("Codex ContextReduction hook", hooks.includes("ContextReduction.hook.sh"));
+  assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
+  assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));
 } catch (err) {
   keepTemp = true;
   console.error(err instanceof Error ? err.message : String(err));

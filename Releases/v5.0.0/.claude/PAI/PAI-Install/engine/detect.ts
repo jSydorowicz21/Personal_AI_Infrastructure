@@ -4,10 +4,10 @@
  * All detection is read-only and non-destructive.
  */
 
-import { execSync } from "child_process";
+import { execFileSync, execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { basename, join } from "path";
+import { basename, extname, join } from "path";
 import type { DetectionResult, ExistingUserContentDetection, FrameworkId } from "./types";
 import { getFrameworkTarget } from "./frameworks";
 
@@ -21,6 +21,28 @@ function tryExec(cmd: string): string | null {
   }
 }
 
+function tryExecFile(command: string, args: string[] = []): string | null {
+  try {
+    if (process.platform === "win32" && [".cmd", ".bat"].includes(extname(command).toLowerCase())) {
+      return execFileSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", [command, ...args].map(quoteCmdArg).join(" ")], {
+        timeout: 5000,
+        stdio: ["ignore", "pipe", "pipe"],
+      }).toString().trim();
+    }
+    return execFileSync(command, args, { timeout: 5000, stdio: ["ignore", "pipe", "pipe"] })
+      .toString()
+      .trim();
+  } catch {
+    return null;
+  }
+}
+
+function quoteCmdArg(value: string): string {
+  if (value === "") return "\"\"";
+  if (!/[ \t&()^|<>"%]/.test(value)) return value;
+  return `"${value.replace(/"/g, "\"\"").replace(/%/g, "%%")}"`;
+}
+
 function detectOS(): DetectionResult["os"] {
   const platform: DetectionResult["os"]["platform"] =
     process.platform === "darwin" ? "darwin" : process.platform === "win32" ? "win32" : "linux";
@@ -30,16 +52,20 @@ function detectOS(): DetectionResult["os"] {
   let name = "";
 
   if (platform === "darwin") {
-    const swVers = tryExec("sw_vers -productVersion");
+    const swVers = tryExecFile("sw_vers", ["-productVersion"]);
     version = swVers || "";
     name = `macOS ${version}`;
   } else if (platform === "win32") {
-    version = tryExec("ver") || "";
+    version = tryExecFile("cmd", ["/c", "ver"]) || "";
     name = version || "Windows";
   } else {
-    const release = tryExec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
+    let release = "";
+    try {
+      const osRelease = readFileSync("/etc/os-release", "utf-8");
+      release = osRelease.match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1] || "";
+    } catch { /* ignore missing os-release */ }
     name = release || "Linux";
-    version = tryExec("uname -r") || "";
+    version = tryExecFile("uname", ["-r"]) || "";
   }
 
   return { platform, arch, version, name };
@@ -49,23 +75,23 @@ function detectShell(): DetectionResult["shell"] {
   const shellPath = process.env.SHELL || (process.platform === "win32" ? process.env.ComSpec || "powershell.exe" : "/bin/sh");
   const shellName = shellPath.split(/[\\/]/).pop() || (process.platform === "win32" ? "powershell.exe" : "sh");
   const version = process.platform === "win32"
-    ? tryExec("powershell -NoProfile -Command \"$PSVersionTable.PSVersion.ToString()\"") || tryExec("cmd /c ver") || ""
-    : tryExec(`${shellPath} --version 2>&1 | head -1`) || "";
+    ? tryExecFile("powershell", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"]) || tryExecFile("cmd", ["/c", "ver"]) || ""
+    : (tryExecFile(shellPath, ["--version"]) || "").split(/\r?\n/)[0] || "";
 
   return { name: shellName, version, path: shellPath };
 }
 
 function detectTool(
   name: string,
-  versionCmd: string
+  versionArgs: string[] = ["--version"]
 ): { installed: boolean; version?: string; path?: string } {
   const pathOutput = process.platform === "win32"
-    ? tryExec(`where.exe ${name}`)
-    : tryExec(`which ${name}`);
+    ? tryExecFile("where.exe", [name])
+    : tryExecFile("which", [name]);
   const path = pathOutput?.split(/\r?\n/).find(Boolean);
   if (!path) return { installed: false };
 
-  const versionOutput = tryExec(versionCmd);
+  const versionOutput = tryExecFile(path, versionArgs);
   // Extract version number from output
   const versionMatch = versionOutput?.match(/(\d+\.\d+[\.\d]*)/);
   const version = versionMatch?.[1] || versionOutput || undefined;
@@ -312,18 +338,18 @@ export function detectExistingUserContent(paiUserDir: string): ExistingUserConte
 function detectPrincipal(): DetectionResult["principal"] {
   const username = process.env.USER || process.env.LOGNAME || "user";
 
-  const gitName = tryExec("git config --global user.name");
-  const gitEmail = tryExec("git config --global user.email");
+  const gitName = tryExecFile("git", ["config", "--global", "user.name"]);
+  const gitEmail = tryExecFile("git", ["config", "--global", "user.email"]);
 
   let realName: string | null = null;
   if (process.platform === "darwin") {
     // dscl returns "RealName:\n First Last" — strip header + leading space
-    const dscl = tryExec(`dscl . -read /Users/${username} RealName 2>/dev/null`);
+    const dscl = tryExecFile("dscl", [".", "-read", `/Users/${username}`, "RealName"]);
     if (dscl) {
       const m = dscl.match(/RealName:\s*\n?\s*(.+)/);
       if (m) realName = m[1].trim();
     }
-    if (!realName) realName = tryExec("id -F 2>/dev/null");
+    if (!realName) realName = tryExecFile("id", ["-F"]);
   }
 
   // Reject obvious placeholders that show up on fresh installs
@@ -344,7 +370,7 @@ function detectPrincipal(): DetectionResult["principal"] {
  */
 function detectVoice(): DetectionResult["voice"] {
   if (process.platform !== "darwin") return undefined;
-  const v = tryExec("defaults read com.apple.speech.synthesis.general.prefs SelectedVoiceName 2>/dev/null");
+  const v = tryExecFile("defaults", ["read", "com.apple.speech.synthesis.general.prefs", "SelectedVoiceName"]);
   if (!v) return undefined;
   return { systemDefault: v };
 }
@@ -357,22 +383,22 @@ export function detectSystem(frameworkId?: FrameworkId): DetectionResult {
   const framework = getFrameworkTarget(frameworkId);
   const paiDir = framework.installRoot;
   const configDir = framework.configDir;
-  const selectedFramework = detectTool(framework.command, `${framework.command} --version 2>&1`);
+  const selectedFramework = detectTool(framework.command);
 
   return {
     os: detectOS(),
     shell: detectShell(),
     tools: {
-      bun: detectTool("bun", "bun --version"),
-      git: detectTool("git", "git --version"),
-      claude: detectTool("claude", "claude --version 2>&1"),
-      codex: detectTool("codex", "codex --version 2>&1"),
-      opencode: detectTool("opencode", "opencode --version 2>&1"),
+      bun: detectTool("bun"),
+      git: detectTool("git"),
+      claude: detectTool("claude"),
+      codex: detectTool("codex"),
+      opencode: detectTool("opencode"),
       selectedFramework,
-      node: detectTool("node", "node --version"),
+      node: detectTool("node"),
       brew: {
-        installed: tryExec("which brew") !== null,
-        path: tryExec("which brew") || undefined,
+        installed: tryExecFile(process.platform === "win32" ? "where.exe" : "which", ["brew"]) !== null,
+        path: tryExecFile(process.platform === "win32" ? "where.exe" : "which", ["brew"]) || undefined,
       },
     },
     existing: detectExisting(home, paiDir, configDir, framework.settingsFile),

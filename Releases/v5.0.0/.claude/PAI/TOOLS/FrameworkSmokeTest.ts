@@ -343,6 +343,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
   if (framework === "codex") {
     checks.push(checkPath("codex config.toml", join(root, "config.toml")));
     checks.push(checkPath("codex hooks.json", join(root, "hooks.json")));
+    checks.push(checkPath("codex memory delete tool", join(root, "PAI", "TOOLS", "MemoryDelete.ts")));
     checks.push(...checkGeneratedAgents(root, framework));
     if (existsSync(join(root, "hooks.json"))) {
       const hooksText = readFileSync(join(root, "hooks.json"), "utf-8");
@@ -350,6 +351,16 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         name: "codex hooks carry PAI_DATA_DIR",
         passed: hooksText.includes("PAI_DATA_DIR"),
         detail: "hooks.json command env",
+      });
+      checks.push({
+        name: "codex hooks include question tab",
+        passed: hooksText.includes("SetQuestionTab.hook.ts"),
+        detail: "AskUserQuestion/request_user_input hook",
+      });
+      checks.push({
+        name: "codex hooks include agent invocation",
+        passed: hooksText.includes("AgentInvocation.hook.ts"),
+        detail: "Agent hook",
       });
     }
     if (existsSync(join(root, "config.toml"))) {
