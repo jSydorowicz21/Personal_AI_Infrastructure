@@ -145,6 +145,14 @@
       "target": "PAI/PULSE/Observability/next.config.ts"
     },
     {
+      "source": "PAI/PULSE/Observability/public/pai-logo.png",
+      "target": "PAI/PULSE/Observability/public/pai-logo.png"
+    },
+    {
+      "source": "PAI/PULSE/Observability/out/pai-logo.png",
+      "target": "PAI/PULSE/Observability/out/pai-logo.png"
+    },
+    {
       "source": "MCPs",
       "target": "MCPs"
     },
