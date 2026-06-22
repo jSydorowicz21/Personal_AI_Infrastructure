@@ -32,6 +32,31 @@ That's it. The script handles everything:
 
 Everything else (Bun, Git, and the selected agent CLI) is installed automatically.
 
+### Interceptor for Browser Verification
+
+PAI expects web verification to use Interceptor, which drives your real Chrome or Brave session through a browser extension and local CLI. Interceptor is installed outside the core PAI installer because Chrome/Brave require a manual unpacked-extension load step and Windows may require native-messaging registration.
+
+On Windows with WSL, install Interceptor on the Windows side first so it uses your real Windows Chrome profile and existing logins. Do not copy a Windows Chrome profile into Linux Chrome; cookies and passwords are encrypted by Windows DPAPI and will not reliably work in WSL/Linux.
+
+The validated Windows + WSL path is:
+
+1. Put the Windows release binary at `%USERPROFILE%\bin\interceptor.exe` and add `%USERPROFILE%\bin` to the Windows user PATH.
+2. If Windows blocks the binary with `Application Control policy` / `Malicious binary reputation`, disable Smart App Control while keeping normal Microsoft Defender and Firewall enabled.
+3. Load the Chrome extension from `C:\Users\<USER>\Projects\Interceptor\extension\dist`, not `C:\Users\<USER>\Projects\Interceptor\dist`.
+4. Register Chrome native messaging under `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.interceptor.host` with the default value pointing at a Windows manifest whose `path` is `C:\Users\<USER>\Projects\Interceptor\daemon\interceptor-daemon.exe`.
+5. Add a WSL shim at `~/.local/bin/interceptor` that forwards to `/mnt/c/Users/<USER>/bin/interceptor.exe`.
+
+After setup, verify from WSL:
+
+```bash
+command -v interceptor
+rtk which interceptor
+interceptor --version
+interceptor status --verbose
+```
+
+Expected healthy state is `daemon: running`, `transport: tcp:127.0.0.1:19221`, and `extension: reachable`. Full troubleshooting lives in the Interceptor skill workflow `Workflows/SetupWindowsWSL.md`.
+
 ---
 
 ## Updating an Existing Install

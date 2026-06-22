@@ -21,6 +21,15 @@
       "target": "PAI/TOOLS/pai.ts"
     },
     {
+      "source": "PAI/PAI-Install/README.md",
+      "target": "PAI/PAI-Install/README.md"
+    },
+    {
+      "source": "skills/Interceptor",
+      "target": "skills/Interceptor",
+      "mirrorToCodexAgentsSkills": true
+    },
+    {
       "source": "skills/Webdesign",
       "target": "skills/Webdesign",
       "mirrorToCodexAgentsSkills": true

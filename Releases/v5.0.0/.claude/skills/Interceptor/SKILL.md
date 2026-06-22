@@ -35,8 +35,8 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
 # Interceptor — Stealth Browser Automation
 
 **Tool:** `interceptor` CLI — Chrome extension that controls the real browser from the inside.
-**Repo:** https://github.com/Hacker-Valley-Media/slop-browser
-**Install:** `~/Projects/interceptor` (built from source — see `Workflows/Update.md`)
+**Repo:** https://github.com/Hacker-Valley-Media/Interceptor
+**Install:** `~/Projects/Interceptor` from source, or the signed release installer/binary. See `Workflows/Update.md` and `Workflows/SetupWindowsWSL.md`.
 
 ### Why Interceptor?
 
@@ -45,9 +45,10 @@ agent-browser (the Browser skill) uses CDP — sites can detect it. Interceptor 
 ### Prerequisites
 
 - Chrome or Brave running with the Interceptor extension loaded
-- `interceptor` CLI in PATH (`/opt/homebrew/bin/interceptor`)
-- `interceptor-daemon` in PATH (`/opt/homebrew/bin/interceptor-daemon`)
-- Native messaging manifest registered (`bash ~/Projects/interceptor/scripts/install.sh --chrome --skip-extension`)
+- `interceptor` CLI in PATH
+- Native messaging manifest registered for the browser profile
+- macOS/Linux source installs: `bash ~/Projects/Interceptor/scripts/install.sh --browser-only --chrome`
+- Windows installs: release binary or source build plus Chrome native-host registry key. On WSL, expose Windows Interceptor through a shim; see `Workflows/SetupWindowsWSL.md`.
 - (Optional, macOS) `interceptor-bridge` helper app — see "Bridge" section below
 
 ### Bridge — macOS Native Helper App
@@ -83,7 +84,7 @@ The skill's procedure is the canonical one.
 - Single-user Mac threat model: acceptable, since anything running as you can
   already do this with effort. Multi-user Macs need socket hardening (see
   Update.md section 6c).
-- Binary built locally from `~/Projects/interceptor/interceptor-bridge/Sources/`,
+- Binary built locally from `~/Projects/Interceptor/interceptor-bridge/Sources/`,
   not a downloaded prebuilt. Provenance is Swift source we just compiled.
 
 ---
@@ -310,6 +311,7 @@ Passes all major bot detection:
 | "replay flow", "replay", "regression check", "run flow" | `Workflows/ReplayFlow.md` | Execute a recorded plan script step-by-step, verify each step, report regressions |
 | "test form", "fill form", "form test", "check form" | `Workflows/TestForm.md` | Discover form fields, fill with test data, submit, verify result |
 | "update", "check version", "rebuild" | `Workflows/Update.md` | Rebuild interceptor from source and verify |
+| "windows", "wsl", "native host not found", "smart app control", "extension load", "shim" | `Workflows/SetupWindowsWSL.md` | Install and troubleshoot Windows Chrome + WSL Interceptor access |
 
 ---
 
