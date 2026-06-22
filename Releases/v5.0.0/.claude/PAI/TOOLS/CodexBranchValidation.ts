@@ -172,6 +172,7 @@ function main(): void {
       "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
       "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
       "PAI/TOOLS/CodexHookContractSmokeTest.ts",
+      "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "--target=bun",
       "--outdir",
@@ -204,6 +205,7 @@ function main(): void {
         PAI_DATA_DIR: join(tempRoot, "pai-data-hook-contract"),
       },
     });
+    run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);

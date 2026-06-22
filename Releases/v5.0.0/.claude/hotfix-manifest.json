@@ -33,6 +33,10 @@
       "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
+      "target": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
     },
