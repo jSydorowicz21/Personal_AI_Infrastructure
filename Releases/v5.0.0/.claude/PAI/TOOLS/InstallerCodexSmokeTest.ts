@@ -95,6 +95,7 @@ enabled = true
   assert("Pulse Windows manager installed", existsSync(join(codexHome, "PAI", "PULSE", "manage.ps1")));
   assert("Pulse Assistant module installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "module.ts")));
   assert("Pulse Assistant checks installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "checks", "tasks.ts")));
+  assert("Memory delete tool installed", existsSync(join(codexHome, "PAI", "TOOLS", "MemoryDelete.ts")));
   assert("Codex agents generated", existsSync(join(codexHome, "agents")));
   assert("Codex hooks generated", existsSync(join(codexHome, "hooks.json")));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");

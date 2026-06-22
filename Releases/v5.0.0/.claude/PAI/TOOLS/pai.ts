@@ -17,6 +17,7 @@
  *   pai profiles         List available profiles
  *   pai mcp list         List available MCPs
  *   pai mcp set <profile>  Set MCP profile
+ *   pai memory delete    Delete a memory file and redact local cache/log copies
  */
 
 import { spawn, spawnSync } from "bun";
@@ -1494,6 +1495,28 @@ function cmdFramework(subCommand?: string, subArg?: string) {
   error("Usage: k framework status | k framework switch claude|codex|opencode");
 }
 
+function cmdMemory(args: string[]) {
+  const subCommand = args[0];
+  if (subCommand !== "delete" && subCommand !== "redact") {
+    error("Usage: k memory delete --path <MEMORY path> --patterns-file <file> | k memory redact --text <literal>");
+  }
+
+  const tool = join(CURRENT_PAI_DIR, "TOOLS", "MemoryDelete.ts");
+  const result = spawnSync([process.execPath, tool, ...args.slice(1)], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      PAI_DIR: CURRENT_PAI_DIR,
+      PAI_DATA_DIR: DATA_DIR,
+      PAI_FRAMEWORK: getActiveFramework(),
+      PAI_FRAMEWORK_DIR: frameworkRoot(getActiveFramework()),
+    },
+  });
+  process.exit(result.exitCode ?? 1);
+}
+
 async function cmdPrompt(prompt: string) {
   // One-shot prompt execution
   // NOTE: No --dangerously-skip-permissions - rely on settings.json permissions
@@ -1537,6 +1560,8 @@ COMMANDS:
   k version, -v            Show version information
   k framework status       Show active framework and global memory path
   k framework switch codex Switch framework (claude|codex|opencode)
+  k memory delete          Delete a memory file and redact cache/log copies
+  k memory redact          Redact exact literals from PAI cache/log files
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
@@ -1563,6 +1588,7 @@ EXAMPLES:
   k -d                     Start with native permission bypass enabled
   k mcp set research       Switch to research profile
   k framework switch codex Switch to Codex while keeping ~/.pai/MEMORY
+  k memory delete --path MEMORY/RELATIONSHIP/note.md --patterns-file /tmp/patterns.txt
   k update                 Update active framework CLI
   k prompt "What time is it?"   One-shot prompt
   k -w                     List available wallpapers
@@ -1594,6 +1620,7 @@ async function main() {
   let subArg: string | undefined;
   let promptText: string | undefined;
   let wallpaperArgs: string[] = [];
+  let passthroughArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -1653,6 +1680,11 @@ async function main() {
         subCommand = args[++i];
         subArg = args[++i];
         break;
+      case "memory":
+        command = "memory";
+        passthroughArgs = args.slice(i + 1);
+        i = args.length; // Exit loop
+        break;
       case "prompt":
       case "-p":
         command = "prompt";
@@ -1698,6 +1730,9 @@ async function main() {
       } else {
         error("Usage: k mcp list | k mcp set <profile>");
       }
+      break;
+    case "memory":
+      cmdMemory(passthroughArgs);
       break;
     case "prompt":
       if (!promptText) {
