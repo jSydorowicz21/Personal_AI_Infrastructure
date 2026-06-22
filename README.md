@@ -202,10 +202,10 @@ macOS/Linux/WSL:
 bash ./Releases/v5.0.0/.claude/update-installed.sh --framework codex --source-dir .
 ```
 
-From a machine that already has PAI installed but needs the latest updater from this fork:
+From a machine that already has PAI installed but needs the latest updater from this branch:
 
 ```powershell
-$u = "https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.ps1"
+$u = "https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.ps1"
 $p = Join-Path $env:TEMP "pai-update-installed.ps1"
 Invoke-WebRequest $u -OutFile $p
 powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
@@ -214,7 +214,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
 macOS/Linux/WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
+curl -fsSL https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
 ```
 
 Use `-Framework claude` or `-Framework opencode` for those targets, or omit `-Framework` to let the updater read `~/.pai/framework.json`.
