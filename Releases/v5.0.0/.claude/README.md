@@ -111,6 +111,20 @@ Use `-Framework claude` or `-Framework opencode` for those targets, or omit `-Fr
 
 Use `--framework claude` or `--framework opencode` with the shell updater. When the source directory points at a git checkout, the updater runs `git fetch --prune` and `git pull --ff-only` before copying files. Pass `-NoPull` in PowerShell or `--no-pull` in Bash when testing uncommitted local changes.
 
+Rollback restores the files touched by the hotfix from the newest backup:
+
+```bash
+BACKUP="$(ls -dt ~/.pai/BACKUPS/hotfix-* | head -1)"
+cp -a "$BACKUP"/. "$CODEX_HOME"/
+```
+
+PowerShell:
+
+```powershell
+$backup = Get-ChildItem "$HOME\.pai\BACKUPS" -Directory -Filter "hotfix-*" | Sort-Object Name -Descending | Select-Object -First 1
+Get-ChildItem -LiteralPath $backup.FullName -Force | Copy-Item -Destination $env:CODEX_HOME -Recurse -Force
+```
+
 ---
 
 ## MCP profiles

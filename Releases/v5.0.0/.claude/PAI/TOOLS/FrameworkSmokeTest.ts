@@ -124,14 +124,8 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       throw new Error("LoadContext did not inject dynamic context into OpenCode prompt");
     }
     writeFileSync(${JSON.stringify(contextMarkerPath)}, "injected", "utf-8");
-    let repeatBlocked = false;
-    try {
-      await hooks["tui.prompt.append"](session, { prompt: repeatedPrompt });
-    } catch {
-      repeatBlocked = true;
-    }
-    if (!repeatBlocked) throw new Error("RepeatDetection did not block repeated OpenCode prompt");
-    writeFileSync(${JSON.stringify(repeatMarkerPath)}, "blocked", "utf-8");
+    await hooks["tui.prompt.append"](session, { prompt: repeatedPrompt });
+    writeFileSync(${JSON.stringify(repeatMarkerPath)}, "advisory", "utf-8");
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "user", content: [{ type: "text", text: "Actually, shared memory should follow OpenCode too." }] } } });
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "assistant", content: [{ type: "text", text: "Important: OpenCode wrote a PAI transcript." }] } } });
     await hooks["tool.execute.after"]({ ...session, tool: "edit" }, { args: { filePath: "PAI/TOOLS/Smoke.ts" }, output: "ok" });
@@ -170,7 +164,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       detail: existsSync(kittySessionPath) ? kittySessionPath : kittyEnvPath,
     },
     {
-      name: "opencode prompt repeat detection blocks",
+      name: "opencode prompt repeat detection stays advisory",
       passed: existsSync(repeatMarkerPath),
       detail: repeatMarkerPath,
     },

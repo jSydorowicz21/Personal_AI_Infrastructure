@@ -64,6 +64,8 @@ async function main(): Promise<void> {
       });
       console.error(`[PromptGuard] 🚨 BLOCKED: ${result.reason}`);
       console.log(JSON.stringify({ decision: 'block', reason: `[PAI SECURITY] Prompt blocked: ${result.reason}` }));
+      process.exitCode = 2;
+      return;
       break;
 
     case 'alert':

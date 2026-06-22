@@ -25,6 +25,14 @@
       "target": "PAI/TOOLS/PaiDoctor.ts"
     },
     {
+      "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
+      "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
     },
@@ -67,6 +75,10 @@
     {
       "source": "hooks/RepeatDetection.hook.ts",
       "target": "hooks/RepeatDetection.hook.ts"
+    },
+    {
+      "source": "hooks/PromptGuard.hook.ts",
+      "target": "hooks/PromptGuard.hook.ts"
     },
     {
       "source": "README.md",
