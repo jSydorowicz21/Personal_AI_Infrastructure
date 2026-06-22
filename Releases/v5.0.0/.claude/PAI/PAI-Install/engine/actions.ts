@@ -2198,10 +2198,10 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
     return false;
   }
 
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && process.platform !== "linux") {
     await emit({
       event: "message",
-      content: `Pulse auto-install is currently macOS-only. Skipping service setup. To run Pulse manually: ${pulseManualStartCommand(paiDir)}`,
+      content: `Pulse auto-install is currently macOS/Linux/Windows-only. Skipping service setup. To run Pulse manually: ${pulseManualStartCommand(paiDir)}`,
     });
     return false;
   }
@@ -2222,6 +2222,13 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
       const child = spawn("bash", [manageScript, "install"], {
         cwd: pulseDir,
         stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          PAI_DIR: join(paiDir, "PAI"),
+          PAI_FRAMEWORK_DIR: paiDir,
+          PAI_DATA_DIR: getPaiDataDir(),
+          PAI_FRAMEWORK: process.env.PAI_FRAMEWORK || "codex",
+        },
       });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 30000);
       child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
@@ -2240,10 +2247,10 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
         return true;
       }
     }
-    // Pulse plist installed but never bound :31337. Surface this as an install
+    // Pulse service installed but never bound :31337. Surface this as an install
     // failure rather than silently reporting success — the user will hit
     // mysterious 'voice not working' / 'pulse not starting' otherwise.
-    await emit({ event: "message", content: `Pulse plist installed but port 31337 did not bind within 10s. Check ${pulseStderrLog}. Voice and dashboard will not work until this is resolved.` });
+    await emit({ event: "message", content: `Pulse service installed but port 31337 did not bind within 10s. Check ${pulseStderrLog}. Voice and dashboard will not work until this is resolved.` });
     return false;
   } catch {
     await emit({ event: "message", content: "Could not install Pulse. Voice notifications will not be available." });
@@ -2519,14 +2526,16 @@ export async function runVoiceSetup(
       ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications (TTS via ElevenLabs), and runs observability + scheduled jobs. Installing it as a launchd agent makes it auto-start on login and stay running across reboots."
       : process.platform === "win32"
         ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Installing it on Windows starts Pulse now and tries to register a per-user startup task."
-        : `Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Auto-install is currently macOS/Windows-only; on this OS you can run it manually later with: ${pulseInstallCommand}`,
+        : process.platform === "linux"
+          ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Installing it on Linux registers a per-user systemd service when available."
+          : `Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Auto-install is currently macOS/Linux/Windows-only; on this OS you can run it manually later with: ${pulseInstallCommand}`,
   });
 
   let voiceServerReady = false;
   if (process.env.PAI_SKIP_PULSE_INSTALL === "1") {
     await emit({ event: "message", content: `Pulse install skipped by PAI_SKIP_PULSE_INSTALL. Start it later with: ${pulseInstallCommand}` });
-  } else if (process.platform === "darwin" || process.platform === "win32") {
-    const serviceLabel = process.platform === "darwin" ? "system launchd service" : "Windows startup task";
+  } else if (process.platform === "darwin" || process.platform === "win32" || process.platform === "linux") {
+    const serviceLabel = process.platform === "darwin" ? "system launchd service" : process.platform === "linux" ? "Linux user service" : "Windows startup task";
     const installPulseChoice = await getChoice("install-pulse", `Install Pulse as a ${serviceLabel}?`, [
       { label: "Yes — install Pulse (recommended)", value: "yes", description: "Starts now and auto-starts on login when supported. Voice + Dashboard + Observability." },
       { label: "Skip — don't install Pulse now", value: "skip", description: `Voice notifications will not work until you run: ${pulseInstallCommand}` },

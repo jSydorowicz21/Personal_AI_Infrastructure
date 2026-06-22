@@ -197,6 +197,7 @@ const PID_PATH = join(PULSE_DIR, "state", "pulse.pid")
 const MAX_FAILURES = 3
 const MAX_SLEEP_MS = 60_000
 const MIN_SLEEP_MS = 1_000
+const VOICE_ROUTES = new Set(["/notify", "/notify/personality", "/voice", "/voice/health"])
 
 async function sleepInterruptibly(ms: number, shuttingDown: () => boolean): Promise<void> {
   const until = Date.now() + ms
@@ -224,6 +225,18 @@ async function supervise(name: string, fn: () => Promise<void>, shuttingDown: ()
       await sleepInterruptibly(30_000, shuttingDown)
     }
   }
+}
+
+function telegramCredentialsConfigured(config: PulseConfig["telegram"]): boolean {
+  if (!config?.enabled) return false
+  const token = config.bot_token ?? process.env.TELEGRAM_BOT_TOKEN
+  const users = config.allowed_users?.length
+    ? config.allowed_users
+    : (process.env.TELEGRAM_ALLOWED_USERS ?? process.env.TELEGRAM_PRINCIPAL_CHAT_ID ?? "")
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean)
+  return Boolean(token && users.length > 0)
 }
 
 // ── Compute next due time ──
@@ -406,8 +419,8 @@ async function main() {
         return buildHealthResponse(state, config)
       }
 
-      // Voice routes: /notify, /notify/personality, /voice
-      if (voiceModule && (pathname === "/notify" || pathname === "/notify/personality" || pathname === "/voice")) {
+      // Voice routes: /notify, /notify/personality, /voice, /voice/health
+      if (voiceModule && VOICE_ROUTES.has(pathname)) {
         const resp = await voiceModule.handleVoiceRequest(req, pathname)
         if (resp) return resp
       }
@@ -466,9 +479,11 @@ async function main() {
 
   // ── Start Long-Running Subsystems (supervised) ──
 
-  if (telegramModule && config.telegram?.enabled) {
+  if (telegramModule && config.telegram?.enabled && telegramCredentialsConfigured(config.telegram)) {
     supervise("telegram", () => telegramModule.startTelegram(config.telegram), isShuttingDown)
     log("info", "Telegram module started (supervised)")
+  } else if (telegramModule && config.telegram?.enabled) {
+    log("warn", "Telegram module enabled but not started: missing token or allowed user configuration")
   }
 
   if (imessageModule && config.imessage?.enabled) {
