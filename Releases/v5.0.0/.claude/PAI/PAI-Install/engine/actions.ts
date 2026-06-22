@@ -709,6 +709,15 @@ function frameworkInstructionContent(content: string, target: FrameworkTarget): 
     .replace(/\$PAI_FRAMEWORK_DIR\/PAI/g, "$PAI_DIR");
 }
 
+function mergeFrameworkInstruction(existing: string, generated: string): string {
+  const trimmedExisting = existing.trim();
+  if (!trimmedExisting) return generated;
+  if (trimmedExisting.includes("Personal AI Infrastructure") || trimmedExisting.includes("@PAI/USER/")) {
+    return generated;
+  }
+  return `${trimmedExisting}\n\n# PAI Managed Instructions\n\n${generated.trim()}\n`;
+}
+
 function yamlString(value: string): string {
   return JSON.stringify(value);
 }
@@ -984,7 +993,18 @@ export async function migrateUserContentFromBackup(
 }
 
 function pathLooksLikeExistingPaiRoot(paiDir: string, settingsFile = "settings.json"): boolean {
-  return existsSync(join(paiDir, settingsFile)) || existsSync(join(paiDir, "skills")) || existsSync(join(paiDir, "PAI", "USER"));
+  const settingsPath = join(paiDir, settingsFile);
+  if (existsSync(settingsPath)) {
+    if (settingsFile !== "config.toml") return true;
+    try {
+      const settings = readFileSync(settingsPath, "utf-8");
+      if (settings.includes("# BEGIN PAI MANAGED ROOT CONFIG") || settings.includes("PAI root:")) {
+        return true;
+      }
+    } catch {}
+  }
+
+  return existsSync(join(paiDir, "skills", "ContextSearch", "SKILL.md")) || existsSync(join(paiDir, "PAI", "USER"));
 }
 
 export async function moveExistingClaudeToBackup(
@@ -1934,7 +1954,8 @@ export async function runConfiguration(
       const targetInstructionPath = join(paiDir, target.instructionFile);
       const content = frameworkInstructionContent(readFileSync(claudeMdPath, "utf-8"), target)
         .replace(/^#\s*CLAUDE\.md\b.*$/m, `# ${target.instructionFile}`);
-      writeFileSync(targetInstructionPath, content);
+      const existingInstruction = existsSync(targetInstructionPath) ? readFileSync(targetInstructionPath, "utf-8") : "";
+      writeFileSync(targetInstructionPath, mergeFrameworkInstruction(existingInstruction, content));
       await emit({ event: "message", content: `${target.instructionFile} generated for ${target.displayName}.` });
     } catch {}
   }

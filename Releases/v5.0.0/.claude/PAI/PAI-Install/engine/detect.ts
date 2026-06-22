@@ -90,8 +90,15 @@ function detectExisting(
   // Check for existing PAI installation
   const settingsPath = join(paiDir, settingsFile);
   if (existsSync(settingsPath)) {
-    result.paiInstalled = true;
-    result.settingsPath = settingsPath;
+    const settings = readFileSync(settingsPath, "utf-8");
+    const managedSettings =
+      settingsFile !== "config.toml" ||
+      settings.includes("# BEGIN PAI MANAGED ROOT CONFIG") ||
+      settings.includes("PAI root:");
+    if (managedSettings) {
+      result.paiInstalled = true;
+      result.settingsPath = settingsPath;
+    }
   }
 
   // Check for existing v5 PAI skills
