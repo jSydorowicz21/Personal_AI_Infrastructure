@@ -33,6 +33,10 @@
       "target": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/CodexRealSessionHookProof.ts",
+      "target": "PAI/TOOLS/CodexRealSessionHookProof.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
       "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
     },
@@ -51,6 +55,10 @@
     {
       "source": "README.md",
       "target": "README.md"
+    },
+    {
+      "source": "RTK.md",
+      "target": "RTK.md"
     },
     {
       "source": "update-installed.sh",

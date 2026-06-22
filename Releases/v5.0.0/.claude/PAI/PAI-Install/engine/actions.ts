@@ -1051,6 +1051,7 @@ export async function moveExistingClaudeToBackup(
     ".env",
     "CLAUDE.md",
     "AGENTS.md",
+    "RTK.md",
   ];
 
   for (const relPath of removableRoots) {
@@ -1960,6 +1961,19 @@ export async function runConfiguration(
       writeFileSync(targetInstructionPath, mergeFrameworkInstruction(existingInstruction, content));
       await emit({ event: "message", content: `${target.instructionFile} generated for ${target.displayName}.` });
     } catch {}
+  }
+
+  if (target.id === "codex" || target.id === "opencode") {
+    const sourceRtkPath = join(paiDir, "RTK.md");
+    if (existsSync(sourceRtkPath)) {
+      try {
+        writeFileSync(join(target.installRoot, "RTK.md"), readFileSync(sourceRtkPath, "utf-8"));
+        await emit({ event: "message", content: "RTK.md installed for Codex/OpenCode command-reduction instructions." });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await emit({ event: "message", content: `Could not install RTK.md: ${reason}` });
+      }
+    }
   }
 
   if (target.id === "codex") {

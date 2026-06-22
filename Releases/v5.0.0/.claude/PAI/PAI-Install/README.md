@@ -32,6 +32,33 @@ That's it. The script handles everything:
 
 Everything else (Bun, Git, and the selected agent CLI) is installed automatically.
 
+### RTK Command Reduction
+
+PAI's Codex runtime can use RTK (Rust Token Killer) to compact shell-command output before it reaches the agent context. RTK is a single Rust binary from <https://github.com/rtk-ai/rtk>; upstream documents typical token reduction of 60-90% on common developer commands.
+
+Install RTK before using command-reduction workflows:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh
+```
+
+Other supported install paths:
+
+```bash
+brew install rtk
+cargo install --git https://github.com/rtk-ai/rtk
+```
+
+Windows users can download `rtk-x86_64-pc-windows-msvc.zip` from the RTK releases page, extract `rtk.exe`, and put it on PATH. For WSL-based PAI, install RTK inside WSL.
+
+Verify:
+
+```bash
+rtk --version
+rtk gain
+which rtk
+```
+
 ### Interceptor for Browser Verification
 
 PAI expects web verification to use Interceptor, which drives your real Chrome or Brave session through a browser extension and local CLI. Interceptor is installed outside the core PAI installer because Chrome/Brave require a manual unpacked-extension load step and Windows may require native-messaging registration.

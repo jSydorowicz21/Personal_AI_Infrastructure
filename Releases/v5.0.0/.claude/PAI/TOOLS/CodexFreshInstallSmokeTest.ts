@@ -79,6 +79,7 @@ try {
   const checks: Check[] = [
     check("Codex home created", existsSync(codexHome), codexHome),
     check("AGENTS.md generated", agentsMd.includes("# AGENTS.md") || agentsMd.includes("PAI"), join(codexHome, "AGENTS.md")),
+    check("RTK.md generated", existsSync(join(codexHome, "RTK.md")), join(codexHome, "RTK.md")),
     check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(codexHome, "config.toml")),
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),

@@ -39,7 +39,7 @@ function runBunTool(name: string): Check {
   const path = join(toolsDir, name);
   const res = spawnSync(process.execPath, [path], {
     encoding: "utf-8",
-    timeout: 60_000,
+    timeout: name === "CodexRealSessionHookProof.ts" ? 120_000 : 60_000,
     env: {
       ...process.env,
       PAI_DIR: paiDir,
@@ -115,6 +115,7 @@ async function main() {
     runBunTool("CodexPaiSecuritySmokeTest.ts"),
     runBunTool("HookSharedPathSmokeTest.ts"),
     runBunTool("CodexHookTriggerSmokeTest.ts"),
+    runBunTool("CodexRealSessionHookProof.ts"),
     runBunTool("CodexFreshInstallSmokeTest.ts"),
     ...optionalSecretChecks(),
   ];
