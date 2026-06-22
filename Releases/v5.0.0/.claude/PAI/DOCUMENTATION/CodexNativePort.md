@@ -464,7 +464,9 @@ What changed:
 - Kept `spawnClaude` and `type = "claude"` as compatibility aliases for older configs.
 - Changed shipped Pulse config and setup templates to teach `type = "ai"`.
 - Replaced GitHub worker direct Claude spawning with the shared framework-agent launcher.
-- Made Telegram and iMessage route through Codex based on active framework state, not only `PAI_FRAMEWORK`.
+- Replaced Telegram and iMessage Claude Agent SDK sessions with active-framework `Inference.ts` calls.
+- Removed the Pulse `@anthropic-ai/claude-agent-sdk` dependency.
+- Made `k prompt` feed one-shot Codex prompts through `codex exec` stdin.
 - Updated observability onboarding and static export to show `~/.pai/USER/...`.
 - Pinned Pulse Observability's Next tracing root and build id for deterministic static exports.
 - Kept `/interview` as the onboarding command and added the actual Codex prompt for it.

@@ -65,7 +65,7 @@ algorithm stop -p <ISA>                       Stop a loop
 Loop mode runs the Algorithm iteratively without human interaction. Each iteration:
 
 1. Reads the ISA and identifies failing Ideal State Criteria
-2. Spawns a `claude -p` session focused on the failing criteria
+2. Spawns an active-framework session focused on the failing criteria
 3. The session makes progress, updates the ISA checkboxes
 4. Re-reads the ISA to check progress
 5. Repeats until all criteria pass or max iterations reached

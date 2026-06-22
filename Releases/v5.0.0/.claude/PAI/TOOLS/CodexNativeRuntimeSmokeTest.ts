@@ -41,22 +41,35 @@ function walkTextFiles(dir: string, acc: string[] = []): string[] {
 
 const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"));
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
+const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
+const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
 const telegram = read(join(paiRoot, "PULSE", "modules", "telegram.ts"));
 const imessage = read(join(paiRoot, "PULSE", "modules", "imessage.ts"));
 const pulseToml = read(join(paiRoot, "PULSE", "PULSE.toml"));
+const pulsePackage = read(join(paiRoot, "PULSE", "package.json"));
 const setup = read(join(paiRoot, "PULSE", "setup.ts"));
 const nextConfig = read(join(paiRoot, "PULSE", "Observability", "next.config.ts"));
+const claudeAgentSdkPackage = ["@anthropic-ai", "claude-agent-sdk"].join("/");
 
 check(
   "framework agent launches Codex exec with workspace-write",
   frameworkAgent.includes('"codex"') &&
     frameworkAgent.includes('"exec"') &&
     frameworkAgent.includes('"--sandbox"') &&
-    frameworkAgent.includes('"workspace-write"'),
+    frameworkAgent.includes('"workspace-write"') &&
+    frameworkAgent.indexOf('if (framework === "codex")') < frameworkAgent.indexOf('Bun.which("claude")'),
   "PAI/TOOLS/lib/framework-agent.ts",
+);
+
+check(
+  "Inference chooses Codex before Claude fallback",
+  inferenceTool.includes('const framework = getActiveFramework()') &&
+    inferenceTool.includes('const useCodex = framework === "codex"') &&
+    inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("spawn('claude'"),
+  "PAI/TOOLS/Inference.ts",
 );
 
 check(
@@ -89,9 +102,20 @@ check(
 
 check(
   "Pulse chat modules route from active framework state",
-  telegram.includes("getActiveFramework() === \"codex\"") &&
-    imessage.includes("getActiveFramework() === \"codex\""),
-  "Telegram and iMessage do not require PAI_FRAMEWORK env",
+    telegram.includes("await inference({") &&
+    imessage.includes("await inference({") &&
+    !telegram.includes(claudeAgentSdkPackage) &&
+    !imessage.includes(claudeAgentSdkPackage) &&
+    !pulsePackage.includes(claudeAgentSdkPackage),
+  "Telegram and iMessage use PAI Inference, not Claude Agent SDK",
+);
+
+check(
+  "PAI one-shot prompt uses Codex exec stdin",
+  paiCli.includes('"exec", "--sandbox", "workspace-write"') &&
+    paiCli.includes('new Blob([prompt])') &&
+    !paiCli.includes('["claude", "-p", prompt]'),
+  "PAI/TOOLS/pai.ts",
 );
 
 check(

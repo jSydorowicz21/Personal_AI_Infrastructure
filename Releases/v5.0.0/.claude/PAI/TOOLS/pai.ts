@@ -1561,21 +1561,23 @@ function cmdDoctor() {
 async function cmdPrompt(prompt: string) {
   // One-shot prompt execution
   // NOTE: No --dangerously-skip-permissions - rely on settings.json permissions
-  // BILLING: subscription, not API. Removed --bare (forces ANTHROPIC_API_KEY),
-  // strip the key from inherited env.
+  // BILLING: subscription/session auth, not API. Strip API credentials from inherited env.
   const activeFramework = getActiveFramework();
   const activeRoot = ensureFrameworkInstall(activeFramework);
-  const args = activeFramework === "claude"
-    ? ["claude", "-p", prompt]
-    : activeFramework === "codex"
-      ? ["codex", "exec", prompt]
-      : ["opencode", "run", prompt];
+  const args = activeFramework === "codex"
+    ? [frameworkCommand(activeFramework), "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "--cd", process.cwd(), "-"]
+    : activeFramework === "opencode"
+      ? [frameworkCommand(activeFramework), "run", "-"]
+      : [frameworkCommand(activeFramework), "-p", prompt];
 
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
   Object.assign(env, frameworkEnv(activeRoot, activeFramework));
   delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN;
   const proc = spawn(frameworkSpawnArgs(args), {
-    stdio: ["inherit", "inherit", "inherit"],
+    stdin: activeFramework === "codex" || activeFramework === "opencode" ? new Blob([prompt]) : "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
     env,
   });
 
