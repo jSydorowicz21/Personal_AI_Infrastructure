@@ -21,8 +21,24 @@
       "target": "PAI/TOOLS/pai.ts"
     },
     {
+      "source": "PAI/TOOLS/Inference.ts",
+      "target": "PAI/TOOLS/Inference.ts"
+    },
+    {
+      "source": "PAI/TOOLS/algorithm.ts",
+      "target": "PAI/TOOLS/algorithm.ts"
+    },
+    {
+      "source": "PAI/TOOLS/lib/framework-agent.ts",
+      "target": "PAI/TOOLS/lib/framework-agent.ts"
+    },
+    {
       "source": "PAI/TOOLS/PaiDoctor.ts",
       "target": "PAI/TOOLS/PaiDoctor.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },
     {
       "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
@@ -67,6 +83,66 @@
     {
       "source": "PAI/PAI-Install/README.md",
       "target": "PAI/PAI-Install/README.md"
+    },
+    {
+      "source": "PAI/ALGORITHM/LATEST",
+      "target": "PAI/ALGORITHM/LATEST"
+    },
+    {
+      "source": "PAI/ALGORITHM/v6.3.0.md",
+      "target": "PAI/ALGORITHM/v6.3.0.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/CodexNativePort.md",
+      "target": "PAI/DOCUMENTATION/CodexNativePort.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Pulse/PulseSystem.md",
+      "target": "PAI/DOCUMENTATION/Pulse/PulseSystem.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Tools/Cli.md",
+      "target": "PAI/DOCUMENTATION/Tools/Cli.md"
+    },
+    {
+      "source": "PAI/PULSE/PULSE.toml",
+      "target": "PAI/PULSE/PULSE.toml"
+    },
+    {
+      "source": "PAI/PULSE/lib.ts",
+      "target": "PAI/PULSE/lib.ts"
+    },
+    {
+      "source": "PAI/PULSE/pulse.ts",
+      "target": "PAI/PULSE/pulse.ts"
+    },
+    {
+      "source": "PAI/PULSE/setup.ts",
+      "target": "PAI/PULSE/setup.ts"
+    },
+    {
+      "source": "PAI/PULSE/package.json",
+      "target": "PAI/PULSE/package.json"
+    },
+    {
+      "source": "PAI/PULSE/bun.lock",
+      "target": "PAI/PULSE/bun.lock"
+    },
+    {
+      "source": "PAI/PULSE/modules/telegram.ts",
+      "target": "PAI/PULSE/modules/telegram.ts"
+    },
+    {
+      "source": "PAI/PULSE/modules/imessage.ts",
+      "target": "PAI/PULSE/modules/imessage.ts"
+    },
+    {
+      "source": "PAI/PULSE/checks/github-work.ts",
+      "target": "PAI/PULSE/checks/github-work.ts"
+    },
+    {
+      "source": "PAI/PULSE/Observability/next.config.ts",
+      "target": "PAI/PULSE/Observability/next.config.ts"
     },
     {
       "source": "MCPs",
