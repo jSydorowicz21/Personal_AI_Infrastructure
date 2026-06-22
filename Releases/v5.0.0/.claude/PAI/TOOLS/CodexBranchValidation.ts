@@ -170,6 +170,7 @@ function main(): void {
       "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
       "PAI/TOOLS/HookSharedPathSmokeTest.ts",
       "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
+      "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),
@@ -185,6 +186,13 @@ function main(): void {
         PAI_FRAMEWORK_DIR: releaseRoot,
         PAI_DIR: join(releaseRoot, "PAI"),
         PAI_DATA_DIR: join(tempRoot, "pai-data"),
+      },
+    });
+    run("Repeat detection smoke", "bun", ["PAI/TOOLS/RepeatDetectionSmokeTest.ts"], {
+      env: {
+        PAI_FRAMEWORK_DIR: releaseRoot,
+        PAI_DIR: join(releaseRoot, "PAI"),
+        PAI_DATA_DIR: join(tempRoot, "pai-data-repeat"),
       },
     });
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);

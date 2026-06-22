@@ -41,6 +41,10 @@
       "target": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
+      "target": "PAI/TOOLS/RepeatDetectionSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
       "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
     },
@@ -59,6 +63,10 @@
     {
       "source": "hooks/StartupSelfCheck.hook.ts",
       "target": "hooks/StartupSelfCheck.hook.ts"
+    },
+    {
+      "source": "hooks/RepeatDetection.hook.ts",
+      "target": "hooks/RepeatDetection.hook.ts"
     },
     {
       "source": "README.md",
