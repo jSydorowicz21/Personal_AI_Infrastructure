@@ -17,6 +17,7 @@
  *   pai profiles         List available profiles
  *   pai mcp list         List available MCPs
  *   pai mcp set <profile>  Set MCP profile
+ *   pai doctor           Verify local PAI runtime health
  *   pai memory delete    Delete a memory file and redact local cache/log copies
  */
 
@@ -1593,13 +1594,20 @@ COMMANDS:
   k framework switch codex Switch framework (claude|codex|opencode)
   k memory delete          Delete a memory file and redact cache/log copies
   k memory redact          Redact exact literals from PAI cache/log files
-  k doctor                 Verify Codex PAI runtime, hooks, Pulse, MCPs
+  k doctor                 Run PAI runtime diagnostics (config, hooks, Pulse, MCPs)
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
   k prompt "<text>"        One-shot prompt execution
   k -w, --wallpaper        List/switch wallpapers (Kitty + macOS)
   k help, -h               Show this help
+
+TROUBLESHOOTING:
+  If startup reports a PAI self-check warning, run:
+    k doctor
+
+  Optional credential reminders are warnings, not failures. Critical failures
+  point at the config, hook, Pulse, or install surface that needs repair.
 
 MCP SHORTCUTS:
   bd, brightdata           Bright Data scraping

@@ -123,6 +123,18 @@ function validateReadmeUrls(): void {
   check("README stale URL scan", failures.length === 0, failures.length === 0 ? "no known stale fork/branch URLs" : failures.join("\n"));
 }
 
+function validateDoctorDiscoverability(): void {
+  const files = [
+    join(repoRoot, "README.md"),
+    join(releaseRoot, "README.md"),
+    join(releaseRoot, "PAI", "PAI-Install", "README.md"),
+    join(releaseRoot, "PAI", "TOOLS", "pai.ts"),
+  ];
+  const missing = files.filter((path) => !readFileSync(path, "utf-8").includes("k doctor"));
+  run("k help documents doctor", "bun", ["PAI/TOOLS/pai.ts", "help"]);
+  check("doctor docs discoverability", missing.length === 0, missing.length === 0 ? "k doctor appears in CLI help and docs" : missing.join("\n"));
+}
+
 function validateHotfixDryRun(): void {
   const installRoot = join(tempRoot, "install-root");
   const home = join(tempRoot, "home");
@@ -180,6 +192,7 @@ function main(): void {
 
     validateHotfixDryRun();
     validateReadmeUrls();
+    validateDoctorDiscoverability();
 
     const failed = checks.filter((item) => !item.passed);
     if (failed.length > 0) {
