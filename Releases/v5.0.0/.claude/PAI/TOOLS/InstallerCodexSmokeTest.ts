@@ -104,6 +104,7 @@ enabled = true
   assert("Codex ContextReduction hook", hooks.includes("ContextReduction.hook.sh"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));
+  assert("Codex StartupSelfCheck hook", hooks.includes("StartupSelfCheck.hook.ts"));
 } catch (err) {
   keepTemp = true;
   console.error(err instanceof Error ? err.message : String(err));

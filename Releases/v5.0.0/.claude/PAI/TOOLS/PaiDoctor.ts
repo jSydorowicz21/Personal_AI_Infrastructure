@@ -115,6 +115,7 @@ async function main() {
     runBunTool("CodexPaiSecuritySmokeTest.ts"),
     runBunTool("HookSharedPathSmokeTest.ts"),
     runBunTool("CodexHookTriggerSmokeTest.ts"),
+    runBunTool("StartupSelfCheckSmokeTest.ts"),
     runBunTool("CodexRealSessionHookProof.ts"),
     runBunTool("CodexFreshInstallSmokeTest.ts"),
     ...optionalSecretChecks(),

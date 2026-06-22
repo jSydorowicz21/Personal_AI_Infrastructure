@@ -83,6 +83,7 @@ try {
     check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(codexHome, "config.toml")),
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
+    check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
     check("framework state points to Codex", frameworkState.active === "codex" && frameworkState.root === codexHome, join(dataDir, "framework.json")),

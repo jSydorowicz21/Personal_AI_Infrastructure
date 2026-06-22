@@ -37,6 +37,10 @@
       "target": "PAI/TOOLS/CodexRealSessionHookProof.ts"
     },
     {
+      "source": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
+      "target": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
       "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
     },
@@ -51,6 +55,10 @@
     {
       "source": "MCPs",
       "target": "MCPs"
+    },
+    {
+      "source": "hooks/StartupSelfCheck.hook.ts",
+      "target": "hooks/StartupSelfCheck.hook.ts"
     },
     {
       "source": "README.md",

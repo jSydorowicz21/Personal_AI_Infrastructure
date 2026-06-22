@@ -228,6 +228,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           hooks: [
             commandHook(config, "KittyEnvPersist.hook.ts"),
             commandHook(config, "LoadContext.hook.ts", 20),
+            commandHook(config, "StartupSelfCheck.hook.ts", 5),
           ],
         },
       ],

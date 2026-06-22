@@ -577,6 +577,7 @@ function generateCodexHooks(root: string): Record<string, any> {
           hooks: [
             codexCommandHook(root, "KittyEnvPersist.hook.ts"),
             codexCommandHook(root, "LoadContext.hook.ts", 20),
+            codexCommandHook(root, "StartupSelfCheck.hook.ts", 5),
           ],
         },
       ],
