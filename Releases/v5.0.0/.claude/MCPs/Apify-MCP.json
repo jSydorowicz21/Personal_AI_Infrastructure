@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "apify": {
+      "command": "bunx",
+      "args": [
+        "@apify/actors-mcp-server@latest"
+      ],
+      "env_vars": [
+        "APIFY_TOKEN"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    }
+  }
+}

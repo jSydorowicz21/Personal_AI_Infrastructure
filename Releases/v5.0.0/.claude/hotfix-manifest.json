@@ -25,6 +25,22 @@
       "target": "PAI/PAI-Install/README.md"
     },
     {
+      "source": "MCPs",
+      "target": "MCPs"
+    },
+    {
+      "source": "README.md",
+      "target": "README.md"
+    },
+    {
+      "source": "update-installed.sh",
+      "target": "update-installed.sh"
+    },
+    {
+      "source": "update-installed.ps1",
+      "target": "update-installed.ps1"
+    },
+    {
       "source": "skills/Interceptor",
       "target": "skills/Interceptor",
       "mirrorToCodexAgentsSkills": true

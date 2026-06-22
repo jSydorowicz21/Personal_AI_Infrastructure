@@ -63,9 +63,9 @@ const MCP_SHORTCUTS: Record<string, string> = {
 // Profile descriptions
 const PROFILE_DESCRIPTIONS: Record<string, string> = {
   none: "No MCPs (maximum performance)",
-  minimal: "Essential MCPs (content, daemon, Foundry)",
-  "dev-work": "Development tools (Shadcn, Codex, Supabase)",
-  security: "Security tools (httpx, naabu)",
+  minimal: "No external MCPs; base PAI tools only",
+  "dev-work": "Development tools (Shadcn, Supabase)",
+  security: "Reserved security profile; no bundled external MCPs",
   research: "Research tools (Brightdata, Apify)",
   clickup: "Official ClickUp MCP (tasks, time tracking, docs)",
   full: "All available MCPs",
@@ -1120,6 +1120,7 @@ function setMcpProfile(profile: string) {
 }
 
 function setMcpCustom(mcpNames: string[]) {
+  const MCP_DIR = getMcpDir();
   const files: string[] = [];
 
   for (const name of mcpNames) {
@@ -1582,10 +1583,10 @@ MCP SHORTCUTS:
   ap, apify                Apify automation
   cu, clickup              Official ClickUp (tasks, time tracking, docs)
   dev                      Development tools
-  sec, security            Security tools
+  sec, security            Reserved security profile
   research                 Research tools (BD + Apify)
   full                     All MCPs
-  min, minimal             Essential MCPs only
+  min, minimal             Base PAI tools only
   none                     No MCPs
 
 EXAMPLES:

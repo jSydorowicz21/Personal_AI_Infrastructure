@@ -1,6 +1,6 @@
-﻿# PAI â€” Personal AI Infrastructure
+﻿# PAI - Personal AI Infrastructure
 
-> **PAI is a Life OS.** Scaffolding that turns your AI from a chatbot you talk to into a system that runs your life â€” knows your goals, people, workflows, current state, and ideal state, and continuously hill-climbs you from one to the other.
+> **PAI is a Life OS.** Scaffolding that turns your AI from a chatbot you talk to into a system that runs your life - knows your goals, people, workflows, current state, and ideal state, and continuously hill-climbs you from one to the other.
 
 **Status:** Version 5.0.0 | **License:** [MIT](./LICENSE)
 
@@ -8,12 +8,12 @@
 
 ## What you get
 
-- **A Digital Assistant (DA)** â€” named by you, voiced by you, running as a peer. Ships with a generic "PAI" DA on free public ElevenLabs voices so you can hear it out of the box; `/interview` personalizes it.
-- **The Algorithm** â€” a structured problem-solving framework (OBSERVE â†’ THINK â†’ PLAN â†’ BUILD â†’ EXECUTE â†’ VERIFY â†’ LEARN) that the DA runs for non-trivial tasks.
+- **A Digital Assistant (DA)** - named by you, voiced by you, running as a peer. Ships with a generic "PAI" DA on free public ElevenLabs voices so you can hear it out of the box; `/interview` personalizes it.
+- **The Algorithm** - a structured problem-solving framework (OBSERVE -> THINK -> PLAN -> BUILD -> EXECUTE -> VERIFY -> LEARN) that the DA runs for non-trivial tasks.
 - **Pulse** - a local daemon on port 31337 that provides voice notifications, observability, scheduled tasks, and a Life Dashboard. Runs as a macOS launchd service or Windows per-user scheduled task; the menu bar app is macOS-only.
-- **Skills** â€” 40+ composable capabilities (research, creative writing, security assessment, Cloudflare deploys, voice, etc.) that the DA self-selects at runtime.
-- **Memory** â€” persistent typed storage that compounds across sessions (KNOWLEDGE for durable notes, WORK for active projects, LEARNING for meta-patterns).
-- **TELOS** â€” your mission, goals, beliefs, challenges, and wisdom captured in structured files so the DA can frame every recommendation against who you are and what you're trying to do.
+- **Skills** - 40+ composable capabilities (research, creative writing, security assessment, Cloudflare deploys, voice, etc.) that the DA self-selects at runtime.
+- **Memory** - persistent typed storage that compounds across sessions (KNOWLEDGE for durable notes, WORK for active projects, LEARNING for meta-patterns).
+- **TELOS** - your mission, goals, beliefs, challenges, and wisdom captured in structured files so the DA can frame every recommendation against who you are and what you're trying to do.
 
 ---
 
@@ -24,7 +24,7 @@
 - macOS, Linux, or Windows PowerShell
 - One supported agent CLI: Claude Code, Codex, or OpenCode
 - The API key required by your selected agent CLI
-- An [ElevenLabs API key](https://elevenlabs.io/) (optional â€” enables voice notifications)
+- An [ElevenLabs API key](https://elevenlabs.io/) (optional - enables voice notifications)
 
 ### Important: existing config is backed up and merged
 
@@ -95,7 +95,7 @@ bash ./Releases/v5.0.0/.claude/update-installed.sh --framework codex --source-di
 For a machine that already has PAI installed but does not have the updated script locally:
 
 ```powershell
-$u = "https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.ps1"
+$u = "https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.ps1"
 $p = Join-Path $env:TEMP "pai-update-installed.ps1"
 Invoke-WebRequest $u -OutFile $p
 powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
@@ -104,12 +104,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
 macOS/Linux/WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
+curl -fsSL https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
 ```
 
 Use `-Framework claude` or `-Framework opencode` for those targets, or omit `-Framework` to let the updater read `~/.pai/framework.json`.
 
 Use `--framework claude` or `--framework opencode` with the shell updater. When the source directory points at a git checkout, the updater runs `git fetch --prune` and `git pull --ff-only` before copying files. Pass `-NoPull` in PowerShell or `--no-pull` in Bash when testing uncommitted local changes.
+
+---
+
+## MCP profiles
+
+PAI ships MCP profile files under `MCPs/`; `k -m <profile>` expects those files to already be present.
+
+Useful checks:
+
+```bash
+k mcp list
+k mcp set dev-work
+```
+
+Credential-bearing MCPs use environment variables, not committed secrets:
+
+```bash
+export API_TOKEN="..."       # Bright Data MCP
+export APIFY_TOKEN="..."     # Apify MCP
+```
+
+`dev-work` enables shadcn and Supabase. Supabase still requires the MCP client's browser authentication flow and should be used against development/non-production projects.
 
 ---
 
@@ -119,14 +141,14 @@ Use `--framework claude` or `--framework opencode` with the shell updater. When 
 <framework-home>/
 ├── CLAUDE.md / AGENTS.md       # framework instructions + context routing
 ├── settings/config files       # framework-native config + DA identity
-â”œâ”€â”€ PAI/                         # the engine
-â”‚   â”œâ”€â”€ ALGORITHM/v3.29.0.md     # the universal problem-solving framework
-â”‚   â”œâ”€â”€ DOCUMENTATION/           # every subsystem fully documented
-â”‚   â”œâ”€â”€ PULSE/                   # daemon, menu bar, voice server, scheduled tasks
-â”‚   â”œâ”€â”€ TOOLS/                   # CLI utilities (Inference, GenerateTelosSummary, etc.)
-â”‚   â””â”€â”€ USER/                    # YOUR scaffolds â€” ABOUTME, TELOS/, DA_IDENTITY, etc.
+|-- PAI/                         # the engine
+|   |-- ALGORITHM/v3.29.0.md     # the universal problem-solving framework
+|   |-- DOCUMENTATION/           # every subsystem fully documented
+|   |-- PULSE/                   # daemon, menu bar, voice server, scheduled tasks
+|   |-- TOOLS/                   # CLI utilities (Inference, GenerateTelosSummary, etc.)
+|   `-- USER/                    # YOUR scaffolds - ABOUTME, TELOS/, DA_IDENTITY, etc.
 ├── skills/ or shared skill link # 40+ composable capabilities
-â”œâ”€â”€ agents/                      # specialist subagent definitions
+|-- agents/                      # specialist subagent definitions
 ├── hooks/plugins/              # framework-native lifecycle integration
 └── MEMORY/USER links           # routes to shared state in ~/.pai/
 ```
@@ -137,10 +159,10 @@ The DA reads the selected framework instructions at every session start. Those i
 
 ## Post-install customization
 
-- **DA identity + voice** â€” `/interview` personalizes your DA's name, voice, personality, and relationship framing.
-- **TELOS** â€” `/interview` (TELOS phase) populates your mission, goals, beliefs, challenges, wisdom.
-- **Voice pronunciation** â€” edit `$PAI_DATA_DIR/USER/pronunciations.json` for custom phonetic overrides.
-- **Pulse port** â€” defaults to 31337, bound to loopback. Set `PAI_PULSE_BIND_ALL=1` in `<framework-home>/.env` if you need LAN access (phone, other machines).
+- **DA identity + voice** - `/interview` personalizes your DA's name, voice, personality, and relationship framing.
+- **TELOS** - `/interview` (TELOS phase) populates your mission, goals, beliefs, challenges, wisdom.
+- **Voice pronunciation** - edit `$PAI_DATA_DIR/USER/pronunciations.json` for custom phonetic overrides.
+- **Pulse port** - defaults to 31337, bound to loopback. Set `PAI_PULSE_BIND_ALL=1` in `<framework-home>/.env` if you need LAN access (phone, other machines).
 - **Menu bar app** - macOS-only: `bash <framework-home>/PAI/PULSE/MenuBar/install.sh` builds and installs the Swift menu bar app.
 
 ---
@@ -174,7 +196,7 @@ The DA reads the selected framework instructions at every session start. Those i
 
 ## Philosophy
 
-PAI treats AI as infrastructure, not a feature. The same reason you have a filesystem, a shell, and an init system â€” you need durable scaffolding the model can operate within. Naked chat is not enough. PAI is the Life OS: a layer above Claude Code that knows who you are, what you're building, who matters to you, and where you're trying to go.
+PAI treats AI as infrastructure, not a feature. The same reason you have a filesystem, a shell, and an init system - you need durable scaffolding the model can operate within. Naked chat is not enough. PAI is the Life OS: a layer above Claude Code that knows who you are, what you're building, who matters to you, and where you're trying to go.
 
 You name your DA. You configure your voice. You capture your TELOS. The DA reads all of it at every session and operates as a peer, not a tool.
 
