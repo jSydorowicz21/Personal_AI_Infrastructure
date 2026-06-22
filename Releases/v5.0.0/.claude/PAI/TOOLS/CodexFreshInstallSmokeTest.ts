@@ -76,6 +76,8 @@ try {
   const configToml = existsSync(join(codexHome, "config.toml")) ? readFileSync(join(codexHome, "config.toml"), "utf-8") : "";
   const hooksJson = existsSync(join(codexHome, "hooks.json")) ? readFileSync(join(codexHome, "hooks.json"), "utf-8") : "";
   const agentsMd = existsSync(join(codexHome, "AGENTS.md")) ? readFileSync(join(codexHome, "AGENTS.md"), "utf-8") : "";
+  const interviewPromptPath = join(codexHome, "prompts", "interview.md");
+  const interviewPrompt = existsSync(interviewPromptPath) ? readFileSync(interviewPromptPath, "utf-8") : "";
   const profile = existsSync(shellProfile) ? readFileSync(shellProfile, "utf-8") : "";
   const frameworkState = existsSync(join(dataDir, "framework.json")) ? readJson(join(dataDir, "framework.json")) : {};
 
@@ -87,6 +89,7 @@ try {
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
     check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
+    check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
     check("framework state points to Codex", frameworkState.active === "codex" && frameworkState.root === codexHome, join(dataDir, "framework.json")),

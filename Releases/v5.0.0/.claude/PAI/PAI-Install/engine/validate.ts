@@ -265,10 +265,12 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const codexConfigPath = join(paiDir, "config.toml");
       const codexHooksPath = join(paiDir, "hooks.json");
       const codexPromptPath = join(paiDir, "prompts", "cs.md");
+      const codexInterviewPromptPath = join(paiDir, "prompts", "interview.md");
       const codexAgentPath = join(paiDir, "agents", "engineer.toml");
       const codexSkillPath = join(homedir(), ".agents", "skills", "ContextSearch", "SKILL.md");
       const memoryDeletePath = join(paiDir, "PAI", "TOOLS", "MemoryDelete.ts");
       const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
+      const codexInterviewPromptContent = existsSync(codexInterviewPromptPath) ? readFileSync(codexInterviewPromptPath, "utf-8") : "";
       checks.push({
         name: "Codex config.toml",
         passed: existsSync(codexConfigPath),
@@ -295,6 +297,16 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
             ? "PAI commands generated as Codex prompts"
             : "prompts/cs.md still contains Claude-style Skill(...) redirect"
           : "prompts/cs.md missing",
+        critical: false,
+      });
+      checks.push({
+        name: "Codex interview prompt",
+        passed: existsSync(codexInterviewPromptPath) && codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("'),
+        detail: existsSync(codexInterviewPromptPath)
+          ? codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("')
+            ? "/interview generated as a Codex prompt"
+            : "prompts/interview.md does not invoke the Interview skill in Codex form"
+          : "prompts/interview.md missing",
         critical: false,
       });
       checks.push({

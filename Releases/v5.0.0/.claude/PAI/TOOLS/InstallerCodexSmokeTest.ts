@@ -100,6 +100,10 @@ enabled = true
   assert("Memory delete tool installed", existsSync(join(codexHome, "PAI", "TOOLS", "MemoryDelete.ts")));
   assert("Codex agents generated", existsSync(join(codexHome, "agents")));
   assert("Codex hooks generated", existsSync(join(codexHome, "hooks.json")));
+  const interviewPromptPath = join(codexHome, "prompts", "interview.md");
+  assert("Codex interview prompt generated", existsSync(interviewPromptPath));
+  const interviewPrompt = readFileSync(interviewPromptPath, "utf-8");
+  assert("Codex interview prompt invokes skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
   assert("Codex ContextReduction hook", hooks.includes("ContextReduction.hook.sh"));
