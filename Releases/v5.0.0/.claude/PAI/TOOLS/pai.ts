@@ -727,7 +727,7 @@ function codexRootConfigToml(existing = ""): string {
     lines.push('model_reasoning_effort = "high"');
   }
   if (!rootTomlHasKey(existing, "plan_mode_reasoning_effort")) {
-    lines.push('plan_mode_reasoning_effort = "high"');
+    lines.push('plan_mode_reasoning_effort = "xhigh"');
   }
   lines.push(CODEX_ROOT_END);
   return lines.join("\n");
