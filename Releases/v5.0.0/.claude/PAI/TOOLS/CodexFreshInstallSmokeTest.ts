@@ -37,6 +37,7 @@ const home = join(root, "home");
 const codexHome = join(home, ".codex");
 const dataDir = join(home, ".pai");
 const configDir = join(home, ".config", "PAI");
+const shellProfile = join(home, ".bashrc");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 
 process.env.HOME = home;
@@ -45,6 +46,7 @@ process.env.PAI_DATA_DIR = dataDir;
 process.env.PAI_CONFIG_DIR = configDir;
 process.env.PAI_FRAMEWORK = "codex";
 process.env.PAI_BUNDLE_DIR = releaseRoot;
+process.env.PAI_SHELL_PROFILE = shellProfile;
 process.env.SHELL = "/bin/bash";
 
 const { createFreshState, completeStep } = await import("../PAI-Install/engine/state.ts");
@@ -74,6 +76,7 @@ try {
   const configToml = existsSync(join(codexHome, "config.toml")) ? readFileSync(join(codexHome, "config.toml"), "utf-8") : "";
   const hooksJson = existsSync(join(codexHome, "hooks.json")) ? readFileSync(join(codexHome, "hooks.json"), "utf-8") : "";
   const agentsMd = existsSync(join(codexHome, "AGENTS.md")) ? readFileSync(join(codexHome, "AGENTS.md"), "utf-8") : "";
+  const profile = existsSync(shellProfile) ? readFileSync(shellProfile, "utf-8") : "";
   const frameworkState = existsSync(join(dataDir, "framework.json")) ? readJson(join(dataDir, "framework.json")) : {};
 
   const checks: Check[] = [
@@ -87,6 +90,9 @@ try {
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
     check("framework state points to Codex", frameworkState.active === "codex" && frameworkState.root === codexHome, join(dataDir, "framework.json")),
+    check("shell profile isolated to temp HOME", existsSync(shellProfile), shellProfile),
+    check("shell k alias points to temp Codex", profile.includes(`bun ${JSON.stringify(join(codexHome, "PAI", "TOOLS", "pai.ts"))}`), shellProfile),
+    check("shell pai alias points to temp data", profile.includes(`PAI_DATA_DIR=${JSON.stringify(dataDir)}`), shellProfile),
     check("shared MEMORY link exists", existsSync(join(codexHome, "PAI", "MEMORY")) && lstatSync(join(codexHome, "PAI", "MEMORY")).isSymbolicLink(), join(codexHome, "PAI", "MEMORY")),
     check("shared USER link exists", existsSync(join(codexHome, "PAI", "USER")) && lstatSync(join(codexHome, "PAI", "USER")).isSymbolicLink(), join(codexHome, "PAI", "USER")),
   ];

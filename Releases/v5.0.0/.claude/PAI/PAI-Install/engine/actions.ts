@@ -91,6 +91,10 @@ function displayPath(path: string): string {
   return path.replace(homedir(), "~");
 }
 
+function envHome(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
 async function emitSectionHeader(
   emit: EngineEventHandler,
   sectionId: string,
@@ -731,12 +735,22 @@ function shellProfile(): { kind: "posix" | "fish" | "powershell"; path: string; 
     };
   }
 
+  if (process.env.PAI_SHELL_PROFILE) {
+    const userShell = process.env.SHELL || "";
+    return {
+      kind: userShell.includes("fish") ? "fish" : "posix",
+      path: process.env.PAI_SHELL_PROFILE,
+      display: process.env.PAI_SHELL_PROFILE,
+    };
+  }
+
   const userShell = process.env.SHELL || "";
   if (process.platform === "win32" && !userShell) {
+    const home = envHome();
     const candidates = [
       process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
-      join(homedir(), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
-      join(homedir(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
     ].filter(Boolean);
     const path = candidates.find((candidate) => existsSync(candidate)) || candidates[0];
     return {
@@ -746,12 +760,12 @@ function shellProfile(): { kind: "posix" | "fish" | "powershell"; path: string; 
     };
   }
   if (userShell.includes("fish")) {
-    return { kind: "fish", path: join(homedir(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" };
+    return { kind: "fish", path: join(envHome(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" };
   }
   if (userShell.includes("bash")) {
-    return { kind: "posix", path: join(homedir(), ".bashrc"), display: "~/.bashrc" };
+    return { kind: "posix", path: join(envHome(), ".bashrc"), display: "~/.bashrc" };
   }
-  return { kind: "posix", path: join(homedir(), ".zshrc"), display: "~/.zshrc" };
+  return { kind: "posix", path: join(envHome(), ".zshrc"), display: "~/.zshrc" };
 }
 
 function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string): string {

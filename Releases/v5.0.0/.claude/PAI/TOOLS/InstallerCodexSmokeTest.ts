@@ -24,6 +24,7 @@ try {
   const paiData = join(tempRoot, ".pai");
   const paiConfig = join(tempRoot, ".config", "PAI");
   const profilePath = join(tempRoot, "profile.ps1");
+  const shellProfilePath = process.platform === "win32" ? profilePath : join(tempRoot, ".zshrc");
   const junctionTarget = join(tempRoot, "junction-target");
   mkdirSync(codexHome, { recursive: true });
   mkdirSync(junctionTarget, { recursive: true });
@@ -62,6 +63,7 @@ enabled = true
       PAI_CONFIG_DIR: paiConfig,
       PAI_BUNDLE_DIR: bundleDir,
       PAI_POWERSHELL_PROFILE: profilePath,
+      PAI_SHELL_PROFILE: shellProfilePath,
       PAI_FRAMEWORK: "codex",
       PAI_TEST_AUTOMATED: "1",
       PAI_SKIP_PULSE_INSTALL: "1",
@@ -76,7 +78,6 @@ enabled = true
   installOutput = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
 
   const config = readFileSync(join(codexHome, "config.toml"), "utf-8");
-  const shellProfilePath = process.platform === "win32" ? profilePath : join(tempRoot, ".zshrc");
   if (!existsSync(shellProfilePath)) {
     throw new Error(`Shell profile was not written at ${shellProfilePath}; temp=${tempRoot}\n${installerTail()}`);
   }
