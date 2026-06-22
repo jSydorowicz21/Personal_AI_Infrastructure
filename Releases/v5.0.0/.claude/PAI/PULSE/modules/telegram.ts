@@ -5,7 +5,7 @@
  * Does NOT create its own HTTP server — health is reported via the
  * parent's /health endpoint using telegramHealth().
  *
- * Architecture: grammY polling → auth → SDK session → stream → Telegram
+ * Architecture: grammY polling -> auth -> active framework inference -> Telegram
  */
 
 import { Bot } from "grammy"
@@ -15,10 +15,11 @@ import { join } from "path"
 import { appendFile, mkdir } from "fs/promises"
 import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
 import { inference } from "../../TOOLS/Inference"
+import { getActiveFramework } from "../../TOOLS/lib/transcripts"
 
-// BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Bun auto-loads
-// the framework .env into this process; if the key is present, @anthropic-ai/claude-agent-sdk
-// bills the API key directly instead of the CLAUDE_CODE_OAUTH_TOKEN subscription.
+// BILLING: Strip ANTHROPIC_API_KEY before any Claude fallback query() call. Bun auto-loads
+// the framework .env into this process; if the key is present, the Claude SDK
+// bills the API key directly instead of subscription/session auth.
 // This was the root cause of the April 2026 Sonnet 4.5 $353.89 + Web Search $72.48
 // invoice — every Telegram message was a 25-turn SDK session billed to the API.
 delete process.env.ANTHROPIC_API_KEY
@@ -200,7 +201,7 @@ export async function startTelegram(config: TelegramConfig): Promise<void> {
       let messageId: number | null = null
       let lastEditTime = 0
 
-      if ((process.env.PAI_FRAMEWORK || "").toLowerCase() === "codex") {
+      if (getActiveFramework() === "codex") {
         const result = await inference({
           systemPrompt: TELEGRAM_SYSTEM_PROMPT,
           userPrompt: prompt,

@@ -7,8 +7,8 @@
  *   - Voice notifications (ElevenLabs TTS)
  *   - Hook validation (skill-guard, agent-guard)
  *   - Observability (data APIs + dashboard)
- *   - Telegram bot (grammY polling + claude-agent-sdk)
- *   - iMessage bot (SQLite polling + claude-agent-sdk)
+ *   - Telegram bot (grammY polling + active framework inference)
+ *   - iMessage bot (SQLite polling + active framework inference)
  *   - GitHub work polling (PAI Worker)
  *
  * One process. One port. One launchd plist. One log file.
@@ -48,10 +48,10 @@ try {
 
 // ── BILLING GUARD (defense-in-depth) ──
 // Strip ANTHROPIC_API_KEY from the daemon environment AFTER .env load. Every
-// downstream module (telegram, imessage, spawnClaude) inherits this. Prevents
-// the Claude Agent SDK and `claude` CLI from billing the API key instead of
-// CLAUDE_CODE_OAUTH_TOKEN. Root cause of April 2026 invoice ($498 / $354 Sonnet
-// + $72 WebSearch). Each module also strips independently for belt-and-suspenders.
+// downstream module inherits this. Prevents Claude fallback paths from billing
+// the API key instead of subscription/session auth. Root cause of April 2026
+// invoice ($498 / $354 Sonnet + $72 WebSearch). Each module also strips
+// independently for belt-and-suspenders.
 delete process.env.ANTHROPIC_API_KEY
 
 // ── Imports ──
@@ -67,7 +67,7 @@ import {
   dispatch,
   isSentinel,
   spawnScript,
-  spawnClaude,
+  spawnAI,
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
@@ -157,7 +157,7 @@ interface PulseConfig {
   jobs: Array<{
     name: string
     schedule: string
-    type: "script" | "claude" | "ai"
+    type: "script" | "ai" | "claude"
     command?: string
     prompt?: string
     model?: string
@@ -519,7 +519,7 @@ async function main() {
         let output: string
 
         if (job.type === "claude" || job.type === "ai") {
-          output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+          output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
         } else {
           output = await spawnScript(job.command!)
         }

@@ -32,7 +32,7 @@
  *   smart:    model=opus,    timeout=90s
  *   advisor:  model=opus,    timeout=120s
  *
- * BILLING: Uses Claude CLI with subscription (not API key)
+ * BILLING: Uses the active framework CLI with subscription/session auth, not API keys.
  * CACHE: Uses --exclude-dynamic-system-prompt-sections for cross-invocation prompt cache hits
  *
  * ADVISOR PATTERN (v3.24 Verification Doctrine — see PAI/ALGORITHM/v3.24.0.md):
@@ -59,6 +59,7 @@
 
 import { spawn } from "child_process";
 import { memoryPath } from "./lib/paths";
+import { getActiveFramework } from "./lib/transcripts";
 
 export type InferenceLevel = 'fast' | 'standard' | 'smart';
 
@@ -107,7 +108,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
   const config = LEVEL_CONFIG[level];
   const startTime = Date.now();
   const timeout = options.timeout || config.defaultTimeout;
-  const framework = (process.env.PAI_FRAMEWORK || "").toLowerCase();
+  const framework = getActiveFramework();
   const useCodex = framework === "codex" || (!Bun.which("claude") && !!Bun.which("codex"));
 
   return new Promise((resolve) => {

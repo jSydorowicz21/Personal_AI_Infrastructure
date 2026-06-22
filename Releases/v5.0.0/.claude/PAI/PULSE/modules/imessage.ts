@@ -5,7 +5,7 @@
  * Polls ~/Library/Messages/chat.db for incoming iMessages, processes them
  * through the active PAI inference backend and sends replies back via AppleScript.
  *
- * Architecture: SQLite poll -> auth -> SDK session -> AppleScript reply
+ * Architecture: SQLite poll -> auth -> active framework inference -> AppleScript reply
  *
  * Exports:
  *   startIMessage(config)  — starts SQLite polling loop (runs forever, supervised by parent)
@@ -27,6 +27,7 @@ import { appendFile, mkdir, rename } from "fs/promises"
 import { join } from "path"
 import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
 import { inference } from "../../TOOLS/Inference"
+import { getActiveFramework } from "../../TOOLS/lib/transcripts"
 
 // BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Same rationale
 // as modules/telegram.ts — prevents API billing when the module is re-enabled.
@@ -159,7 +160,7 @@ async function processMessage(
     prompt = `Previous conversation:\n${historyText}\n\nPrincipal's new message: ${sanitized}`
   }
 
-  if ((process.env.PAI_FRAMEWORK || "").toLowerCase() === "codex") {
+  if (getActiveFramework() === "codex") {
     const result = await inference({
       systemPrompt: IMESSAGE_SYSTEM_PROMPT,
       userPrompt: prompt,

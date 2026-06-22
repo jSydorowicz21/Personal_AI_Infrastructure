@@ -18,7 +18,7 @@ export type OutputTarget = "voice" | "telegram" | "ntfy" | "email" | "log"
 export interface Job {
   name: string
   schedule: string
-  type: "script" | "claude" | "ai"
+  type: "script" | "ai" | "claude"
   command?: string
   prompt?: string
   model?: string
@@ -54,16 +54,19 @@ export async function loadConfig(daemonDir: string): Promise<DaemonConfig> {
   const raw = await Bun.file(join(daemonDir, "PULSE.toml")).text()
   const parsed = parseToml(raw) as { job?: Array<Record<string, unknown>> }
 
-  const jobs: Job[] = (parsed.job ?? []).map((j) => ({
-    name: j.name as string,
-    schedule: j.schedule as string,
-    type: (j.type as "script" | "claude" | "ai") ?? "script",
-    command: j.command ? resolveEnvVars(j.command as string) : undefined,
-    prompt: j.prompt ? resolveEnvVars(j.prompt as string) : undefined,
-    model: (j.model as string) ?? "sonnet",
-    output: (j.output ?? "log") as OutputTarget | OutputTarget[],
-    enabled: (j.enabled as boolean) ?? true,
-  }))
+  const jobs: Job[] = (parsed.job ?? []).map((j) => {
+    const rawType = (j.type as "script" | "claude" | "ai") ?? "script"
+    return {
+      name: j.name as string,
+      schedule: j.schedule as string,
+      type: rawType === "claude" ? "ai" : rawType,
+      command: j.command ? resolveEnvVars(j.command as string) : undefined,
+      prompt: j.prompt ? resolveEnvVars(j.prompt as string) : undefined,
+      model: (j.model as string) ?? "standard",
+      output: (j.output ?? "log") as OutputTarget | OutputTarget[],
+      enabled: (j.enabled as boolean) ?? true,
+    }
+  })
 
   return { jobs }
 }
@@ -266,7 +269,7 @@ export async function spawnScript(command: string, timeoutMs = 60_000): Promise<
   return output.trim()
 }
 
-export async function spawnClaude(prompt: string, opts: { model: string; timeoutMs?: number }): Promise<string> {
+export async function spawnAI(prompt: string, opts: { model: string; timeoutMs?: number }): Promise<string> {
   const model = opts.model.toLowerCase()
   const level: InferenceLevel = model.includes("haiku") || model === "fast"
     ? "fast"
@@ -287,3 +290,5 @@ export async function spawnClaude(prompt: string, opts: { model: string; timeout
 
   return result.output.trim()
 }
+
+export const spawnClaude = spawnAI

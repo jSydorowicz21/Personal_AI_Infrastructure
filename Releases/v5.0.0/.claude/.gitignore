@@ -168,6 +168,7 @@ Plugins/marketplaces/.chrome-profile/
 !PAI/PAI-Install/public/assets/*.png
 !PAI/PAI-Install/public/assets/*.jpg
 !PAI/PAI-Install/public/assets/*.jpeg
+!PAI/PULSE/Observability/public/pai-logo.png
 !PAI/PAI-Install/public/assets/*.gif
 !PAI/PAI-Install/public/assets/*.webp
 !PAI/PAI-Install/public/assets/*.svg

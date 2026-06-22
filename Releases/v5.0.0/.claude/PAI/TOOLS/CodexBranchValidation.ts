@@ -174,6 +174,7 @@ function main(): void {
       "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
+      "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),
@@ -206,6 +207,7 @@ function main(): void {
       },
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
+    run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);

@@ -176,7 +176,7 @@ async function generateConfigs(opts: {
   const pulseToml = `# PAI Pulse — ${opts.name} Worker Configuration
 #
 # type = "script" → runs command, $0 cost
-# type = "claude" → spawns claude --print, costs tokens
+# type = "ai" → runs active framework inference, costs tokens
 # output = voice | telegram | ntfy | email | log
 # Sentinels: NO_ACTION, NO_URGENT, NO_EVENTS → suppress dispatch
 
@@ -208,7 +208,7 @@ enabled = true
 [[job]]
 name = "morning-report"
 schedule = "0 7 * * *"
-type = "claude"
+type = "ai"
 prompt = "You are ${opts.name}, a PAI Worker (${opts.description}). Summarize your completed work from the last 24 hours. Check recent git log and closed issues. Be concise."
 model = "sonnet"
 output = "telegram"

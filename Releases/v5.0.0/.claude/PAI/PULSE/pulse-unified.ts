@@ -7,8 +7,8 @@
  *   - Voice notifications (ElevenLabs TTS)
  *   - Hook validation (skill-guard, agent-guard)
  *   - Observability (data APIs + dashboard)
- *   - Telegram bot (grammY polling + claude-agent-sdk)
- *   - iMessage bot (SQLite polling + claude-agent-sdk)
+ *   - Telegram bot (grammY polling + active framework inference)
+ *   - iMessage bot (SQLite polling + active framework inference)
  *   - GitHub work polling (PAI Worker)
  *
  * One process. One port. One launchd plist. One log file.
@@ -59,7 +59,7 @@ import {
   dispatch,
   isSentinel,
   spawnScript,
-  spawnClaude,
+  spawnAI,
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
@@ -114,7 +114,7 @@ interface PulseConfig {
   jobs: Array<{
     name: string
     schedule: string
-    type: "script" | "claude" | "ai"
+    type: "script" | "ai" | "claude"
     command?: string
     prompt?: string
     model?: string
@@ -385,7 +385,7 @@ async function main() {
         let output: string
 
         if (job.type === "claude" || job.type === "ai") {
-          output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+          output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
         } else {
           output = await spawnScript(job.command!)
         }

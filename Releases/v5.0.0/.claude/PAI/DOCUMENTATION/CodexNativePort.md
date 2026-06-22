@@ -407,10 +407,35 @@ Why necessary:
 
 The user should run `k` and get the active PAI runtime, regardless of whether the framework is Claude or Codex. Windows command resolution was needed because `codex.cmd`/batch launch behavior differs from POSIX command spawning.
 
+## Algorithm Native Execution
+
+Files:
+
+- `PAI/TOOLS/algorithm.ts`
+- `PAI/TOOLS/lib/framework-agent.ts`
+- `PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts`
+- `PAI/TOOLS/CodexBranchValidation.ts`
+
+What changed:
+
+- Added a shared framework-agent launcher for edit-capable autonomous work.
+- Algorithm loop mode now launches the active framework instead of direct `claude -p`.
+- Parallel worker agents now use the same launcher with workspace-write access.
+- Sequential iterations removed the old `--bare` path and no longer hardcode Claude.
+- Interactive and ideate modes now launch the active framework with the ISA prompt.
+- Branch validation now scans for direct Claude subprocess regressions in Algorithm.
+
+Why necessary:
+
+The Algorithm is one of PAI's core products. A Codex install cannot be considered native if autonomous iteration, parallel workers, or interactive ISA sessions still shell out to Claude. The shared launcher keeps Claude compatibility while making Codex execute Algorithm work through `codex exec` with the right project directory and workspace-write permissions.
+
 ## Pulse Runtime Parity
 
 Files:
 
+- `PAI/TOOLS/Inference.ts`
+- `PAI/TOOLS/lib/framework-agent.ts`
+- `PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts`
 - `PAI/PULSE/manage.sh`
 - `PAI/PULSE/manage.ps1`
 - `PAI/PULSE/pulse.ts`
@@ -435,13 +460,19 @@ What changed:
 - Added TOML parser utility for Pulse config.
 - Added Pulse Assistant module and checks.
 - Replaced Claude-specific paths in Pulse modules with framework/shared-data paths.
+- Replaced Pulse cron AI job execution with `spawnAI`, backed by active framework inference.
+- Kept `spawnClaude` and `type = "claude"` as compatibility aliases for older configs.
+- Changed shipped Pulse config and setup templates to teach `type = "ai"`.
+- Replaced GitHub worker direct Claude spawning with the shared framework-agent launcher.
+- Made Telegram and iMessage route through Codex based on active framework state, not only `PAI_FRAMEWORK`.
 - Updated observability onboarding and static export to show `~/.pai/USER/...`.
+- Pinned Pulse Observability's Next tracing root and build id for deterministic static exports.
 - Kept `/interview` as the onboarding command and added the actual Codex prompt for it.
 - Adjusted voice, Telegram, iMessage, syslog, user-index, wiki, and scheduled checks for path/runtime parity.
 
 Why necessary:
 
-Pulse is the Life Dashboard. If Codex PAI launches but Pulse still reads Claude paths or shows Claude onboarding, the system is not native. Pulse had to read shared PAI data and remain operable from Codex installs.
+Pulse is the Life Dashboard. If Codex PAI launches but Pulse still reads Claude paths, shows Claude onboarding, or sends scheduled AI work through Claude-only subprocesses, the system is not native. Pulse had to read shared PAI data, run chat and cron AI through the active framework, and keep its static dashboard export reproducible from Codex installs.
 
 ## Security and Memory Safety
 
@@ -485,6 +516,7 @@ Files:
 - `PAI/TOOLS/StartupSelfCheckSmokeTest.ts`
 - `PAI/TOOLS/RepeatDetectionSmokeTest.ts`
 - `PAI/TOOLS/PaiSecurityAuditSmokeTest.ts`
+- `PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts`
 - `PAI/TOOLS/CodexBranchValidation.ts`
 - `.github/workflows/pai-codex-validation.yml`
 
@@ -495,6 +527,7 @@ What changed:
 - Fresh install smoke uses isolated `HOME`, `CODEX_HOME`, `PAI_DATA_DIR`, `PAI_CONFIG_DIR`, and shell profile paths.
 - Installer smoke verifies config preservation, hooks, agents, prompts, Pulse modules, backup creation, and Windows manager installation.
 - Branch validation runs build, JSON parsing, security, hooks, fresh install, installer smoke, hotfix dry-run, stale URL scan, and doctor docs discovery.
+- Native runtime smoke verifies Algorithm, Pulse cron AI, Pulse worker AI, chat routing, and Pulse static export do not regress to Claude-only paths.
 - GitHub Actions workflow runs Codex validation in CI.
 
 Why necessary:
@@ -673,4 +706,3 @@ Representative passing state after the final `/interview` fix:
 - Live doctor: 26 critical checks passed, optional token reminders only.
 - Pulse `/health`: HTTP 200.
 - Served Pulse assistant page: shows `/interview` and `~/.pai/USER/DA/`.
-
