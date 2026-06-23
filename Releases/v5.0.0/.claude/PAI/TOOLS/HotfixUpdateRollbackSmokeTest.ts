@@ -84,7 +84,7 @@ function copyDirectoryContents(source: string, destination: string): void {
 }
 
 function copyInstalledSourceFixture(source: string, destination: string): void {
-  const skipSegments = new Set([".git", ".tmp", "node_modules", "MEMORY", "USER"]);
+  const skipSegments = new Set([".git", ".tmp", "node_modules", "plugins", "MEMORY", "USER"]);
   cpSync(source, destination, {
     recursive: true,
     force: true,
