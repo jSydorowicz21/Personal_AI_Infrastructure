@@ -447,18 +447,24 @@ function Get-PaiPowerShellBlock([string]$InstallRoot, [string]$Framework) {
 function Initialize-PAIEnvironment {
   `$defaultPaiDataDir = '$qData'
   if (-not `$env:PAI_DATA_DIR -or -not (Test-Path -LiteralPath (Join-Path `$env:PAI_DATA_DIR 'framework.json'))) { `$env:PAI_DATA_DIR = `$defaultPaiDataDir }
+  `$stateUsable = `$false
   `$statePath = Join-Path `$env:PAI_DATA_DIR 'framework.json'
   if (Test-Path -LiteralPath `$statePath) {
     try {
       `$state = Get-Content -Raw -LiteralPath `$statePath | ConvertFrom-Json
       if (`$state.root) {
-        `$env:PAI_FRAMEWORK_DIR = [string]`$state.root
-        `$env:PAI_DIR = Join-Path `$env:PAI_FRAMEWORK_DIR 'PAI'
+        `$stateRoot = [string]`$state.root
+        if (Test-Path -LiteralPath `$stateRoot) {
+          `$env:PAI_FRAMEWORK_DIR = `$stateRoot
+          `$env:PAI_DIR = Join-Path `$env:PAI_FRAMEWORK_DIR 'PAI'
+          `$stateUsable = `$true
+        }
       }
       if (`$state.active) { `$env:PAI_FRAMEWORK = [string]`$state.active }
-      if (`$state.dataDir) { `$env:PAI_DATA_DIR = [string]`$state.dataDir }
+      if (`$state.dataDir -and `$stateUsable -and (Test-Path -LiteralPath ([string]`$state.dataDir))) { `$env:PAI_DATA_DIR = [string]`$state.dataDir }
     } catch {}
   }
+  if (-not `$stateUsable -and (Test-Path -LiteralPath (Join-Path `$defaultPaiDataDir 'framework.json'))) { `$env:PAI_DATA_DIR = `$defaultPaiDataDir }
   if (-not `$env:PAI_FRAMEWORK_DIR -or -not (Test-Path -LiteralPath `$env:PAI_FRAMEWORK_DIR)) { `$env:PAI_FRAMEWORK_DIR = '$qRoot' }
   if (-not `$env:PAI_DIR -or -not (Test-Path -LiteralPath `$env:PAI_DIR)) { `$env:PAI_DIR = '$qPai' }
   if (-not `$env:PAI_FRAMEWORK) { `$env:PAI_FRAMEWORK = '$qFramework' }

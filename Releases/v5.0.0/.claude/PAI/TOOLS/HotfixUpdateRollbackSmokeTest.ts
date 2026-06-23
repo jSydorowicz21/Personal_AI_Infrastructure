@@ -92,6 +92,7 @@ const repoSourceRoot = existsSync(join(repoRoot, "Releases", "v5.0.0", ".claude"
   : releaseRoot;
 const root = join(tmpdir(), `pai-hotfix-rollback-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const home = join(root, "home");
+const oneDriveRoot = join(home, "OneDrive");
 const installRoot = join(root, "old-codex");
 const dataDir = join(home, ".pai");
 const configDir = join(home, ".config", "PAI");
@@ -163,6 +164,8 @@ const update = spawnSync(updateCommand, updateArgs, {
   env: {
     ...process.env,
     HOME: home,
+    USERPROFILE: home,
+    OneDrive: oneDriveRoot,
     CODEX_HOME: installRoot,
     PAI_DATA_DIR: staleEnvDataDir,
     PAI_CONFIG_DIR: configDir,
@@ -184,10 +187,28 @@ const powerShellAllHostsProfile = join(home, "Documents", "PowerShell", "profile
 const powerShellProfile = join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
 const windowsPowerShellAllHostsProfile = join(home, "Documents", "WindowsPowerShell", "profile.ps1");
 const windowsPowerShellProfile = join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1");
+const oneDrivePowerShellAllHostsProfile = join(oneDriveRoot, "Documents", "PowerShell", "profile.ps1");
+const oneDrivePowerShellProfile = join(oneDriveRoot, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+const oneDriveWindowsPowerShellAllHostsProfile = join(oneDriveRoot, "Documents", "WindowsPowerShell", "profile.ps1");
+const oneDriveWindowsPowerShellProfile = join(oneDriveRoot, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1");
 const powerShellAllHostsProfileText = read(powerShellAllHostsProfile);
 const powerShellProfileText = read(powerShellProfile);
 const windowsPowerShellAllHostsProfileText = read(windowsPowerShellAllHostsProfile);
 const windowsPowerShellProfileText = read(windowsPowerShellProfile);
+const oneDrivePowerShellAllHostsProfileText = read(oneDrivePowerShellAllHostsProfile);
+const oneDrivePowerShellProfileText = read(oneDrivePowerShellProfile);
+const oneDriveWindowsPowerShellAllHostsProfileText = read(oneDriveWindowsPowerShellAllHostsProfile);
+const oneDriveWindowsPowerShellProfileText = read(oneDriveWindowsPowerShellProfile);
+const profileTexts = [
+  powerShellAllHostsProfileText,
+  powerShellProfileText,
+  windowsPowerShellAllHostsProfileText,
+  windowsPowerShellProfileText,
+  oneDrivePowerShellAllHostsProfileText,
+  oneDrivePowerShellProfileText,
+  oneDriveWindowsPowerShellAllHostsProfileText,
+  oneDriveWindowsPowerShellProfileText,
+];
 
 const beforeRollbackChecks: Check[] = [
   check("hotfix update exits cleanly", update.status === 0, `status=${update.status ?? "null"} ${update.stderr.split(/\r?\n/).slice(-4).join(" | ")}`),
@@ -209,6 +230,8 @@ const beforeRollbackChecks: Check[] = [
   check("hotfix repairs PowerShell profile PAI_DIR", process.platform !== "win32" || (powerShellProfileText.includes("Initialize-PAIEnvironment") && powerShellProfileText.includes("PAI_DIR")), powerShellProfile),
   check("hotfix repairs WindowsPowerShell all-host profile", process.platform !== "win32" || (windowsPowerShellAllHostsProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellAllHostsProfileText.includes("PAI_DIR")), windowsPowerShellAllHostsProfile),
   check("hotfix repairs WindowsPowerShell profile PAI_DIR", process.platform !== "win32" || (windowsPowerShellProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellProfileText.includes("PAI_DIR")), windowsPowerShellProfile),
+  check("hotfix repairs OneDrive PowerShell profiles", process.platform !== "win32" || profileTexts.slice(4).every((text) => text.includes("Initialize-PAIEnvironment") && text.includes("PAI_DIR")), oneDriveRoot),
+  check("PowerShell profiles avoid stale smoke roots", process.platform !== "win32" || profileTexts.every((text) => !text.includes(staleEnvDataDir) && !text.includes(join(root, "deleted-codex"))), "profile bootstrap paths"),
   check("PowerShell bootstrap repairs stale PAI_DIR", process.platform !== "win32" || powerShellAllHostsProfileText.includes("-not (Test-Path -LiteralPath $env:PAI_DIR)"), powerShellAllHostsProfile),
   check("config.toml protected", read(join(installRoot, "config.toml")) === sentinels.config, join(installRoot, "config.toml")),
   check("auth.json protected", read(join(installRoot, "auth.json")) === sentinels.auth, join(installRoot, "auth.json")),
