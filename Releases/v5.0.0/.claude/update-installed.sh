@@ -295,8 +295,8 @@ apply_entry() {
   local transform="$7"
   local mirror="$8"
 
-  source_rel="${source_rel//\//\/}"
-  target_rel="${target_rel//\//\/}"
+  source_rel="$(printf '%s' "$source_rel" | tr '\\' '/')"
+  target_rel="$(printf '%s' "$target_rel" | tr '\\' '/')"
   local source="$release_root/$source_rel"
   local target="$install_root/$target_rel"
   [ -e "$source" ] || fail "Manifest source missing: $source"
