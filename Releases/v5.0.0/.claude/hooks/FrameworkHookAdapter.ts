@@ -8,7 +8,7 @@
 
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
-import { extname, join, resolve } from "path";
+import { basename, extname, join, resolve } from "path";
 import { isSubagentSession } from "./lib/session";
 
 type JsonObject = Record<string, any>;
@@ -210,7 +210,20 @@ async function main() {
     },
   });
 
-  process.exit(child.status ?? 0);
+  if (child.error) {
+    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} failed: ${child.error.message}`);
+    process.exit(124);
+  }
+  if (child.signal) {
+    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} terminated by signal ${child.signal}`);
+    process.exit(124);
+  }
+  if (child.status === null) {
+    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} exited without status`);
+    process.exit(124);
+  }
+
+  process.exit(child.status);
 }
 
 main().catch((err) => {

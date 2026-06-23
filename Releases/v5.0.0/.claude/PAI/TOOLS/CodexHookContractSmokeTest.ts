@@ -36,6 +36,8 @@ const tempData = join(tempRoot, "pai-data");
 const tempConfig = join(tempRoot, "config");
 const tempTranscript = join(tempRoot, "transcript.jsonl");
 const fakeBin = join(tempRoot, "bin");
+const adapterTimeoutHook = "FrameworkHookAdapterTimeoutSmoke.hook.ts";
+const adapterTimeoutHookPath = join(dirname(adapter), adapterTimeoutHook);
 const checks: Check[] = [];
 
 function check(name: string, passed: boolean, detail: string): void {
@@ -206,6 +208,31 @@ function runHook(target: string, payload: Record<string, any>) {
   });
 }
 
+function runAdapterTimeoutProbe() {
+  writeFileSync(adapterTimeoutHookPath, "setTimeout(() => {}, 10_000);\n");
+  return spawnSync(process.execPath, [adapter, "--framework", "codex", "--target", adapterTimeoutHook, "--timeout-ms", "1"], {
+    input: JSON.stringify({
+      hook_event_name: "UserPromptSubmit",
+      prompt: "timeout probe",
+      cwd: tempRoot,
+      session_id: "hook-contract-adapter-timeout",
+    }),
+    encoding: "utf-8",
+    timeout: 5_000,
+    maxBuffer: 1024 * 1024,
+    env: {
+      ...process.env,
+      HOME: tempRoot,
+      PAI_DIR: paiDir,
+      PAI_DATA_DIR: tempData,
+      PAI_FRAMEWORK: "codex",
+      PAI_FRAMEWORK_DIR: frameworkRoot,
+      PAI_SETTINGS_PATH: join(frameworkRoot, "settings.json"),
+      PAI_CONFIG_DIR: tempConfig,
+    },
+  });
+}
+
 function writeSlowRtk(): void {
   mkdirSync(fakeBin, { recursive: true });
   const slowScript = join(fakeBin, "rtk-slow.js");
@@ -296,6 +323,13 @@ try {
     `status=${rtkTimeout.result.status ?? "null"} elapsed=${rtkTimeout.elapsedMs}ms`
   );
 
+  const adapterTimeout = runAdapterTimeoutProbe();
+  check(
+    "FrameworkHookAdapter reports child timeout",
+    adapterTimeout.status === 124 && `${adapterTimeout.stderr || ""}`.includes(adapterTimeoutHook),
+    `status=${adapterTimeout.status ?? "null"} stderr=${`${adapterTimeout.stderr || ""}`.trim()}`
+  );
+
   const failed = checks.filter((item) => !item.passed);
   if (failed.length > 0) {
     console.error(`\n${failed.length} Codex hook contract check(s) failed.`);
@@ -304,6 +338,7 @@ try {
 
   console.log("\nAll Codex hook contract checks passed.");
 } finally {
+  rmSync(adapterTimeoutHookPath, { force: true });
   if (keep) {
     console.log(`\nKept hook contract root: ${tempRoot}`);
   } else {

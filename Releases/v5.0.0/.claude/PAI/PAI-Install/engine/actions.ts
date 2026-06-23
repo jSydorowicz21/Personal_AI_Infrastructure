@@ -4,7 +4,7 @@
  * Each action takes state + event emitter, performs work, returns result.
  */
 
-import { execSync, spawn } from "child_process";
+import { execSync, spawn, spawnSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, unlinkSync, chmodSync, lstatSync, cpSync, rmSync, readlinkSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { join, basename, dirname } from "path";
@@ -792,6 +792,51 @@ function shellProfiles(): { kind: "posix" | "fish" | "powershell"; path: string;
   return [{ kind: "posix", path: join(envHome(), ".zshrc"), display: "~/.zshrc" }];
 }
 
+function powerShellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function setWindowsPaiUserEnvironment(root: string, dataDir: string, framework: FrameworkId): boolean {
+  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return true;
+
+  const env = {
+    PAI_DIR: join(root, "PAI"),
+    PAI_FRAMEWORK_DIR: root,
+    PAI_FRAMEWORK: framework,
+    PAI_DATA_DIR: dataDir,
+    PAI_CONFIG_DIR: process.env.PAI_CONFIG_DIR || join(envHome(), ".config", "PAI"),
+  };
+  Object.assign(process.env, env);
+
+  const target = process.env.PAI_USER_ENV_TARGET === "Process" ? "Process" : "User";
+  const script = [
+    `$target = '${target}'`,
+    ...Object.entries(env).map(([key, value]) =>
+      `[Environment]::SetEnvironmentVariable('${key}', ${powerShellSingleQuote(value)}, $target)`
+    ),
+    "if ($target -eq 'User') {",
+    "  try {",
+    `    Add-Type -Namespace Pai.Native -Name User32 -MemberDefinition @'
+[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);
+'@ -ErrorAction SilentlyContinue`,
+    "    $result = [UIntPtr]::Zero",
+    "    [Pai.Native.User32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null",
+    "  } catch {}",
+    "}",
+  ].join("\n");
+
+  const result = spawnSync("powershell", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
+  ], { stdio: "ignore" });
+
+  return result.status === 0;
+}
+
 function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string, framework: string): string {
   const paiDir = dirname(dirname(paiScript));
   const frameworkDir = dirname(paiDir);
@@ -832,7 +877,6 @@ function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: 
       "Initialize-PAIEnvironment",
       "function Invoke-PAI {",
       "  Initialize-PAIEnvironment",
-      `  $env:PAI_DATA_DIR = '${escapedDataDir}'`,
       `  bun '${escapedPaiScript}' @args`,
       "}",
       "function pai {",
@@ -2179,6 +2223,14 @@ export async function runConfiguration(
     writtenProfiles.push(rcPath);
   }
   await emit({ event: "message", content: `Shell aliases pai and k added to ${writtenProfiles.length} shell profile(s).` });
+
+  if (process.platform === "win32") {
+    if (setWindowsPaiUserEnvironment(paiDir, dataDir, target.id)) {
+      await emit({ event: "message", content: "Windows user environment updated for direct PAI/provider launches." });
+    } else {
+      await emit({ event: "message", content: "Could not update Windows user environment; shell profile aliases were still written." });
+    }
+  }
 
   // Fix permissions
   await emit({ event: "progress", step: "configuration", percent: 90, detail: "Setting permissions..." });

@@ -65,6 +65,7 @@ enabled = true
       PAI_POWERSHELL_PROFILE: profilePath,
       PAI_SHELL_PROFILE: shellProfilePath,
       PAI_FRAMEWORK: "codex",
+      PAI_USER_ENV_TARGET: "Process",
       PAI_TEST_AUTOMATED: "1",
       PAI_SKIP_PULSE_INSTALL: "1",
     },
@@ -93,6 +94,7 @@ enabled = true
   assert("Codex plugin preserved", config.includes("[plugins.\"browser@openai-bundled\"]"));
   assert("Shell k alias", profile.includes("function k") || profile.includes("alias k"));
   assert("Shell pai alias", profile.includes("function pai") || profile.includes("alias pai"));
+  assert("Windows user env repaired", process.platform !== "win32" || installOutput.includes("Windows user environment updated"));
   assert("Backup created", backupExists);
   assert("Pulse Windows manager installed", existsSync(join(codexHome, "PAI", "PULSE", "manage.ps1")));
   assert("Pulse Assistant module installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "module.ts")));
@@ -106,6 +108,7 @@ enabled = true
   assert("Codex interview prompt invokes skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
+  assert("Codex PromptProcessing timeout", hooks.includes('"timeout": 35') && hooks.includes("--timeout-ms"));
   assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));

@@ -56,6 +56,14 @@ function readFrameworkState(): FrameworkState | null {
   return state;
 }
 
+function hasStaleFrameworkEnv(): boolean {
+  const envFrameworkDir = process.env.PAI_FRAMEWORK_DIR;
+  if (envFrameworkDir) return !existsSync(expandPath(envFrameworkDir));
+  const envPaiDir = process.env.PAI_DIR;
+  if (envPaiDir) return !existsSync(expandPath(envPaiDir));
+  return false;
+}
+
 /**
  * Get the PAI data directory (expanded)
  * Priority: shared framework state → existing PAI_DIR env var → legacy Claude path
@@ -78,16 +86,20 @@ export function getPaiDir(): string {
  * MEMORY and USER live here so Claude, Codex, and OpenCode can share state.
  */
 export function getDataDir(): string {
+  const defaultDataDir = join(homeDir(), '.pai');
+  const defaultState = readFrameworkStateAt(defaultDataDir);
+  const defaultStateUsable = Boolean(defaultState?.root && existsSync(expandPath(defaultState.root)));
   const envDataDir = process.env.PAI_DATA_DIR;
   if (envDataDir) {
     const expanded = expandPath(envDataDir);
     if (existsSync(expanded)) {
       const state = readFrameworkStateAt(expanded);
-      if (!state?.root || existsSync(expandPath(state.root))) return expanded;
+      if (!state && (!defaultStateUsable || !hasStaleFrameworkEnv())) return expanded;
+      if (state?.root && existsSync(expandPath(state.root))) return expanded;
     }
   }
 
-  return join(homeDir(), '.pai');
+  return defaultDataDir;
 }
 
 /**

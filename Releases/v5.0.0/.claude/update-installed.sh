@@ -112,8 +112,9 @@ json_tool() {
   fi
 }
 
-read_framework_state() {
-  local state_path="$HOME/.pai/framework.json"
+read_framework_state_at() {
+  local data_dir="$1"
+  local state_path="$data_dir/framework.json"
   [ -f "$state_path" ] || return 0
   local tool
   tool="$(json_tool)"
@@ -127,11 +128,55 @@ try:
         data = json.load(f)
 except Exception:
     sys.exit(0)
-print("{}\t{}".format(data.get("active", "") or "", data.get("root", "") or ""))
+print("{}\t{}\t{}".format(data.get("active", "") or "", data.get("root", "") or "", data.get("dataDir", "") or ""))
 PY
   else
-    "$tool" -e 'const fs=require("fs"); try { const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log(`${data.active||""}\t${data.root||""}`); } catch {}' "$state_path"
+    "$tool" -e 'const fs=require("fs"); try { const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log(`${data.active||""}\t${data.root||""}\t${data.dataDir||""}`); } catch {}' "$state_path"
   fi
+}
+
+read_framework_state() {
+  read_framework_state_at "$HOME/.pai"
+}
+
+framework_state_usable() {
+  local root="${1:-}"
+  [ -z "$root" ] || [ -e "$root" ]
+}
+
+stale_framework_env() {
+  if [ -n "${PAI_FRAMEWORK_DIR:-}" ] && [ ! -e "$PAI_FRAMEWORK_DIR" ]; then
+    return 0
+  fi
+  if [ -n "${PAI_DIR:-}" ] && [ ! -e "$PAI_DIR" ]; then
+    return 0
+  fi
+  return 1
+}
+
+resolve_pai_data_dir() {
+  local default_data_dir="$HOME/.pai"
+  local state active root data_dir
+  state="$(read_framework_state || true)"
+  root="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $2}')"
+  data_dir="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $3}')"
+
+  if [ -n "${PAI_DATA_DIR:-}" ] && [ -e "$PAI_DATA_DIR" ]; then
+    local env_state env_root
+    env_state="$(read_framework_state_at "$PAI_DATA_DIR" || true)"
+    env_root="$(printf '%s' "$env_state" | awk -F '\t' 'NR==1 {print $2}')"
+    if { [ -z "$env_state" ] && { ! framework_state_usable "$root" || ! stale_framework_env; }; } || framework_state_usable "$env_root"; then
+      absolute_path "$PAI_DATA_DIR"
+      return 0
+    fi
+  fi
+
+  if framework_state_usable "$root" && [ -n "$data_dir" ]; then
+    absolute_path "$data_dir"
+    return 0
+  fi
+
+  absolute_path "$default_data_dir"
 }
 
 resolve_target() {
@@ -400,7 +445,8 @@ const config = {
 await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJson(config), null, 2)}\n`);
 TS
 
-  local data_dir="${PAI_DATA_DIR:-$HOME/.pai}"
+  local data_dir
+  data_dir="$(resolve_pai_data_dir)"
   local config_dir="${PAI_CONFIG_DIR:-$HOME/.config/PAI}"
   (cd "$install_root" && bun "$script_path" "$install_root" "$data_dir" "$config_dir")
   success "Regenerated Codex hooks.json from installed generator."

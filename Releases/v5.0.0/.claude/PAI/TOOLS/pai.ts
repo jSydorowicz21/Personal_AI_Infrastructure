@@ -212,7 +212,7 @@ function normalizeFramework(value: string | undefined): FrameworkId | null {
   const v = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
   if (v === "claude" || v === "claudecode") return "claude";
   if (v === "codex" || v === "openai" || v === "openaicodex") return "codex";
-  if (v === "opencode") return "opencode";
+  if (v === "opencode" || v === "open") return "opencode";
   return null;
 }
 
@@ -593,6 +593,41 @@ function frameworkEnv(root: string, id: FrameworkId): Record<string, string> {
   };
 }
 
+function setWindowsPaiUserEnvironment(root: string, id: FrameworkId): boolean {
+  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return true;
+
+  const env = frameworkEnv(root, id);
+  Object.assign(process.env, env);
+
+  const target = process.env.PAI_USER_ENV_TARGET === "Process" ? "Process" : "User";
+  const script = [
+    `$target = '${target}'`,
+    ...Object.entries(env).map(([key, value]) =>
+      `[Environment]::SetEnvironmentVariable('${key}', ${powerShellSingleQuote(value)}, $target)`
+    ),
+    "if ($target -eq 'User') {",
+    "  try {",
+    `    Add-Type -Namespace Pai.Native -Name User32 -MemberDefinition @'
+[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);
+'@ -ErrorAction SilentlyContinue`,
+    "    $result = [UIntPtr]::Zero",
+    "    [Pai.Native.User32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null",
+    "  } catch {}",
+    "}",
+  ].join("\n");
+  const result = spawnSync([
+    "powershell",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script,
+  ]);
+
+  return result.exitCode === 0;
+}
+
 function codexHookCommand(root: string, hookFile: string): string {
   const env = frameworkEnv(root, "codex");
   const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
@@ -940,6 +975,13 @@ function setActiveFramework(id: FrameworkId) {
     dataDir: DATA_DIR,
     updatedAt: new Date().toISOString(),
   }, null, 2));
+  if (process.platform === "win32") {
+    if (setWindowsPaiUserEnvironment(root, id)) {
+      log("Windows user environment updated for direct PAI/provider launches.", "✅");
+    } else {
+      log("Could not update Windows user environment; current shell launch still works.", "⚠️");
+    }
+  }
   log(`Active framework set to ${frameworkName(id)} at ${root}`, "✅");
   log(`Global PAI memory remains at ${join(DATA_DIR, "MEMORY")}`, "🧠");
 }

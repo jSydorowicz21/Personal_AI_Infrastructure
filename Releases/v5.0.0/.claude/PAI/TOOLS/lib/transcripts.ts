@@ -49,7 +49,7 @@ export function normalizeFramework(value: string | undefined): FrameworkId | nul
   const v = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
   if (v === "claude" || v === "claudecode") return "claude";
   if (v === "codex" || v === "openai" || v === "openaicodex") return "codex";
-  if (v === "opencode") return "opencode";
+  if (v === "opencode" || v === "open") return "opencode";
   return null;
 }
 
@@ -67,18 +67,22 @@ export function getActiveFramework(): FrameworkId {
 }
 
 export function getActiveFrameworkRoot(framework = getActiveFramework()): string {
-  if (process.env.PAI_FRAMEWORK_DIR) return expandHome(process.env.PAI_FRAMEWORK_DIR);
-
   const state = readFrameworkState();
   const stateFramework = normalizeFramework(state?.active) || normalizeFramework(state?.framework);
   if (state?.root && (!stateFramework || stateFramework === framework)) {
-    return expandHome(state.root);
+    const stateRoot = expandHome(state.root);
+    if (existsSync(stateRoot)) return stateRoot;
+  }
+
+  if (process.env.PAI_FRAMEWORK_DIR) {
+    const envRoot = expandHome(process.env.PAI_FRAMEWORK_DIR);
+    if (existsSync(envRoot)) return envRoot;
   }
 
   return getFrameworkDir();
 }
 
-export function getClaudeProjectDir(root = getFrameworkDir()): string {
+export function getClaudeProjectDir(root = getActiveFrameworkRoot("claude")): string {
   const slug = root.replace(/[\\/.:]/g, "-");
   return join(root, "projects", slug);
 }

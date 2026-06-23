@@ -47,6 +47,7 @@ process.env.PAI_CONFIG_DIR = configDir;
 process.env.PAI_FRAMEWORK = "codex";
 process.env.PAI_BUNDLE_DIR = releaseRoot;
 process.env.PAI_SHELL_PROFILE = shellProfile;
+process.env.PAI_USER_ENV_TARGET = "Process";
 process.env.SHELL = "/bin/bash";
 
 const { createFreshState, completeStep } = await import("../PAI-Install/engine/state.ts");
@@ -89,6 +90,7 @@ try {
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
     check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
+    check("PromptProcessing timeout leaves fallback room", hooksJson.includes('"timeout": 35') && hooksJson.includes("--timeout-ms"), join(codexHome, "hooks.json")),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
@@ -97,6 +99,7 @@ try {
     check("shell k alias points to temp Codex", profile.includes(`bun ${JSON.stringify(join(codexHome, "PAI", "TOOLS", "pai.ts"))}`), shellProfile),
     check("shell pai alias points to temp data", profile.includes(`PAI_DATA_DIR=${JSON.stringify(dataDir)}`), shellProfile),
     check("shell pai alias exports PAI_DIR", profile.includes(`PAI_DIR=${JSON.stringify(join(codexHome, "PAI"))}`), shellProfile),
+    check("installer refreshes PAI environment variables", process.platform !== "win32" || events.some((event) => event.includes("Windows user environment updated")), "process-scope user env test"),
     check("shared MEMORY link exists", existsSync(join(codexHome, "PAI", "MEMORY")) && lstatSync(join(codexHome, "PAI", "MEMORY")).isSymbolicLink(), join(codexHome, "PAI", "MEMORY")),
     check("shared USER link exists", existsSync(join(codexHome, "PAI", "USER")) && lstatSync(join(codexHome, "PAI", "USER")).isSymbolicLink(), join(codexHome, "PAI", "USER")),
   ];

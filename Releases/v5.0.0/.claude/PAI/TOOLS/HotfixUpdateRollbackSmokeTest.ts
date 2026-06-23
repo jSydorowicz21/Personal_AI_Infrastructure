@@ -37,6 +37,33 @@ function read(path: string): string {
   return existsSync(path) ? readFileSync(path, "utf-8") : "";
 }
 
+function normalizePathText(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase();
+}
+
+function codexHookDataDirs(hooksJson: string): string[] {
+  const values: string[] = [];
+  function visit(value: unknown): void {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(/(?:^|\s)PAI_DATA_DIR='([^']*)'/g)) {
+        values.push(match[1]);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  }
+  try {
+    visit(JSON.parse(hooksJson));
+  } catch {}
+  return values;
+}
+
 function latestBackupRoot(home: string): string {
   const backups = join(home, ".pai", "BACKUPS");
   if (!existsSync(backups)) return "";
@@ -67,6 +94,8 @@ const root = join(tmpdir(), `pai-hotfix-rollback-smoke-${Date.now()}-${Math.rand
 const home = join(root, "home");
 const installRoot = join(root, "old-codex");
 const dataDir = join(home, ".pai");
+const configDir = join(home, ".config", "PAI");
+const staleEnvDataDir = join(root, "stale-env", ".pai");
 
 const sentinels = {
   agents: "OLD_AGENTS_SENTINEL",
@@ -81,6 +110,13 @@ const sentinels = {
 
 mkdirSync(installRoot, { recursive: true });
 mkdirSync(dataDir, { recursive: true });
+mkdirSync(staleEnvDataDir, { recursive: true });
+write(join(dataDir, "framework.json"), JSON.stringify({ active: "codex", root: installRoot, dataDir }, null, 2));
+write(join(staleEnvDataDir, "framework.json"), JSON.stringify({
+  active: "codex",
+  root: join(root, "deleted-codex"),
+  dataDir: staleEnvDataDir,
+}, null, 2));
 write(join(installRoot, "AGENTS.md"), sentinels.agents);
 write(join(installRoot, "PAI", "TOOLS", "pai.ts"), sentinels.paiTool);
 write(join(installRoot, "hooks", "RepeatDetection.hook.ts"), sentinels.repeatHook);
@@ -128,8 +164,11 @@ const update = spawnSync(updateCommand, updateArgs, {
     ...process.env,
     HOME: home,
     CODEX_HOME: installRoot,
-    PAI_DATA_DIR: dataDir,
+    PAI_DATA_DIR: staleEnvDataDir,
+    PAI_CONFIG_DIR: configDir,
+    PAI_FRAMEWORK_DIR: join(root, "deleted-codex"),
     PAI_FRAMEWORK: "codex",
+    PAI_USER_ENV_TARGET: "Process",
   },
 });
 
@@ -138,6 +177,9 @@ const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedHooksJson = read(join(installRoot, "hooks.json"));
+const hookDataDirs = codexHookDataDirs(updatedHooksJson).map(normalizePathText);
+const expectedHookDataSuffix = normalizePathText(join("home", ".pai"));
+const staleHookDataSegment = normalizePathText(join("stale-env", ".pai"));
 const powerShellProfile = join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
 const windowsPowerShellProfile = join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1");
 const powerShellProfileText = read(powerShellProfile);
@@ -154,8 +196,11 @@ const beforeRollbackChecks: Check[] = [
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
   check("hooks.json regenerated with PromptProcessing", updatedHooksJson.includes("PromptProcessing.hook.ts"), join(installRoot, "hooks.json")),
+  check("PromptProcessing timeout leaves fallback room", updatedHooksJson.includes('"timeout": 35') && updatedHooksJson.includes("--timeout-ms"), join(installRoot, "hooks.json")),
   check("hooks.json regenerated with ISA sync hooks", updatedHooksJson.includes("ISASync.hook.ts") && updatedHooksJson.includes("CheckpointPerISC.hook.ts"), join(installRoot, "hooks.json")),
   check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
+  check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
+  check("updater refreshes PAI environment variables", process.platform !== "win32" || update.stdout.includes("Updated PAI environment variables at Process scope"), "process-scope user env test"),
   check("hotfix repairs PowerShell profile PAI_DIR", process.platform !== "win32" || (powerShellProfileText.includes("Initialize-PAIEnvironment") && powerShellProfileText.includes("PAI_DIR")), powerShellProfile),
   check("hotfix repairs WindowsPowerShell profile PAI_DIR", process.platform !== "win32" || (windowsPowerShellProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellProfileText.includes("PAI_DIR")), windowsPowerShellProfile),
   check("config.toml protected", read(join(installRoot, "config.toml")) === sentinels.config, join(installRoot, "config.toml")),
