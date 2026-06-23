@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 type Check = {
@@ -148,7 +148,24 @@ function trackedSecretAudit(): void {
 function hotfixManifestAudit(): void {
   const manifest = readJson(manifestPath);
   const forbidden: string[] = [];
+  const missingSources: string[] = [];
+  const sourceEntries = new Set<string>();
+
+  function isManifestCovered(relPath: string): boolean {
+    const normalized = slash(relPath);
+    if (sourceEntries.has(normalized)) return true;
+    for (const source of sourceEntries) {
+      if (normalized.startsWith(`${source}/`)) return true;
+    }
+    return false;
+  }
+
   for (const entry of manifest.entries || []) {
+    const source = slash(String(entry.source || ""));
+    if (source) {
+      sourceEntries.add(source);
+      if (!existsSync(join(releaseRoot, source))) missingSources.push(source);
+    }
     const targets = entry.targets && typeof entry.targets === "object"
       ? Object.values(entry.targets)
       : [entry.target || entry.source];
@@ -161,6 +178,38 @@ function hotfixManifestAudit(): void {
   }
 
   check("hotfix manifest avoids protected state/config", forbidden.length === 0, forbidden.length ? forbidden.join(", ") : `${manifest.entries?.length || 0} manifest entries`);
+  check("hotfix manifest sources exist", missingSources.length === 0, missingSources.length ? missingSources.join(", ") : `${sourceEntries.size} source entries`);
+
+  const requiredManagedSources = [
+    "PAI/TOOLS/CodexBranchValidation.ts",
+    "PAI/TOOLS/FrameworkSmokeTest.ts",
+    "PAI/TOOLS/MemoryDelete.ts",
+  ];
+  const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));
+  check("hotfix manifest includes parity validators", missingManagedSources.length === 0, missingManagedSources.length ? missingManagedSources.join(", ") : requiredManagedSources.join(", "));
+
+  const unresolvedImports: string[] = [];
+  for (const source of sourceEntries) {
+    const fullPath = join(releaseRoot, source);
+    if (!existsSync(fullPath) || extname(fullPath) !== ".ts") continue;
+    const text = readFileSync(fullPath, "utf-8");
+    const importPattern = /(?:from\s+["'](\.[^"']+)["']|import\(\s*["'](\.[^"']+)["']\s*\))/g;
+    for (const match of text.matchAll(importPattern)) {
+      const specifier = match[1] || match[2] || "";
+      if (!specifier.startsWith(".")) continue;
+      const base = slash(relative(releaseRoot, resolve(dirname(fullPath), specifier)));
+      const candidates = [
+        base,
+        `${base}.ts`,
+        `${base}.js`,
+        `${base}/index.ts`,
+        `${base}/module.ts`,
+      ];
+      const existing = candidates.find((candidate) => existsSync(join(releaseRoot, candidate)));
+      if (existing && !isManifestCovered(existing)) unresolvedImports.push(`${source} -> ${existing}`);
+    }
+  }
+  check("hotfix manifest covers managed TS imports", unresolvedImports.length === 0, unresolvedImports.length ? unresolvedImports.join("\n") : "relative imports covered");
 }
 
 function interceptorRiskDocsAudit(): void {

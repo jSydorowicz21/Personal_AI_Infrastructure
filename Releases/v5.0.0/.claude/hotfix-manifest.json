@@ -4,6 +4,10 @@
   "description": "Managed files safe to overlay into an existing PAI install without touching USER, MEMORY, settings, auth, hooks state, or framework config.",
   "entries": [
     {
+      "source": "hotfix-manifest.json",
+      "target": "hotfix-manifest.json"
+    },
+    {
       "source": "CLAUDE.md",
       "targets": {
         "claude": "CLAUDE.md",
@@ -29,8 +33,8 @@
       "target": "PAI/TOOLS/algorithm.ts"
     },
     {
-      "source": "PAI/TOOLS/lib/framework-agent.ts",
-      "target": "PAI/TOOLS/lib/framework-agent.ts"
+      "source": "PAI/TOOLS/lib",
+      "target": "PAI/TOOLS/lib"
     },
     {
       "source": "PAI/TOOLS/PaiDoctor.ts",
@@ -81,8 +85,20 @@
       "target": "PAI/TOOLS/HookSharedPathSmokeTest.ts"
     },
     {
-      "source": "PAI/PAI-Install/README.md",
-      "target": "PAI/PAI-Install/README.md"
+      "source": "PAI/TOOLS/MemoryDelete.ts",
+      "target": "PAI/TOOLS/MemoryDelete.ts"
+    },
+    {
+      "source": "PAI/TOOLS/FrameworkSmokeTest.ts",
+      "target": "PAI/TOOLS/FrameworkSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexBranchValidation.ts",
+      "target": "PAI/TOOLS/CodexBranchValidation.ts"
+    },
+    {
+      "source": "PAI/PAI-Install",
+      "target": "PAI/PAI-Install"
     },
     {
       "source": "PAI/ALGORITHM/LATEST",
@@ -121,6 +137,14 @@
       "target": "PAI/PULSE/setup.ts"
     },
     {
+      "source": "PAI/PULSE/manage.ps1",
+      "target": "PAI/PULSE/manage.ps1"
+    },
+    {
+      "source": "PAI/PULSE/toml.ts",
+      "target": "PAI/PULSE/toml.ts"
+    },
+    {
       "source": "PAI/PULSE/package.json",
       "target": "PAI/PULSE/package.json"
     },
@@ -129,28 +153,32 @@
       "target": "PAI/PULSE/bun.lock"
     },
     {
-      "source": "PAI/PULSE/modules/telegram.ts",
-      "target": "PAI/PULSE/modules/telegram.ts"
+      "source": "PAI/PULSE/Assistant",
+      "target": "PAI/PULSE/Assistant"
     },
     {
-      "source": "PAI/PULSE/modules/imessage.ts",
-      "target": "PAI/PULSE/modules/imessage.ts"
+      "source": "PAI/PULSE/checks",
+      "target": "PAI/PULSE/checks"
     },
     {
-      "source": "PAI/PULSE/checks/github-work.ts",
-      "target": "PAI/PULSE/checks/github-work.ts"
+      "source": "PAI/PULSE/lib",
+      "target": "PAI/PULSE/lib"
     },
     {
-      "source": "PAI/PULSE/Observability/next.config.ts",
-      "target": "PAI/PULSE/Observability/next.config.ts"
+      "source": "PAI/PULSE/modules",
+      "target": "PAI/PULSE/modules"
     },
     {
-      "source": "PAI/PULSE/Observability/public/pai-logo.png",
-      "target": "PAI/PULSE/Observability/public/pai-logo.png"
+      "source": "PAI/PULSE/Observability",
+      "target": "PAI/PULSE/Observability"
     },
     {
-      "source": "PAI/PULSE/Observability/out/pai-logo.png",
-      "target": "PAI/PULSE/Observability/out/pai-logo.png"
+      "source": "PAI/PULSE/Performance",
+      "target": "PAI/PULSE/Performance"
+    },
+    {
+      "source": "PAI/PULSE/VoiceServer",
+      "target": "PAI/PULSE/VoiceServer"
     },
     {
       "source": "MCPs",
@@ -159,6 +187,14 @@
     {
       "source": "hooks/StartupSelfCheck.hook.ts",
       "target": "hooks/StartupSelfCheck.hook.ts"
+    },
+    {
+      "source": "hooks/lib",
+      "target": "hooks/lib"
+    },
+    {
+      "source": "hooks/security",
+      "target": "hooks/security"
     },
     {
       "source": "hooks/RepeatDetection.hook.ts",
@@ -175,6 +211,10 @@
     {
       "source": "RTK.md",
       "target": "RTK.md"
+    },
+    {
+      "source": "commands",
+      "target": "commands"
     },
     {
       "source": "update-installed.sh",

@@ -28,7 +28,12 @@ function check(name: string, passed: boolean, detail: string): void {
 }
 
 function run(name: string, command: string, args: string[], options: { cwd?: string; env?: Record<string, string>; timeout?: number } = {}): void {
-  const result = spawnSync(command, args, {
+  const resolvedCommand = Bun.which(command) || command;
+  const spawnCommand = process.platform === "win32" && resolvedCommand.toLowerCase().endsWith(".cmd")
+    ? (process.env.ComSpec || "cmd.exe")
+    : resolvedCommand;
+  const spawnArgs = spawnCommand === resolvedCommand ? args : ["/d", "/c", resolvedCommand, ...args];
+  const result = spawnSync(spawnCommand, spawnArgs, {
     cwd: options.cwd || releaseRoot,
     env: { ...process.env, ...options.env },
     encoding: "utf-8",
@@ -38,7 +43,7 @@ function run(name: string, command: string, args: string[], options: { cwd?: str
   const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
   const detail = result.status === 0
     ? output.split(/\r?\n/).slice(-1)[0] || `${command} ${args.join(" ")}`
-    : `status=${result.status ?? "null"} signal=${result.signal ?? ""}\n${output.split(/\r?\n/).slice(-80).join("\n")}`;
+    : `status=${result.status ?? "null"} signal=${result.signal ?? ""} error=${result.error?.message || ""}\n${output.split(/\r?\n/).slice(-80).join("\n")}`;
   check(name, result.status === 0, detail);
 }
 
@@ -141,14 +146,35 @@ function validateHotfixDryRun(): void {
   const paiData = join(home, ".pai");
   mkdirSync(installRoot, { recursive: true });
   mkdirSync(paiData, { recursive: true });
-  run("hotfix dry-run", "bash", [
-    join(releaseRoot, "update-installed.sh"),
-    "--framework", "codex",
-    "--install-root", installRoot,
-    "--source-dir", repoRoot,
-    "--no-pull",
-    "--dry-run",
-  ], {
+  const command = process.platform === "win32" ? "powershell" : "bash";
+  const args = process.platform === "win32"
+    ? [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        join(releaseRoot, "update-installed.ps1"),
+        "-Framework",
+        "codex",
+        "-InstallRoot",
+        installRoot,
+        "-SourceDir",
+        repoRoot,
+        "-NoPull",
+        "-DryRun",
+      ]
+    : [
+        join(releaseRoot, "update-installed.sh"),
+        "--framework",
+        "codex",
+        "--install-root",
+        installRoot,
+        "--source-dir",
+        repoRoot,
+        "--no-pull",
+        "--dry-run",
+      ];
+  run("hotfix dry-run", command, args, {
     cwd: repoRoot,
     env: {
       HOME: home,
@@ -175,6 +201,8 @@ function main(): void {
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "PAI/TOOLS/FrameworkSmokeTest.ts",
+      "PAI/TOOLS/MemoryDelete.ts",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),
@@ -208,6 +236,7 @@ function main(): void {
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
+    run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);

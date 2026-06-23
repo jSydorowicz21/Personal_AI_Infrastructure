@@ -699,13 +699,22 @@ These are the proof commands used during the port:
 ```bash
 bun PAI/TOOLS/CodexFreshInstallSmokeTest.ts
 bun PAI/TOOLS/InstallerCodexSmokeTest.ts
+bun PAI/TOOLS/FrameworkSmokeTest.ts
+bun PAI/TOOLS/PaiSecurityAuditSmokeTest.ts
 bun PAI/TOOLS/CodexBranchValidation.ts
 bun ~/.codex/PAI/TOOLS/pai.ts doctor
 ```
 
-Representative passing state after the final `$Interview` fix:
+Current passing state for the Codex/Windows parity branch:
 
-- `CodexBranchValidation.ts`: 15 checks passed.
-- Live doctor: 26 critical checks passed, optional token reminders only.
+- Windows `CodexBranchValidation.ts`: 17 checks passed.
+- WSL Ubuntu `CodexBranchValidation.ts`: 17 checks passed.
+- `FrameworkSmokeTest.ts`: isolated and shared-sequence switching passed for Claude, Codex, and OpenCode with shared `PAI_DATA_DIR`.
+- `PaiSecurityAuditSmokeTest.ts`: hotfix manifest avoids protected state/config, all manifest sources exist, and managed TypeScript imports are covered.
+- Live Codex doctor: 25 critical checks passed, with optional token reminders only.
 - Pulse `/health`: HTTP 200.
 - Served Pulse assistant page: shows `$Interview` and `~/.pai/USER/DA/`.
+
+## Remaining Parity Boundary
+
+The Windows and Linux proof paths are live-run in this branch. macOS parity is covered by shared POSIX installer/update paths and the same framework/runtime tests, but a real macOS host was not available in this validation environment. Do not claim macOS native parity as fully proven until `CodexBranchValidation.ts`, `FrameworkSmokeTest.ts`, and `pai.ts doctor` pass on a macOS install.

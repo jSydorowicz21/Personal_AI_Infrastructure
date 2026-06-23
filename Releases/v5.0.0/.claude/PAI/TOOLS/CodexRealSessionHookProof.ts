@@ -57,28 +57,36 @@ mkdirSync(join(dataDir, "MEMORY", "OBSERVABILITY"), { recursive: true });
 const codexPath = Bun.which("codex") || "";
 const marker = `pai-real-codex-hook-proof-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const beforeLog = readLog();
+const proofCommand = process.platform === "win32"
+  ? `Write-Output '${marker}'`
+  : `printf '${marker}\\n'`;
 const prompt = [
   "Run exactly this shell command and then stop.",
   "Do not run any other commands.",
   "",
-  `printf '${marker}\\n'`,
+  proofCommand,
 ].join("\n");
 
+const codexArgs = [
+  "exec",
+  "--skip-git-repo-check",
+  "--cd",
+  home,
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--dangerously-bypass-hook-trust",
+  "-c",
+  "mcp_servers={}",
+  "--json",
+  "-",
+];
+const spawnCommand = process.platform === "win32" && codexPath.toLowerCase().endsWith(".cmd")
+  ? (process.env.ComSpec || "cmd.exe")
+  : codexPath;
+const spawnArgs = spawnCommand === codexPath ? codexArgs : ["/d", "/c", codexPath, ...codexArgs];
+
 const run = codexPath
-  ? spawnSync(codexPath, [
-      "exec",
-      "--skip-git-repo-check",
-      "--cd",
-      home,
-      "--sandbox",
-      "danger-full-access",
-      "--dangerously-bypass-hook-trust",
-      "-c",
-      "mcp_servers={}",
-      "--json",
-      prompt,
-    ], {
-      input: "",
+  ? spawnSync(spawnCommand, spawnArgs, {
+      input: prompt,
       encoding: "utf-8",
       timeout: 90_000,
       env: {

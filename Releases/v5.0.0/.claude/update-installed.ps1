@@ -33,8 +33,10 @@ function Resolve-AbsolutePath([string]$Path) {
   return [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
 }
 
+$EffectiveHome = if ($env:HOME) { Resolve-AbsolutePath $env:HOME } else { Resolve-AbsolutePath $HOME }
+
 function Read-FrameworkState {
-  $statePath = Join-Path $HOME ".pai\framework.json"
+  $statePath = Join-Path $EffectiveHome ".pai\framework.json"
   if (-not (Test-Path -LiteralPath $statePath)) { return $null }
   try {
     return Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
@@ -63,9 +65,9 @@ function Resolve-Target {
   if (-not $fw -and $env:PAI_FRAMEWORK) { $fw = Normalize-Framework $env:PAI_FRAMEWORK }
   if (-not $fw -and $state -and $state.active) { $fw = Normalize-Framework $state.active }
   if (-not $fw) {
-    if ($env:CODEX_HOME -or (Test-Path -LiteralPath (Join-Path $HOME ".codex"))) { $fw = "codex" }
-    elseif ($env:CLAUDE_HOME -or (Test-Path -LiteralPath (Join-Path $HOME ".claude"))) { $fw = "claude" }
-    elseif ($env:OPENCODE_CONFIG_DIR -or (Test-Path -LiteralPath (Join-Path $HOME ".config\opencode"))) { $fw = "opencode" }
+    if ($env:CODEX_HOME -or (Test-Path -LiteralPath (Join-Path $EffectiveHome ".codex"))) { $fw = "codex" }
+    elseif ($env:CLAUDE_HOME -or (Test-Path -LiteralPath (Join-Path $EffectiveHome ".claude"))) { $fw = "claude" }
+    elseif ($env:OPENCODE_CONFIG_DIR -or (Test-Path -LiteralPath (Join-Path $EffectiveHome ".config\opencode"))) { $fw = "opencode" }
   }
   if (-not $fw) { throw "Could not determine framework. Pass -Framework codex|claude|opencode." }
 
@@ -75,9 +77,9 @@ function Resolve-Target {
   }
   if (-not $root) {
     switch ($fw) {
-      "codex" { $root = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" } }
-      "claude" { $root = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $HOME ".claude" } }
-      "opencode" { $root = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } else { Join-Path $HOME ".config\opencode" } }
+      "codex" { $root = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $EffectiveHome ".codex" } }
+      "claude" { $root = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $EffectiveHome ".claude" } }
+      "opencode" { $root = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\opencode" } }
     }
   }
 
@@ -221,7 +223,7 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
 
   if ($Framework -eq "codex" -and $Entry.mirrorToCodexAgentsSkills -and $targetRel.StartsWith("skills\")) {
     $skillName = Split-Path -Leaf $targetRel
-    $agentsSkillRoot = if ($AgentsSkillsRoot) { Resolve-AbsolutePath $AgentsSkillsRoot } else { Join-Path $HOME ".agents\skills" }
+    $agentsSkillRoot = if ($AgentsSkillsRoot) { Resolve-AbsolutePath $AgentsSkillsRoot } else { Join-Path $EffectiveHome ".agents\skills" }
     $agentsTarget = Join-Path $agentsSkillRoot $skillName
     Backup-Existing $InstallRoot $agentsTarget $BackupRoot | Out-Null
     New-Item -ItemType Directory -Force -Path $agentsSkillRoot | Out-Null
@@ -276,7 +278,7 @@ try {
   Info "Manifest: $manifestFile"
 
   $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-  $backupRoot = Join-Path $HOME ".pai\BACKUPS\hotfix-$stamp"
+  $backupRoot = Join-Path $EffectiveHome ".pai\BACKUPS\hotfix-$stamp"
   if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
     Info "Backups: $backupRoot"

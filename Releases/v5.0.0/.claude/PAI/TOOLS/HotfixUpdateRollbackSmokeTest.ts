@@ -92,15 +92,34 @@ write(join(installRoot, "auth.json"), sentinels.auth);
 write(join(installRoot, "PAI", "USER", "profile.md"), sentinels.user);
 write(join(installRoot, "MEMORY", "STATE", "state.json"), sentinels.memory);
 
-const updateArgs = [
-  join(releaseRoot, "update-installed.sh"),
-  "--framework", "codex",
-  "--install-root", installRoot,
-  "--no-pull",
-];
-if (!remote) updateArgs.push("--source-dir", repoSourceRoot);
+const updateCommand = process.platform === "win32" ? "powershell" : "bash";
+const updateArgs = process.platform === "win32"
+  ? [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      join(releaseRoot, "update-installed.ps1"),
+      "-Framework",
+      "codex",
+      "-InstallRoot",
+      installRoot,
+      "-NoPull",
+    ]
+  : [
+      join(releaseRoot, "update-installed.sh"),
+      "--framework",
+      "codex",
+      "--install-root",
+      installRoot,
+      "--no-pull",
+    ];
+if (!remote) {
+  if (process.platform === "win32") updateArgs.push("-SourceDir", repoSourceRoot);
+  else updateArgs.push("--source-dir", repoSourceRoot);
+}
 
-const update = spawnSync("bash", updateArgs, {
+const update = spawnSync(updateCommand, updateArgs, {
   cwd: repoRoot,
   encoding: "utf-8",
   timeout: 180_000,
