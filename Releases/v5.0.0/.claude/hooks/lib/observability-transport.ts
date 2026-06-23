@@ -14,6 +14,12 @@ import { join } from 'path';
 import type { ObservabilityTarget } from './identity';
 import { getEnvPath, getMemoryDir } from './paths';
 
+function debug(message: string): void {
+  if (process.env.PAI_HOOK_DEBUG === '1') {
+    process.stderr.write(message);
+  }
+}
+
 function readEnvOrPaiEnv(keys: readonly string[]): string {
   for (const k of keys) {
     const v = process.env[k];
@@ -53,7 +59,7 @@ function getCFAccountId(): string {
   const value = readEnvOrPaiEnv(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID'] as const);
   if (value) return value;
 
-  process.stderr.write(
+  debug(
     '[observability-transport] CLOUDFLARE_ACCOUNT_ID / CF_ACCOUNT_ID missing; CF KV transport will be skipped\n'
   );
   return '';
@@ -63,7 +69,7 @@ function getCFNamespaceId(): string {
   const value = readEnvOrPaiEnv(['CLOUDFLARE_KV_NAMESPACE_ID', 'CF_KV_NAMESPACE_ID'] as const);
   if (value) return value;
 
-  process.stderr.write(
+  debug(
     '[observability-transport] CLOUDFLARE_KV_NAMESPACE_ID / CF_KV_NAMESPACE_ID missing; CF KV transport will be skipped\n'
   );
   return '';
@@ -189,7 +195,7 @@ async function pushToCFKV(key: string, body: string): Promise<void> {
 
   const token = getCFToken();
   if (!token) {
-    process.stderr.write(
+    debug(
       `[pushToCFKV] ${key}: no CF token resolved (set CLOUDFLARE_API_TOKEN or CLOUDFLARE_API_TOKEN_WORKERS_EDIT in PAI env)\n`
     );
     return;

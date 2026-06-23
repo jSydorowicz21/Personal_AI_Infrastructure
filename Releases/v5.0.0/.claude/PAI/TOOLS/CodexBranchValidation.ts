@@ -204,6 +204,7 @@ function main(): void {
       "PAI/TOOLS/FrameworkSmokeTest.ts",
       "PAI/TOOLS/MemoryDelete.ts",
       "hooks/FrameworkHookAdapter.ts",
+      "hooks/ToolActivityTracker.hook.ts",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),

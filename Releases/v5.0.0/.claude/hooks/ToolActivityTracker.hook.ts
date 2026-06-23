@@ -11,7 +11,8 @@
  * OUTPUTS:
  * - MEMORY/OBSERVABILITY/tool-activity.jsonl (structured event log)
  *
- * PERFORMANCE: <25ms typical (adds one git rev-parse on write-class tools)
+ * PERFORMANCE: local capture stays synchronous; external observability fan-out
+ * is bounded so PostToolUse cannot stall ordinary tool calls.
  */
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
@@ -31,6 +32,7 @@ interface ToolUseInput {
 
 const OBS_DIR = memoryPath('OBSERVABILITY');
 const ACTIVITY_FILE = join(OBS_DIR, 'tool-activity.jsonl');
+const OBSERVABILITY_PUSH_BUDGET_MS = Number(process.env.PAI_TOOL_ACTIVITY_PUSH_BUDGET_MS || '750');
 
 // Tools that mutate filesystem state — capture extra ground truth.
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
@@ -105,6 +107,28 @@ function captureGroundTruth(toolName: string, input: Record<string, unknown>, re
   return Object.keys(gt).length > 0 ? gt : undefined;
 }
 
+async function pushObservabilityBounded(wroteState: boolean): Promise<void> {
+  if (OBSERVABILITY_PUSH_BUDGET_MS <= 0) return;
+
+  const pushes: Promise<void>[] = [pushEventsToTargets()];
+  if (wroteState) pushes.push(pushStateToTargets());
+
+  let timedOut = false;
+  await Promise.race([
+    Promise.allSettled(pushes).then(() => undefined),
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, OBSERVABILITY_PUSH_BUDGET_MS);
+    }),
+  ]);
+
+  if (timedOut && process.env.PAI_HOOK_DEBUG === '1') {
+    console.error(`[ToolActivityTracker] observability push exceeded ${OBSERVABILITY_PUSH_BUDGET_MS}ms; local event already captured`);
+  }
+}
+
 async function main() {
   try {
     const input = await readStdin();
@@ -144,9 +168,7 @@ async function main() {
     // and the session disappears mid-work.
     const wrote = data.session_id ? bumpLastToolActivity(data.session_id) : false;
 
-    const pushes: Promise<void>[] = [pushEventsToTargets()];
-    if (wrote) pushes.push(pushStateToTargets());
-    await Promise.all(pushes);
+    await pushObservabilityBounded(wrote);
   } catch (e) {
     console.error('[ToolActivityTracker]', e instanceof Error ? e.message : String(e));
   }

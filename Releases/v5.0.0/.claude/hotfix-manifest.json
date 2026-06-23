@@ -193,6 +193,10 @@
       "target": "hooks/ContextReduction.hook.sh"
     },
     {
+      "source": "hooks/ToolActivityTracker.hook.ts",
+      "target": "hooks/ToolActivityTracker.hook.ts"
+    },
+    {
       "source": "hooks/StartupSelfCheck.hook.ts",
       "target": "hooks/StartupSelfCheck.hook.ts"
     },

@@ -186,6 +186,7 @@ function hotfixManifestAudit(): void {
     "PAI/TOOLS/MemoryDelete.ts",
     "hooks/FrameworkHookAdapter.ts",
     "hooks/ContextReduction.hook.sh",
+    "hooks/ToolActivityTracker.hook.ts",
   ];
   const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));
   check("hotfix manifest includes parity runtime files", missingManagedSources.length === 0, missingManagedSources.length ? missingManagedSources.join(", ") : requiredManagedSources.join(", "));
