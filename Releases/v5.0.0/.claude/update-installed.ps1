@@ -101,10 +101,18 @@ function Resolve-PaiDataDir {
   return $defaultDataDir
 }
 
+function Resolve-PaiConfigDir {
+  if ($env:PAI_CONFIG_DIR) {
+    $envConfigDir = Resolve-AbsolutePath $env:PAI_CONFIG_DIR
+    if (Test-Path -LiteralPath $envConfigDir) { return $envConfigDir }
+  }
+  return (Join-Path $EffectiveHome ".config\PAI")
+}
+
 function Set-PaiUserEnvironment([string]$InstallRoot, [string]$Framework) {
   $dataDir = Resolve-PaiDataDir
   $paiDir = Join-Path $InstallRoot "PAI"
-  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+  $configDir = Resolve-PaiConfigDir
 
   $values = @{
     PAI_DIR = $paiDir
@@ -395,7 +403,7 @@ await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJs
   Set-Content -LiteralPath $scriptPath -Value $script -NoNewline
 
   $dataDir = Resolve-PaiDataDir
-  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+  $configDir = Resolve-PaiConfigDir
 
   Push-Location $InstallRoot
   try {
@@ -422,7 +430,7 @@ function Get-PowerShellProfileCandidates {
 function Get-PaiPowerShellBlock([string]$InstallRoot, [string]$Framework) {
   $dataDir = Resolve-PaiDataDir
   $paiDir = Join-Path $InstallRoot "PAI"
-  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+  $configDir = Resolve-PaiConfigDir
   $paiScript = Join-Path $paiDir "TOOLS\pai.ts"
   $qData = $dataDir.Replace("'", "''")
   $qRoot = $InstallRoot.Replace("'", "''")

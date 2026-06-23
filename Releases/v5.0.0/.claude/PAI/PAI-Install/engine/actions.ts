@@ -95,6 +95,12 @@ function envHome(): string {
   return process.env.HOME || process.env.USERPROFILE || homedir();
 }
 
+function resolveConfigDir(): string {
+  return process.env.PAI_CONFIG_DIR && existsSync(process.env.PAI_CONFIG_DIR)
+    ? process.env.PAI_CONFIG_DIR
+    : join(envHome(), ".config", "PAI");
+}
+
 async function emitSectionHeader(
   emit: EngineEventHandler,
   sectionId: string,
@@ -804,7 +810,7 @@ function setWindowsPaiUserEnvironment(root: string, dataDir: string, framework: 
     PAI_FRAMEWORK_DIR: root,
     PAI_FRAMEWORK: framework,
     PAI_DATA_DIR: dataDir,
-    PAI_CONFIG_DIR: process.env.PAI_CONFIG_DIR || join(envHome(), ".config", "PAI"),
+    PAI_CONFIG_DIR: resolveConfigDir(),
   };
   Object.assign(process.env, env);
 

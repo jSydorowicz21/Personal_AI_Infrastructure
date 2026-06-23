@@ -37,7 +37,9 @@ const HOME = homedir();
 const CURRENT_PAI_DIR = join(import.meta.dir, "..");
 const CURRENT_INSTALL_ROOT = join(CURRENT_PAI_DIR, "..");
 const DATA_DIR = process.env.PAI_DATA_DIR || join(HOME, ".pai");
-const CONFIG_DIR = process.env.PAI_CONFIG_DIR || join(HOME, ".config", "PAI");
+const CONFIG_DIR = process.env.PAI_CONFIG_DIR && existsSync(process.env.PAI_CONFIG_DIR)
+  ? process.env.PAI_CONFIG_DIR
+  : join(HOME, ".config", "PAI");
 const FRAMEWORK_STATE = join(DATA_DIR, "framework.json");
 const BANNER_SCRIPT = join(import.meta.dir, "Banner.ts");
 const VOICE_SERVER = "http://localhost:31337/notify/personality";
