@@ -12,7 +12,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { join, resolve, sep } from 'path';
 
 /**
  * Expand shell variables in a path string
@@ -21,10 +21,12 @@ import { join, resolve } from 'path';
 export function expandPath(path: string): string {
   const home = homedir();
 
-  return path
+  const expanded = path
     .replace(/^\$HOME(?=\/|\\|$)/, home)
     .replace(/^\$\{HOME\}(?=\/|\\|$)/, home)
     .replace(/^~(?=\/|\\|$)/, home);
+
+  return sep === '\\' ? expanded : expanded.replace(/\\/g, sep);
 }
 
 type FrameworkState = {
