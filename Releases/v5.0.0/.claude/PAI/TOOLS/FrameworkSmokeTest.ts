@@ -428,6 +428,15 @@ const base = uniqueRoot();
 const frameworks: Framework[] = ["claude", "codex", "opencode"];
 const isolatedResults = frameworks.map((framework) => runSwitch(framework, join(base, `${framework}-case`)));
 const sequenceBase = join(base, "switch-sequence");
+const sequenceData = join(sequenceBase, "pai-data");
+const memoryMarker = join(sequenceData, "MEMORY", "STATE", "provider-swap-memory.md");
+const userMarker = join(sequenceData, "USER", "PROJECTS", "provider-swap-user.md");
+const memoryMarkerText = `provider-swap-memory:${Date.now()}`;
+const userMarkerText = `provider-swap-user:${Date.now()}`;
+mkdirSync(join(sequenceData, "MEMORY", "STATE"), { recursive: true });
+mkdirSync(join(sequenceData, "USER", "PROJECTS"), { recursive: true });
+writeFileSync(memoryMarker, memoryMarkerText, "utf-8");
+writeFileSync(userMarker, userMarkerText, "utf-8");
 const sequenceResults = frameworks.map((framework) => runSwitch(framework, sequenceBase));
 let failed = 0;
 
@@ -450,7 +459,7 @@ for (const [index, framework] of frameworks.entries()) {
 }
 
 const sequenceDataDirs = new Set(sequenceResults.map((result) => result.data));
-const finalStatePath = join(sequenceBase, "pai-data", "framework.json");
+const finalStatePath = join(sequenceData, "framework.json");
 const finalState = existsSync(finalStatePath) ? readJson(finalStatePath) : {};
 const sequenceChecks: Check[] = [
   {
@@ -464,6 +473,20 @@ const sequenceChecks: Check[] = [
     detail: JSON.stringify({ active: finalState.active, dataDir: finalState.dataDir }),
   },
 ];
+for (const result of sequenceResults) {
+  const memoryPath = join(result.root, "PAI", "MEMORY", "STATE", "provider-swap-memory.md");
+  const userPath = join(result.root, "PAI", "USER", "PROJECTS", "provider-swap-user.md");
+  sequenceChecks.push({
+    name: `${finalState.active ? result.root.split(/[\\/]/).pop() : "framework"} sees shared memory marker`,
+    passed: existsSync(memoryPath) && readFileSync(memoryPath, "utf-8") === memoryMarkerText,
+    detail: memoryPath,
+  });
+  sequenceChecks.push({
+    name: `${finalState.active ? result.root.split(/[\\/]/).pop() : "framework"} sees shared user marker`,
+    passed: existsSync(userPath) && readFileSync(userPath, "utf-8") === userMarkerText,
+    detail: userPath,
+  });
+}
 printResult("shared switch sequence", sequenceChecks);
 failed += sequenceChecks.filter((check) => !check.passed).length;
 

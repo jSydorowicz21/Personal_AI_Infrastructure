@@ -203,6 +203,7 @@ function main(): void {
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "PAI/TOOLS/FrameworkSmokeTest.ts",
       "PAI/TOOLS/MemoryDelete.ts",
+      "hooks/FrameworkHookAdapter.ts",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),

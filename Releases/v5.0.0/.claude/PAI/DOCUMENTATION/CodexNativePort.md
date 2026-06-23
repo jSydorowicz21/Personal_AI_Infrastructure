@@ -712,7 +712,7 @@ Current passing state for the Codex/Windows parity branch:
 - GitHub Actions `windows-latest` `CodexBranchValidation.ts`: passed.
 - GitHub Actions `ubuntu-latest` `CodexBranchValidation.ts`: passed.
 - GitHub Actions `macos-latest` `CodexBranchValidation.ts`: passed.
-- `FrameworkSmokeTest.ts`: isolated and shared-sequence switching passed for Claude, Codex, and OpenCode with shared `PAI_DATA_DIR`.
+- `FrameworkSmokeTest.ts`: isolated and shared-sequence switching passed for Claude, Codex, and OpenCode with shared `PAI_DATA_DIR`; the shared sequence seeds memory/user marker files and verifies each provider sees the same contents through its own `PAI/MEMORY` and `PAI/USER` paths.
 - `PaiSecurityAuditSmokeTest.ts`: hotfix manifest avoids protected state/config, all manifest sources exist, and managed TypeScript imports are covered.
 - Live Codex doctor: 25 critical checks passed, with optional token reminders only.
 - Pulse `/health`: HTTP 200.

@@ -184,9 +184,11 @@ function hotfixManifestAudit(): void {
     "PAI/TOOLS/CodexBranchValidation.ts",
     "PAI/TOOLS/FrameworkSmokeTest.ts",
     "PAI/TOOLS/MemoryDelete.ts",
+    "hooks/FrameworkHookAdapter.ts",
+    "hooks/ContextReduction.hook.sh",
   ];
   const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));
-  check("hotfix manifest includes parity validators", missingManagedSources.length === 0, missingManagedSources.length ? missingManagedSources.join(", ") : requiredManagedSources.join(", "));
+  check("hotfix manifest includes parity runtime files", missingManagedSources.length === 0, missingManagedSources.length ? missingManagedSources.join(", ") : requiredManagedSources.join(", "));
 
   const unresolvedImports: string[] = [];
   for (const source of sourceEntries) {

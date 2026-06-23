@@ -185,6 +185,14 @@
       "target": "MCPs"
     },
     {
+      "source": "hooks/FrameworkHookAdapter.ts",
+      "target": "hooks/FrameworkHookAdapter.ts"
+    },
+    {
+      "source": "hooks/ContextReduction.hook.sh",
+      "target": "hooks/ContextReduction.hook.sh"
+    },
+    {
       "source": "hooks/StartupSelfCheck.hook.ts",
       "target": "hooks/StartupSelfCheck.hook.ts"
     },
