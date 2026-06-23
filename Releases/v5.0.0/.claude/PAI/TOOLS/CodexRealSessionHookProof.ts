@@ -48,7 +48,7 @@ function outputTail(stdout: string, stderr: string): string {
 
 function runDetail(): string {
   if (!run) return "codex not found";
-  if (run.status === 0) return `status=0 marker=${marker}`;
+  if (run.status === 0) return `status=0 marker=${marker} attempt=${attemptUsed}`;
   return outputTail(run.stdout || "", run.stderr || "") || `status=${run.status ?? "null"}`;
 }
 
@@ -67,18 +67,6 @@ function waitForLogMarker(beforeLength: number, needle: string, timeoutMs = 15_0
 mkdirSync(join(dataDir, "MEMORY", "OBSERVABILITY"), { recursive: true });
 
 const codexPath = Bun.which("codex") || "";
-const marker = `pai-real-codex-hook-proof-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-const beforeLog = readLog();
-const proofCommand = process.platform === "win32"
-  ? `Write-Output '${marker}'`
-  : `printf '${marker}\\n'`;
-const prompt = [
-  "Run exactly this shell command and then stop.",
-  "Do not run any other commands.",
-  "",
-  proofCommand,
-].join("\n");
-
 const codexArgs = [
   "exec",
   "--skip-git-repo-check",
@@ -96,8 +84,27 @@ const spawnCommand = process.platform === "win32" && codexPath.toLowerCase().end
   : codexPath;
 const spawnArgs = spawnCommand === codexPath ? codexArgs : ["/d", "/c", codexPath, ...codexArgs];
 
-const run = codexPath
-  ? spawnSync(spawnCommand, spawnArgs, {
+let marker = "";
+let attemptUsed = 0;
+let run: ReturnType<typeof spawnSync> | null = null;
+let logDelta = "";
+
+const maxAttempts = Math.max(1, Number(process.env.PAI_REAL_CODEX_PROOF_ATTEMPTS || "2"));
+for (let attempt = 1; codexPath && attempt <= maxAttempts; attempt++) {
+  attemptUsed = attempt;
+  marker = `pai-real-codex-hook-proof-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const beforeLog = readLog();
+  const proofCommand = process.platform === "win32"
+    ? `Write-Output '${marker}'`
+    : `printf '${marker}\\n'`;
+  const prompt = [
+    "Use the shell tool to run exactly this command now, then stop.",
+    "Do not explain. Do not run any other command.",
+    "",
+    proofCommand,
+  ].join("\n");
+
+  run = spawnSync(spawnCommand, spawnArgs, {
       input: prompt,
       encoding: "utf-8",
       timeout: 120_000,
@@ -111,10 +118,11 @@ const run = codexPath
         PAI_SETTINGS_PATH: join(frameworkRoot, "settings.json"),
         PAI_CONFIG_DIR: process.env.PAI_CONFIG_DIR || join(home, ".config", "PAI"),
       },
-    })
-  : null;
-
-const logDelta = waitForLogMarker(beforeLog.length, marker);
+    });
+  logDelta = waitForLogMarker(beforeLog.length, marker, 30_000);
+  const commandEvent = Boolean(run.stdout?.includes('"type":"command_execution"') && run.stdout.includes(marker));
+  if (run.status === 0 && commandEvent && logDelta.includes(marker)) break;
+}
 
 const checks: Check[] = [
   check("codex executable found", Boolean(codexPath), codexPath || "$PATH"),

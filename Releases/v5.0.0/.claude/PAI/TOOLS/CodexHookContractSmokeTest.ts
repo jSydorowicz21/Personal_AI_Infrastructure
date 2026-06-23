@@ -8,7 +8,7 @@
  */
 
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -26,7 +26,7 @@ type Check = {
 
 const keep = process.argv.includes("--keep");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
-const home = process.env.HOME || "";
+const home = process.env.HOME || homedir();
 const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || (existsSync(join(home, ".codex")) ? join(home, ".codex") : releaseRoot);
 const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
 const adapter = join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts");
@@ -92,6 +92,21 @@ function configuredHooks(): HookCase[] {
     { event: "Stop", matcher: "*", target: "VoiceCompletion.hook.ts" },
     { event: "Stop", matcher: "*", target: "DocIntegrity.hook.ts" },
   ]);
+}
+
+function hasExplicitMatcherForTarget(targetName: string, expectedMatcher: string): boolean {
+  if (!existsSync(hooksJsonPath)) return true;
+  const parsed = JSON.parse(readFileSync(hooksJsonPath, "utf-8"));
+  for (const groups of Object.values(parsed.hooks || {})) {
+    for (const group of Array.isArray(groups) ? groups : []) {
+      for (const hook of Array.isArray(group.hooks) ? group.hooks : []) {
+        if (hook?.type !== "command" || typeof hook.command !== "string") continue;
+        if (extractTarget(hook.command) !== targetName) continue;
+        return Object.hasOwn(group, "matcher") && String(group.matcher) === expectedMatcher;
+      }
+    }
+  }
+  return false;
 }
 
 function uniqueCases(cases: HookCase[]): HookCase[] {
@@ -241,6 +256,11 @@ try {
 
   const cases = configuredHooks();
   check("Codex hook targets discovered", cases.length > 0, `${cases.length} target/event pair(s)`);
+  check(
+    "ToolActivityTracker has explicit catch-all matcher",
+    hasExplicitMatcherForTarget("ToolActivityTracker.hook.ts", "*"),
+    hooksJsonPath,
+  );
 
   for (const item of cases) {
     const targetPath = join(frameworkRoot, "hooks", item.target);

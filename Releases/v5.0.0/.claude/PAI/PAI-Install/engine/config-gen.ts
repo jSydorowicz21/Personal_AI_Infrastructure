@@ -292,6 +292,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           ],
         },
         {
+          matcher: "*",
           hooks: [
             commandHook(config, "ToolActivityTracker.hook.ts", 5),
           ],
