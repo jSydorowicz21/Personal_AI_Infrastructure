@@ -451,7 +451,7 @@ Once PAI is running, kick off the phased interview to populate your TELOS, ident
 For Codex:
 
 ```
-/prompts:interview
+$Interview
 ```
 
 For Claude Code:

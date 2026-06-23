@@ -2508,7 +2508,7 @@ function handleOnboardingState(): Response {
   return Response.json({
     templateMode,
     daName,
-    interviewCommand: activeFramework() === "codex" ? "/prompts:interview" : "/interview",
+    interviewCommand: activeFramework() === "codex" ? "$Interview" : "/interview",
   })
 }
 
