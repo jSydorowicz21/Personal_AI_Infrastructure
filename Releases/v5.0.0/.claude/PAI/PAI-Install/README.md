@@ -446,7 +446,15 @@ This reloads your shell config and launches PAI for the first time. The installe
 
 ### First-run: populate your personal context
 
-Once PAI is running, kick off the phased interview to populate your TELOS, identity, preferences, and life dimensions:
+Once PAI is running, kick off the phased interview to populate your TELOS, identity, preferences, and life dimensions.
+
+For Codex:
+
+```
+/prompts:interview
+```
+
+For Claude Code:
 
 ```
 /interview
@@ -459,7 +467,7 @@ The interview is conversational and resumable. It runs in 4 phases:
 3. **Phase 3 - Preferences:** Books, Authors, Bands, Movies, Restaurants, Food, Learning, Civic
 4. **Phase 4 - Identity:** Light review of PRINCIPAL_IDENTITY and current state
 
-Each section is skippable. If you have existing data (Obsidian, Notion, journals, prior PAI install), bring it in via the `Migrate` skill **before** running `/interview` - it intakes external content, classifies chunks against the PAI taxonomy, and writes them into the right files with provenance, so the interview only fills the genuine gaps.
+Each section is skippable. If you have existing data (Obsidian, Notion, journals, prior PAI install), bring it in via the `Migrate` skill **before** running the interview - it intakes external content, classifies chunks against the PAI taxonomy, and writes them into the right files with provenance, so the interview only fills the genuine gaps.
 
 ---
 

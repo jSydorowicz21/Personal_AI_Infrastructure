@@ -21,7 +21,7 @@ export default function EmptyStateGuide({
   section,
   description,
   userDir,
-  interviewCommand = "/interview",
+  interviewCommand = "/prompts:interview",
   daPromptExample,
   hideInterview = false,
 }: EmptyStateGuideProps) {

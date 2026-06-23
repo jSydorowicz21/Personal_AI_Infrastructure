@@ -41,7 +41,7 @@ PAI's v5.0.0 release was originally shaped around Claude Code's filesystem, sett
 | `ac0bd3e` | Prevented fresh install smoke from touching user shell profile. | Ensured tests use isolated temp profiles and cannot corrupt a real user's shell config. |
 | `793b6cf` | Defaulted Codex PAI sessions to high reasoning. | Made Codex PAI start at the reasoning level expected for Life OS work without manual `/model` selection. |
 | `31b28ae` | Used extra high reasoning for Codex plan mode. | Raised plan-mode depth for complex planning while preserving high as the normal default. |
-| `3e3ca19` | Added Codex interview onboarding prompt. | Closed the Pulse onboarding gap by making `/interview` a real Codex slash prompt. |
+| `3e3ca19` | Added Codex interview onboarding prompt. | Closed the Pulse onboarding gap by generating `prompts/interview.md`, invoked in Codex as `/prompts:interview`. |
 
 ## Framework Abstraction
 
@@ -327,11 +327,11 @@ What changed:
 - Added `codexPromptContent()` to convert Claude-style skill redirects into Codex prompt syntax:
   - `Skill("ContextSearch", "$ARGUMENTS")` becomes `$ContextSearch $ARGUMENTS`
   - `Skill("Interview", "$ARGUMENTS")` becomes `$Interview $ARGUMENTS`
-- Added `/interview` command source and validation.
+- Added `commands/interview.md` command source and validation for Codex's generated `/prompts:interview` prompt.
 
 Why necessary:
 
-Codex slash commands live in `prompts/`, while PAI's command source files are Claude-style markdown commands. Codex needed generated prompts with Codex-native skill invocation syntax. `/interview` was especially important because Pulse onboarding already told users to run it.
+Codex custom prompts live in `prompts/` and are invoked with the `/prompts:<name>` namespace, while PAI's command source files are Claude-style markdown commands. Codex needed generated prompts with Codex-native skill invocation syntax. The Interview prompt was especially important because Pulse onboarding already told users to run the interview.
 
 ## Agents and Skills
 
@@ -469,7 +469,7 @@ What changed:
 - Made `k prompt` feed one-shot Codex prompts through `codex exec` stdin.
 - Updated observability onboarding and static export to show `~/.pai/USER/...`.
 - Pinned Pulse Observability's Next tracing root and build id for deterministic static exports.
-- Kept `/interview` as the onboarding command and added the actual Codex prompt for it.
+- Kept `/interview` as the Claude onboarding command and added the actual Codex `/prompts:interview` prompt for it.
 - Adjusted voice, Telegram, iMessage, syslog, user-index, wiki, and scheduled checks for path/runtime parity.
 
 Why necessary:
@@ -525,7 +525,7 @@ Files:
 What changed:
 
 - Added `k doctor` for live Codex runtime health.
-- Doctor checks active framework, Codex root, `AGENTS.md`, `RTK.md`, config, hooks, `/interview`, MCP profiles, shared data, Pulse health, hook smoke tests, real session hook proof, hotfix rollback, and fresh install.
+- Doctor checks active framework, Codex root, `AGENTS.md`, `RTK.md`, config, hooks, `/prompts:interview`, MCP profiles, shared data, Pulse health, hook smoke tests, real session hook proof, hotfix rollback, and fresh install.
 - Fresh install smoke uses isolated `HOME`, `CODEX_HOME`, `PAI_DATA_DIR`, `PAI_CONFIG_DIR`, and shell profile paths.
 - Installer smoke verifies config preservation, hooks, agents, prompts, Pulse modules, backup creation, and Windows manager installation.
 - Branch validation runs build, JSON parsing, security, hooks, fresh install, installer smoke, hotfix dry-run, stale URL scan, and doctor docs discovery.
@@ -640,14 +640,14 @@ Files:
 
 What changed:
 
-- Added `/interview` command source.
+- Added `commands/interview.md` command source.
 - Codex prompt generation now produces `prompts/interview.md` with `$Interview $ARGUMENTS`.
 - Doctor, fresh install smoke, and installer smoke verify the prompt exists and is Codex-shaped.
 - Pulse onboarding now points to `~/.pai/USER/...` instead of `~/.claude/PAI/USER/...`.
 
 Why necessary:
 
-Pulse advertised `/interview`, but Codex had no slash prompt for it. That was a native-support gap at the first-run personalization layer. The fix makes Pulse's onboarding instruction executable in Codex.
+Pulse advertised `/interview`, but Codex custom prompts are invoked as `/prompts:<name>`. That was a native-support gap at the first-run personalization layer. The fix makes Pulse's onboarding instruction executable in Codex as `/prompts:interview`.
 
 ## Reasoning Defaults
 
@@ -702,9 +702,9 @@ bun PAI/TOOLS/CodexBranchValidation.ts
 bun ~/.codex/PAI/TOOLS/pai.ts doctor
 ```
 
-Representative passing state after the final `/interview` fix:
+Representative passing state after the final `/prompts:interview` fix:
 
 - `CodexBranchValidation.ts`: 15 checks passed.
 - Live doctor: 26 critical checks passed, optional token reminders only.
 - Pulse `/health`: HTTP 200.
-- Served Pulse assistant page: shows `/interview` and `~/.pai/USER/DA/`.
+- Served Pulse assistant page: shows `/prompts:interview` and `~/.pai/USER/DA/`.

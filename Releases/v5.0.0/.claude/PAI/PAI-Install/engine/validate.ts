@@ -304,7 +304,7 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         passed: existsSync(codexInterviewPromptPath) && codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("'),
         detail: existsSync(codexInterviewPromptPath)
           ? codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("')
-            ? "/interview generated as a Codex prompt"
+            ? "/prompts:interview generated as a Codex prompt"
             : "prompts/interview.md does not invoke the Interview skill in Codex form"
           : "prompts/interview.md missing",
         critical: false,

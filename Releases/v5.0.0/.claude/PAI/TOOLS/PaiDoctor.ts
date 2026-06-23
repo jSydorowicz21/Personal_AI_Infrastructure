@@ -103,7 +103,7 @@ async function main() {
     ok("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(frameworkRoot, "config.toml")),
     ok("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
     ok("hooks.json has FrameworkHookAdapter", hooksJson.includes("FrameworkHookAdapter.ts"), join(frameworkRoot, "hooks.json")),
-    ok("/interview prompt invokes Interview skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
+    ok("/prompts:interview invokes Interview skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
     ok("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),
     ok("Shared PAI data exists", existsSync(dataDir), dataDir),
     ...systemdPulseChecks(),
