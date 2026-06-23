@@ -350,7 +350,7 @@ What changed:
 - Added Codex agent generation from shared agent markdown.
 - Rewrites `CLAUDE.md`, `Claude Code`, and `~/.claude` references for Codex.
 - Installs/generated Codex-native agent definitions under `agents/`.
-- Links PAI skills into `~/.agents/skills` for Codex.
+- Keeps PAI skills in the active Codex home skill tree to avoid duplicate `$` skill selector entries.
 - Compact skill descriptions were added to keep Codex skill context manageable.
 
 Why necessary:

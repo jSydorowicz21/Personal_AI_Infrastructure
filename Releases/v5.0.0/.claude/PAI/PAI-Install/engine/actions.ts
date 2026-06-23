@@ -1991,28 +1991,6 @@ export async function runConfiguration(
   }
 
   if (target.id === "codex") {
-    const sourceSkillsDir = join(paiDir, "skills");
-    const codexSkillsDir = join(homedir(), ".agents", "skills");
-    if (existsSync(sourceSkillsDir)) {
-      try {
-        mkdirSync(codexSkillsDir, { recursive: true });
-        let linked = 0;
-        for (const entry of readdirSync(sourceSkillsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const src = join(sourceSkillsDir, entry.name);
-          if (!existsSync(join(src, "SKILL.md"))) continue;
-          const dst = join(codexSkillsDir, entry.name);
-          if (existsSync(dst)) continue;
-          symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir");
-          linked++;
-        }
-        await emit({ event: "message", content: `Linked ${linked} PAI skills into ~/.agents/skills for Codex.` });
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        await emit({ event: "message", content: `Could not link PAI skills into ~/.agents/skills: ${reason}` });
-      }
-    }
-
     try {
       const syncedPrompts = syncCodexPrompts(paiDir);
       await emit({ event: "message", content: `Synced ${syncedPrompts} command prompt(s) into Codex prompts.` });

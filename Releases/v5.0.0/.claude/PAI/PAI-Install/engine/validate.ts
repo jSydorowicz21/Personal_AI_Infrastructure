@@ -267,7 +267,7 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const codexPromptPath = join(paiDir, "prompts", "cs.md");
       const codexInterviewPromptPath = join(paiDir, "prompts", "interview.md");
       const codexAgentPath = join(paiDir, "agents", "engineer.toml");
-      const codexSkillPath = join(homedir(), ".agents", "skills", "ContextSearch", "SKILL.md");
+      const codexSkillPath = join(paiDir, "skills", "ContextSearch", "SKILL.md");
       const memoryDeletePath = join(paiDir, "PAI", "TOOLS", "MemoryDelete.ts");
       const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
       const codexInterviewPromptContent = existsSync(codexInterviewPromptPath) ? readFileSync(codexInterviewPromptPath, "utf-8") : "";
@@ -284,9 +284,9 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         critical: true,
       });
       checks.push({
-        name: "Codex skill link",
+        name: "Codex home skills",
         passed: existsSync(codexSkillPath),
-        detail: existsSync(codexSkillPath) ? "ContextSearch present in ~/.agents/skills" : "ContextSearch missing from ~/.agents/skills",
+        detail: existsSync(codexSkillPath) ? "ContextSearch present in Codex home skills" : "ContextSearch missing from Codex home skills",
         critical: false,
       });
       checks.push({

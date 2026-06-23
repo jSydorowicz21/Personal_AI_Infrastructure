@@ -921,18 +921,6 @@ function ensureFrameworkInstall(id: FrameworkId): string {
   linkDirectory(join(root, "PAI", "USER"), join(DATA_DIR, "USER"));
 
   if (id === "codex") {
-    const codexSkills = join(HOME, ".agents", "skills");
-    mkdirSync(codexSkills, { recursive: true });
-    const sourceSkills = join(root, "skills");
-    if (existsSync(sourceSkills)) {
-      for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const src = join(sourceSkills, entry.name);
-        if (!existsSync(join(src, "SKILL.md"))) continue;
-        const dst = join(codexSkills, entry.name);
-        if (!existsSync(dst)) createDirectoryLink(src, dst);
-      }
-    }
     syncCodexPrompts(root);
     syncCodexAgents(root);
   } else if (id === "opencode") {

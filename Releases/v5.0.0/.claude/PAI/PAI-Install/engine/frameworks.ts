@@ -89,7 +89,7 @@ export function frameworkChoices(): Array<{ label: string; value: FrameworkId; d
     {
       label: "Codex",
       value: "codex",
-      description: "Installs PAI into CODEX_HOME or ~/.codex, writes AGENTS.md/config.toml, and syncs skills to ~/.agents/skills.",
+      description: "Installs PAI into CODEX_HOME or ~/.codex, writes AGENTS.md/config.toml, and keeps skills in the Codex home.",
     },
     {
       label: "OpenCode",
