@@ -179,6 +179,14 @@ resolve_pai_data_dir() {
   absolute_path "$default_data_dir"
 }
 
+resolve_pai_config_dir() {
+  if [ -n "${PAI_CONFIG_DIR:-}" ] && [ -e "$PAI_CONFIG_DIR" ]; then
+    absolute_path "$PAI_CONFIG_DIR"
+    return 0
+  fi
+  printf '%s\n' "$HOME/.config/PAI"
+}
+
 resolve_target() {
   local state active root fw
   state="$(read_framework_state || true)"
@@ -447,7 +455,8 @@ TS
 
   local data_dir
   data_dir="$(resolve_pai_data_dir)"
-  local config_dir="${PAI_CONFIG_DIR:-$HOME/.config/PAI}"
+  local config_dir
+  config_dir="$(resolve_pai_config_dir)"
   (cd "$install_root" && bun "$script_path" "$install_root" "$data_dir" "$config_dir")
   success "Regenerated Codex hooks.json from installed generator."
 }
