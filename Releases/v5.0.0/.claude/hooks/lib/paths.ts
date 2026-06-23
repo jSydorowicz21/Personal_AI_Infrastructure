@@ -14,12 +14,16 @@ import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve, sep } from 'path';
 
+function homeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
 /**
  * Expand shell variables in a path string
  * Supports: $HOME, ${HOME}, ~
  */
 export function expandPath(path: string): string {
-  const home = homedir();
+  const home = homeDir();
 
   const expanded = path
     .replace(/^\$HOME(?=\/|\\|$)/, home)
@@ -34,9 +38,9 @@ type FrameworkState = {
   dataDir?: string;
 };
 
-function readFrameworkState(): FrameworkState | null {
+function readFrameworkStateAt(dataDir: string): FrameworkState | null {
   try {
-    const statePath = join(getDataDir(), 'framework.json');
+    const statePath = join(dataDir, 'framework.json');
     if (!existsSync(statePath)) return null;
     const parsed = JSON.parse(readFileSync(statePath, 'utf-8'));
     if (!parsed || typeof parsed !== 'object') return null;
@@ -46,21 +50,27 @@ function readFrameworkState(): FrameworkState | null {
   }
 }
 
+function readFrameworkState(): FrameworkState | null {
+  const state = readFrameworkStateAt(getDataDir());
+  if (state?.root && !existsSync(expandPath(state.root))) return null;
+  return state;
+}
+
 /**
  * Get the PAI data directory (expanded)
- * Priority: PAI_DIR env var → shared framework state → legacy Claude path
+ * Priority: shared framework state → existing PAI_DIR env var → legacy Claude path
  */
 export function getPaiDir(): string {
-  const envPaiDir = process.env.PAI_DIR;
-
-  if (envPaiDir) {
-    return expandPath(envPaiDir);
-  }
-
   const frameworkRoot = readFrameworkState()?.root;
   if (frameworkRoot) return join(expandPath(frameworkRoot), 'PAI');
 
-  return join(homedir(), '.claude', 'PAI');
+  const envPaiDir = process.env.PAI_DIR;
+  if (envPaiDir) {
+    const expanded = expandPath(envPaiDir);
+    if (existsSync(expanded)) return expanded;
+  }
+
+  return join(homeDir(), '.claude', 'PAI');
 }
 
 /**
@@ -69,26 +79,38 @@ export function getPaiDir(): string {
  */
 export function getDataDir(): string {
   const envDataDir = process.env.PAI_DATA_DIR;
-  if (envDataDir) return expandPath(envDataDir);
+  if (envDataDir) {
+    const expanded = expandPath(envDataDir);
+    if (existsSync(expanded)) {
+      const state = readFrameworkStateAt(expanded);
+      if (!state?.root || existsSync(expandPath(state.root))) return expanded;
+    }
+  }
 
-  return join(homedir(), '.pai');
+  return join(homeDir(), '.pai');
 }
 
 /**
  * Get the active framework home directory.
- * Priority: PAI_FRAMEWORK_DIR env var → shared framework state → parent of PAI_DIR → legacy Claude path
+ * Priority: shared framework state → existing PAI_FRAMEWORK_DIR env var → parent of existing PAI_DIR → legacy Claude path
  */
 export function getFrameworkDir(): string {
-  const envFrameworkDir = process.env.PAI_FRAMEWORK_DIR;
-  if (envFrameworkDir) return expandPath(envFrameworkDir);
-
   const frameworkRoot = readFrameworkState()?.root;
   if (frameworkRoot) return expandPath(frameworkRoot);
 
-  const envPaiDir = process.env.PAI_DIR;
-  if (envPaiDir) return resolve(expandPath(envPaiDir), '..');
+  const envFrameworkDir = process.env.PAI_FRAMEWORK_DIR;
+  if (envFrameworkDir) {
+    const expanded = expandPath(envFrameworkDir);
+    if (existsSync(expanded)) return expanded;
+  }
 
-  return join(homedir(), '.claude');
+  const envPaiDir = process.env.PAI_DIR;
+  if (envPaiDir) {
+    const expanded = expandPath(envPaiDir);
+    if (existsSync(expanded)) return resolve(expanded, '..');
+  }
+
+  return join(homeDir(), '.claude');
 }
 
 /**

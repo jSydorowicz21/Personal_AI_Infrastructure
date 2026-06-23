@@ -19,9 +19,9 @@ export function expandHome(value: string): string {
     .replace(/^\$\{HOME\}(?=\/|\\|$)/, home);
 }
 
-function readFrameworkState(): FrameworkState | null {
+function readFrameworkStateAt(dataDir: string): FrameworkState | null {
   try {
-    const statePath = join(getPaiDataDir(), "framework.json");
+    const statePath = join(dataDir, "framework.json");
     if (!existsSync(statePath)) return null;
     const parsed = JSON.parse(readFileSync(statePath, "utf-8"));
     if (!parsed || typeof parsed !== "object") return null;
@@ -31,22 +31,41 @@ function readFrameworkState(): FrameworkState | null {
   }
 }
 
+function readFrameworkState(): FrameworkState | null {
+  const state = readFrameworkStateAt(getPaiDataDir());
+  if (state?.root && !existsSync(expandHome(state.root))) return null;
+  return state;
+}
+
 export function getPaiDir(): string {
-  if (process.env.PAI_DIR) return expandHome(process.env.PAI_DIR);
   const frameworkRoot = readFrameworkState()?.root;
   if (frameworkRoot) return join(expandHome(frameworkRoot), "PAI");
+  if (process.env.PAI_DIR) {
+    const envPaiDir = expandHome(process.env.PAI_DIR);
+    if (existsSync(envPaiDir)) return envPaiDir;
+  }
   return resolve(import.meta.dir, "..", "..");
 }
 
 export function getFrameworkDir(): string {
-  if (process.env.PAI_FRAMEWORK_DIR) return expandHome(process.env.PAI_FRAMEWORK_DIR);
   const frameworkRoot = readFrameworkState()?.root;
   if (frameworkRoot) return expandHome(frameworkRoot);
+  if (process.env.PAI_FRAMEWORK_DIR) {
+    const envFrameworkDir = expandHome(process.env.PAI_FRAMEWORK_DIR);
+    if (existsSync(envFrameworkDir)) return envFrameworkDir;
+  }
   return resolve(getPaiDir(), "..");
 }
 
 export function getPaiDataDir(): string {
-  return expandHome(process.env.PAI_DATA_DIR || join(homeDir(), ".pai"));
+  if (process.env.PAI_DATA_DIR) {
+    const envDataDir = expandHome(process.env.PAI_DATA_DIR);
+    if (existsSync(envDataDir)) {
+      const state = readFrameworkStateAt(envDataDir);
+      if (!state?.root || existsSync(expandHome(state.root))) return envDataDir;
+    }
+  }
+  return join(homeDir(), ".pai");
 }
 
 export function getConfigDir(): string {

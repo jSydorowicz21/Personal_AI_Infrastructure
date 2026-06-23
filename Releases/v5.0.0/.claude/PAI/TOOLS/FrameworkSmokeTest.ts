@@ -244,6 +244,68 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     resolved = JSON.parse(result.stdout.trim());
   } catch {}
 
+  const staleEnv = {
+    ...process.env,
+    PAI_DATA_DIR: data,
+    PAI_DIR: join(root, "deleted-framework", "PAI"),
+    PAI_FRAMEWORK_DIR: join(root, "deleted-framework"),
+  } as Record<string, string>;
+  const staleResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: staleEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  let staleResolved: Record<string, string> = {};
+  try {
+    staleResolved = JSON.parse(staleResult.stdout.trim());
+  } catch {}
+
+  const home = join(root, "home");
+  const homeData = join(home, ".pai");
+  mkdirSync(homeData, { recursive: true });
+  writeFileSync(join(homeData, "framework.json"), JSON.stringify({ active: "codex", root, dataDir: homeData }), "utf-8");
+  const staleDataEnv = {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    PAI_DATA_DIR: join(root, "deleted-data"),
+    PAI_DIR: join(root, "deleted-framework", "PAI"),
+    PAI_FRAMEWORK_DIR: join(root, "deleted-framework"),
+  } as Record<string, string>;
+  const staleDataResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: staleDataEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  let staleDataResolved: Record<string, string> = {};
+  try {
+    staleDataResolved = JSON.parse(staleDataResult.stdout.trim());
+  } catch {}
+
+  const staleExistingData = join(root, "stale-data");
+  mkdirSync(staleExistingData, { recursive: true });
+  writeFileSync(
+    join(staleExistingData, "framework.json"),
+    JSON.stringify({ active: "codex", root: join(root, "deleted-framework"), dataDir: staleExistingData }),
+    "utf-8",
+  );
+  const staleExistingDataEnv = {
+    ...staleDataEnv,
+    PAI_DATA_DIR: staleExistingData,
+  } as Record<string, string>;
+  const staleExistingDataResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: staleExistingDataEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  let staleExistingDataResolved: Record<string, string> = {};
+  try {
+    staleExistingDataResolved = JSON.parse(staleExistingDataResult.stdout.trim());
+  } catch {}
+
   return [
     {
       name: "path fallback exits 0",
@@ -259,6 +321,36 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       name: "hooks path fallback uses framework.json",
       passed: resolved.hooksPaiDir === join(root, "PAI") && resolved.hooksFrameworkDir === root,
       detail: JSON.stringify({ pai: resolved.hooksPaiDir, root: resolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path ignores stale PAI_DIR when framework state exists",
+      passed: staleResolved.toolsPaiDir === join(root, "PAI") && staleResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleResolved.toolsPaiDir, root: staleResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path ignores stale PAI_DIR when framework state exists",
+      passed: staleResolved.hooksPaiDir === join(root, "PAI") && staleResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleResolved.hooksPaiDir, root: staleResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path ignores deleted PAI_DATA_DIR",
+      passed: staleDataResolved.toolsPaiDir === join(root, "PAI") && staleDataResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleDataResolved.toolsPaiDir, root: staleDataResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path ignores deleted PAI_DATA_DIR",
+      passed: staleDataResolved.hooksPaiDir === join(root, "PAI") && staleDataResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleDataResolved.hooksPaiDir, root: staleDataResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path ignores invalid PAI_DATA_DIR framework state",
+      passed: staleExistingDataResolved.toolsPaiDir === join(root, "PAI") && staleExistingDataResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleExistingDataResolved.toolsPaiDir, root: staleExistingDataResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path ignores invalid PAI_DATA_DIR framework state",
+      passed: staleExistingDataResolved.hooksPaiDir === join(root, "PAI") && staleExistingDataResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleExistingDataResolved.hooksPaiDir, root: staleExistingDataResolved.hooksFrameworkDir }),
     },
   ];
 }
