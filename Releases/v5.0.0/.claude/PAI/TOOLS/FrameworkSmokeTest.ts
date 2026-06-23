@@ -422,6 +422,82 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
   };
 }
 
+function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
+  const root = join(base, framework);
+  const data = join(base, "pai-data");
+  const config = join(base, "pai-config");
+  const env: Record<string, string> = {
+    ...process.env,
+    PAI_DATA_DIR: data,
+    PAI_CONFIG_DIR: config,
+    PAI_FRAMEWORK: framework,
+    PAI_FRAMEWORK_DIR: root,
+  } as Record<string, string>;
+  if (framework === "claude") env.CLAUDE_HOME = root;
+  if (framework === "codex") env.CODEX_HOME = root;
+  if (framework === "opencode") env.OPENCODE_CONFIG_DIR = root;
+
+  const first = spawnSync(process.execPath, [paiTool, "framework", "switch", framework], {
+    cwd: join(import.meta.dir, "..", ".."),
+    env,
+    encoding: "utf-8",
+    timeout: 30_000,
+  });
+
+  const staleAlgorithmDir = join(root, "PAI", "ALGORITHM");
+  rmSync(staleAlgorithmDir, { recursive: true, force: true });
+  mkdirSync(staleAlgorithmDir, { recursive: true });
+  writeFileSync(join(staleAlgorithmDir, "LATEST"), "stale", "utf-8");
+  const staleHooksDir = join(root, "hooks");
+  rmSync(staleHooksDir, { recursive: true, force: true });
+  mkdirSync(staleHooksDir, { recursive: true });
+  writeFileSync(join(staleHooksDir, "FrameworkHookAdapter.ts"), "stale", "utf-8");
+  const customHookPath = join(staleHooksDir, "CustomLocalOnly.hook.ts");
+  writeFileSync(customHookPath, "custom", "utf-8");
+
+  const second = spawnSync(process.execPath, [paiTool, "framework", "switch", framework], {
+    cwd: join(import.meta.dir, "..", ".."),
+    env,
+    encoding: "utf-8",
+    timeout: 30_000,
+  });
+
+  const sourceLatest = readFileSync(join(import.meta.dir, "..", "ALGORITHM", "LATEST"), "utf-8");
+  const refreshedLatestPath = join(root, "PAI", "ALGORITHM", "LATEST");
+  const refreshedLatest = existsSync(refreshedLatestPath) ? readFileSync(refreshedLatestPath, "utf-8") : "";
+  const sourceHook = readFileSync(join(import.meta.dir, "..", "..", "hooks", "FrameworkHookAdapter.ts"), "utf-8");
+  const refreshedHookPath = join(root, "hooks", "FrameworkHookAdapter.ts");
+  const refreshedHook = existsSync(refreshedHookPath) ? readFileSync(refreshedHookPath, "utf-8") : "";
+
+  return [
+    {
+      name: `${framework} managed PAI refresh setup exits 0`,
+      passed: first.status === 0,
+      detail: `status=${first.status ?? "null"}`,
+    },
+    {
+      name: `${framework} managed PAI refresh switch exits 0`,
+      passed: second.status === 0,
+      detail: `status=${second.status ?? "null"}`,
+    },
+    {
+      name: `${framework} managed PAI bundle refreshes stale files`,
+      passed: refreshedLatest === sourceLatest,
+      detail: refreshedLatestPath,
+    },
+    {
+      name: `${framework} managed framework directory refreshes stale files`,
+      passed: refreshedHook === sourceHook,
+      detail: refreshedHookPath,
+    },
+    {
+      name: `${framework} managed framework directory preserves custom files`,
+      passed: existsSync(customHookPath) && readFileSync(customHookPath, "utf-8") === "custom",
+      detail: customHookPath,
+    },
+  ];
+}
+
 function printResult(label: string, checks: Check[]) {
   console.log(`\n${label}`);
   for (const check of checks) {
@@ -443,6 +519,10 @@ mkdirSync(join(sequenceData, "USER", "PROJECTS"), { recursive: true });
 writeFileSync(memoryMarker, memoryMarkerText, "utf-8");
 writeFileSync(userMarker, userMarkerText, "utf-8");
 const sequenceResults = frameworks.map((framework) => runSwitch(framework, sequenceBase));
+const refreshResults = frameworks.map((framework) => ({
+  framework,
+  checks: checkManagedPaiRefresh(framework, join(base, `${framework}-refresh`)),
+}));
 let failed = 0;
 
 for (const [index, framework] of frameworks.entries()) {
@@ -461,6 +541,11 @@ for (const [index, framework] of frameworks.entries()) {
   if (result.stderr.trim()) {
     console.log(`${framework} shared-switch stderr:\n${result.stderr.trim()}`);
   }
+}
+
+for (const result of refreshResults) {
+  printResult(`${result.framework} managed refresh`, result.checks);
+  failed += result.checks.filter((check) => !check.passed).length;
 }
 
 const sequenceDataDirs = new Set(sequenceResults.map((result) => result.data));

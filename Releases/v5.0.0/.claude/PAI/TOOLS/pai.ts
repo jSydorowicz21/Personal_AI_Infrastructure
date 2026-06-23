@@ -24,7 +24,7 @@
 import { spawn, spawnSync } from "bun";
 import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
 import { homedir } from "os";
-import { join, basename, dirname, delimiter, extname } from "path";
+import { join, basename, dirname, delimiter, extname, resolve } from "path";
 
 // ============================================================================
 // Configuration
@@ -260,6 +260,43 @@ function linkDirectory(localPath: string, globalPath: string): number {
 
 function createDirectoryLink(src: string, dst: string) {
   symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir");
+}
+
+function syncManagedPaiEntry(src: string, dst: string) {
+  if (resolve(src) === resolve(dst)) return;
+  if (existsSync(dst)) {
+    try {
+      if (realpathSync(dst) === realpathSync(src)) return;
+    } catch {
+      // Broken links or inaccessible targets are replaced below.
+    }
+    rmSync(dst, { recursive: true, force: true });
+  }
+  mkdirSync(dirname(dst), { recursive: true });
+  const stat = lstatSync(src);
+  if (stat.isDirectory()) createDirectoryLink(src, dst);
+  else if (stat.isFile()) cpSync(src, dst);
+}
+
+function syncManagedFrameworkDirectory(src: string, dst: string) {
+  if (!existsSync(src)) return;
+  if (resolve(src) === resolve(dst)) return;
+  if (!existsSync(dst)) {
+    createDirectoryLink(src, dst);
+    return;
+  }
+  try {
+    if (realpathSync(dst) === realpathSync(src)) return;
+  } catch {
+    // Broken links or inaccessible targets are replaced below.
+  }
+  const stat = lstatSync(dst);
+  if (stat.isSymbolicLink()) {
+    rmSync(dst, { recursive: true, force: true });
+    createDirectoryLink(src, dst);
+    return;
+  }
+  cpSync(src, dst, { recursive: true, force: true });
 }
 
 function syncCodexPrompts(root: string): number {
@@ -912,9 +949,7 @@ function ensureFrameworkInstall(id: FrameworkId): string {
     if (entry.name === "MEMORY" || entry.name === "USER") continue;
     const src = join(CURRENT_PAI_DIR, entry.name);
     const dst = join(targetPaiDir, entry.name);
-    if (existsSync(dst)) continue;
-    if (entry.isDirectory()) createDirectoryLink(src, dst);
-    else if (entry.isFile()) cpSync(src, dst);
+    syncManagedPaiEntry(src, dst);
   }
 
   for (const dir of ["skills", "hooks", "plugins", "commands", "agents", "MCPs"]) {
@@ -922,9 +957,7 @@ function ensureFrameworkInstall(id: FrameworkId): string {
     if (id === "opencode" && dir === "commands") continue;
     const src = join(CURRENT_INSTALL_ROOT, dir);
     const dst = join(root, dir);
-    if (existsSync(src) && !existsSync(dst)) {
-      createDirectoryLink(src, dst);
-    }
+    syncManagedFrameworkDirectory(src, dst);
   }
 
   linkDirectory(join(root, "MEMORY"), join(DATA_DIR, "MEMORY"));

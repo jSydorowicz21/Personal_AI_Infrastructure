@@ -35,11 +35,17 @@ function readJson(path: string): any {
   }
 }
 
+function timeoutForTool(name: string): number {
+  if (name === "CodexRealSessionHookProof.ts") return 120_000;
+  if (name === "CodexFreshInstallSmokeTest.ts") return 120_000;
+  return 60_000;
+}
+
 function runBunTool(name: string): Check {
   const path = join(toolsDir, name);
   const res = spawnSync(process.execPath, [path], {
     encoding: "utf-8",
-    timeout: name === "CodexRealSessionHookProof.ts" ? 120_000 : 60_000,
+    timeout: timeoutForTool(name),
     env: {
       ...process.env,
       PAI_DIR: paiDir,
