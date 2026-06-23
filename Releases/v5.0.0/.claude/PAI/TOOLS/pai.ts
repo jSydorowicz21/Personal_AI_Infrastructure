@@ -23,9 +23,9 @@
 
 import { spawn, spawnSync } from "bun";
 import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
-import { homedir } from "os";
 import { join, basename, dirname, delimiter, extname, resolve } from "path";
 import { generateCodexHooksJson } from "../PAI-Install/engine/config-gen";
+import { expandHome as expandPaiHome, getConfigDir, getPaiDataDir, homeDir as resolveHomeDir } from "./lib/paths";
 
 // ============================================================================
 // Configuration
@@ -33,13 +33,11 @@ import { generateCodexHooksJson } from "../PAI-Install/engine/config-gen";
 
 type FrameworkId = "claude" | "codex" | "opencode";
 
-const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
+const HOME = resolveHomeDir();
 const CURRENT_PAI_DIR = join(import.meta.dir, "..");
 const CURRENT_INSTALL_ROOT = join(CURRENT_PAI_DIR, "..");
-const DATA_DIR = process.env.PAI_DATA_DIR || join(HOME, ".pai");
-const CONFIG_DIR = process.env.PAI_CONFIG_DIR && existsSync(process.env.PAI_CONFIG_DIR)
-  ? process.env.PAI_CONFIG_DIR
-  : join(HOME, ".config", "PAI");
+const DATA_DIR = getPaiDataDir();
+const CONFIG_DIR = getConfigDir();
 const FRAMEWORK_STATE = join(DATA_DIR, "framework.json");
 const BANNER_SCRIPT = join(import.meta.dir, "Banner.ts");
 const VOICE_SERVER = "http://localhost:31337/notify/personality";
@@ -145,15 +143,27 @@ function getStartupCatchphrase(): string {
 function frameworkRoot(id: FrameworkId): string {
   const state = readFrameworkState();
   const stateFramework = state?.active || state?.framework;
-  if (state?.root && stateFramework === id) return state.root;
-  if (id === "codex" && process.env.CODEX_HOME) return process.env.CODEX_HOME;
-  if (id === "opencode" && process.env.OPENCODE_CONFIG_DIR) return process.env.OPENCODE_CONFIG_DIR;
-  if (id === "claude" && (process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME)) {
-    return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME!;
+  if (state?.root && stateFramework === id && existsSync(expandPaiHome(state.root))) return expandPaiHome(state.root);
+  const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  const canCreateEnvRoot = envFramework === id && process.argv[2] === "framework" && process.argv[3] === "switch";
+  if (id === "codex" && process.env.CODEX_HOME) {
+    const codexHome = expandPaiHome(process.env.CODEX_HOME);
+    if (existsSync(codexHome) || canCreateEnvRoot) return codexHome;
+  }
+  if (id === "opencode" && process.env.OPENCODE_CONFIG_DIR) {
+    const opencodeHome = expandPaiHome(process.env.OPENCODE_CONFIG_DIR);
+    if (existsSync(opencodeHome) || canCreateEnvRoot) return opencodeHome;
+  }
+  const claudeHome = process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME;
+  if (id === "claude" && claudeHome) {
+    const expandedClaudeHome = expandPaiHome(claudeHome);
+    if (existsSync(expandedClaudeHome) || canCreateEnvRoot) return expandedClaudeHome;
   }
   const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
-  const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
-  if (frameworkDirOverride && envFramework === id) return frameworkDirOverride;
+  if (frameworkDirOverride && envFramework === id) {
+    const expandedFrameworkDir = expandPaiHome(frameworkDirOverride);
+    if (existsSync(expandedFrameworkDir) || canCreateEnvRoot) return expandedFrameworkDir;
+  }
   if (id === "codex") return join(HOME, ".codex");
   if (id === "opencode") return join(HOME, ".config", "opencode");
   return join(HOME, ".claude");
@@ -169,7 +179,7 @@ function resolveWindowsCommand(command: string): string {
   if (process.platform !== "win32") return command;
   if (command.includes("\\") || command.includes("/") || extname(command)) return command;
 
-  const pathEntries = (process.env.PATH || "").split(delimiter).filter(Boolean);
+  const pathEntries = (process.env.PATH || process.env.Path || process.env.path || "").split(delimiter).filter(Boolean);
   const pathExts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
     .split(";")
     .map((ext) => ext.toLowerCase());

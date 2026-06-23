@@ -93,6 +93,18 @@
       "target": "PAI/TOOLS/MemoryDelete.ts"
     },
     {
+      "source": "PAI/TOOLS/MemoryDeleteSmokeTest.ts",
+      "target": "PAI/TOOLS/MemoryDeleteSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts",
+      "target": "PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts",
+      "target": "PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/FrameworkSmokeTest.ts",
       "target": "PAI/TOOLS/FrameworkSmokeTest.ts"
     },

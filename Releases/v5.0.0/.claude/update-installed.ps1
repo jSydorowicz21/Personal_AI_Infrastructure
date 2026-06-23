@@ -255,6 +255,51 @@ function Copy-DirectoryContents([string]$Source, [string]$Destination) {
   }
 }
 
+function Test-SameFileContent([string]$Source, [string]$Target) {
+  if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { return $false }
+  if (-not (Test-Path -LiteralPath $Target -PathType Leaf)) { return $false }
+  try {
+    $sourceHash = Get-FileHash -Algorithm SHA256 -LiteralPath $Source
+    $targetHash = Get-FileHash -Algorithm SHA256 -LiteralPath $Target
+    return $sourceHash.Hash -eq $targetHash.Hash
+  } catch {
+    return $false
+  }
+}
+
+function Remove-ExistingPathSafely([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return }
+  $item = Get-Item -LiteralPath $Path -Force
+  if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+    Remove-Item -LiteralPath $Path -Force
+    return
+  }
+  Remove-Item -LiteralPath $Path -Recurse -Force
+}
+
+function Ensure-NoReparseAncestor([string]$Path, [string]$StopRoot) {
+  $stop = [System.IO.Path]::GetFullPath($StopRoot).TrimEnd("\", "/")
+  $current = Split-Path -Parent ([System.IO.Path]::GetFullPath($Path))
+  $toBreak = @()
+  while ($current -and $current.Length -ge $stop.Length) {
+    if ([string]::Equals($current.TrimEnd("\", "/"), $stop, [System.StringComparison]::OrdinalIgnoreCase)) { break }
+    if (Test-Path -LiteralPath $current) {
+      $item = Get-Item -LiteralPath $current -Force
+      if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        $toBreak = @($current) + $toBreak
+      }
+    }
+    $parent = Split-Path -Parent $current
+    if ($parent -eq $current) { break }
+    $current = $parent
+  }
+
+  foreach ($linkPath in $toBreak) {
+    Remove-Item -LiteralPath $linkPath -Force
+    New-Item -ItemType Directory -Force -Path $linkPath | Out-Null
+  }
+}
+
 function Get-BackupRelativePath([string]$InstallRoot, [string]$Path) {
   $rootFull = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd("\", "/")
   $pathFull = [System.IO.Path]::GetFullPath($Path)
@@ -317,21 +362,36 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
   }
 
   $backup = Backup-Existing $InstallRoot $target $BackupRoot
+  Ensure-NoReparseAncestor $target $InstallRoot
   $parent = Split-Path -Parent $target
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
 
   $sourceItem = Get-Item -LiteralPath $source -Force
   if ($sourceItem.PSIsContainer) {
     if (Test-Path -LiteralPath $target) {
-      Remove-Item -LiteralPath $target -Recurse -Force
+      Remove-ExistingPathSafely $target
     }
     Copy-DirectoryContents $source $target
   } elseif ($Entry.transformInstructions) {
     $text = Get-Content -Raw -LiteralPath $source
     $text = Convert-InstructionContent $text $Framework
-    Set-Content -LiteralPath $target -Value $text -NoNewline
+    try {
+      Set-Content -LiteralPath $target -Value $text -NoNewline
+    } catch {
+      if ((Test-Path -LiteralPath $target -PathType Leaf) -and ((Get-Content -Raw -LiteralPath $target) -eq $text)) {
+        return [pscustomobject]@{ Status = "unchanged"; Detail = "locked identical file"; Target = $target }
+      }
+      throw
+    }
   } else {
-    Copy-Item -LiteralPath $source -Destination $target -Force
+    try {
+      Copy-Item -LiteralPath $source -Destination $target -Force
+    } catch {
+      if (Test-SameFileContent $source $target) {
+        return [pscustomobject]@{ Status = "unchanged"; Detail = "locked identical file"; Target = $target }
+      }
+      throw
+    }
   }
 
   if ($Framework -eq "codex" -and $Entry.mirrorToCodexAgentsSkills -and $targetRel.StartsWith("skills\")) {
@@ -341,7 +401,7 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
     Backup-Existing $InstallRoot $agentsTarget $BackupRoot | Out-Null
     New-Item -ItemType Directory -Force -Path $agentsSkillRoot | Out-Null
     if (Test-Path -LiteralPath $agentsTarget) {
-      Remove-Item -LiteralPath $agentsTarget -Recurse -Force
+      Remove-ExistingPathSafely $agentsTarget
     }
     Copy-DirectoryContents $source $agentsTarget
   }

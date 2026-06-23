@@ -202,7 +202,10 @@ function main(): void {
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "PAI/TOOLS/FrameworkSmokeTest.ts",
+      "PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts",
+      "PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts",
       "PAI/TOOLS/MemoryDelete.ts",
+      "PAI/TOOLS/MemoryDeleteSmokeTest.ts",
       "hooks/FrameworkHookAdapter.ts",
       "hooks/ToolActivityTracker.hook.ts",
       "hooks/RtkPreToolUse.hook.js",
@@ -240,6 +243,9 @@ function main(): void {
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
     run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"]);
+    run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
+    run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
+    run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);

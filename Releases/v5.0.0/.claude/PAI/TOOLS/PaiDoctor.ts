@@ -134,6 +134,9 @@ async function main() {
     runBunTool("CodexRealSessionHookProof.ts"),
     runBunTool("HotfixUpdateRollbackSmokeTest.ts"),
     runBunTool("CodexFreshInstallSmokeTest.ts"),
+    runBunTool("FrameworkCommandResolutionSmokeTest.ts"),
+    runBunTool("FrameworkLaunchCwdSmokeTest.ts"),
+    runBunTool("MemoryDeleteSmokeTest.ts"),
     ...optionalSecretChecks(),
   ];
 

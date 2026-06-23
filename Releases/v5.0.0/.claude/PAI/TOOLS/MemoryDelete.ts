@@ -9,7 +9,7 @@
  */
 
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { memoryPath, getMemoryDir, expandHome } from "./lib/paths";
 
 type Options = {
@@ -70,10 +70,12 @@ function unique(values: string[]): string[] {
 
 function resolveInsideMemory(inputPath: string): string {
   const memoryRoot = resolve(getMemoryDir());
-  const candidate = inputPath.startsWith("/") || inputPath.startsWith("~") || inputPath.startsWith("$HOME")
-    ? resolve(expandHome(inputPath))
-    : resolve(memoryRoot, inputPath.replace(/^MEMORY[\\/]/, ""));
-  if (candidate !== memoryRoot && !candidate.startsWith(`${memoryRoot}/`)) {
+  const expanded = expandHome(inputPath);
+  const candidate = isAbsolute(expanded)
+    ? resolve(expanded)
+    : resolve(memoryRoot, expanded.replace(/^MEMORY[\\/]/, ""));
+  const rel = relative(memoryRoot, candidate);
+  if (rel && (rel.startsWith("..") || isAbsolute(rel))) {
     throw new Error(`Refusing to delete outside MEMORY/: ${inputPath}`);
   }
   return candidate;

@@ -12,14 +12,24 @@ function assert(name: string, condition: boolean, detail = ""): void {
 const root = mkdtempSync(join(tmpdir(), "pai-launch-cwd-smoke-"));
 try {
   const projectDir = join(root, "project");
+  const home = join(root, "home");
   const codexHome = join(root, "codex-home");
   const paiData = join(root, "pai-data");
   const paiConfig = join(root, "pai-config");
   const bin = join(root, "bin");
   const cwdFile = join(root, "codex-cwd.txt");
   mkdirSync(projectDir, { recursive: true });
+  mkdirSync(home, { recursive: true });
   mkdirSync(codexHome, { recursive: true });
+  mkdirSync(paiData, { recursive: true });
+  mkdirSync(paiConfig, { recursive: true });
   mkdirSync(bin, { recursive: true });
+  writeFileSync(join(paiData, "framework.json"), JSON.stringify({
+    active: "codex",
+    frameworkName: "Codex",
+    root: codexHome,
+    dataDir: paiData,
+  }, null, 2));
 
   if (process.platform === "win32") {
     writeFileSync(join(bin, "codex.cmd"), `@echo off\r\ncd > "${cwdFile}"\r\nexit /b 0\r\n`, "utf-8");
@@ -29,13 +39,25 @@ try {
     spawnSync("chmod", ["755", shim]);
   }
 
+  const testPath = `${bin}${delimiter}${process.env.PATH || process.env.Path || ""}`;
   const env = {
     ...process.env,
+    HOME: home,
+    USERPROFILE: home,
     PAI_FRAMEWORK: "codex",
     CODEX_HOME: codexHome,
+    CLAUDE_HOME: "",
+    PAI_CLAUDE_HOME: "",
+    OPENCODE_CONFIG_DIR: "",
+    PAI_FRAMEWORK_DIR: "",
+    PAI_DIR: "",
     PAI_DATA_DIR: paiData,
+    PAI_MEMORY_DIR: "",
+    PAI_USER_DIR: "",
     PAI_CONFIG_DIR: paiConfig,
-    PATH: `${bin}${delimiter}${process.env.PATH || ""}`,
+    PAI_SETTINGS_PATH: "",
+    PATH: testPath,
+    Path: testPath,
   };
 
   const result = spawnSync(process.execPath, [join(import.meta.dir, "pai.ts")], {
@@ -45,8 +67,9 @@ try {
     timeout: 20_000,
   });
 
-  assert("PAI launch exits 0 with fake Codex", result.status === 0, result.stderr.trim().slice(0, 160));
-  assert("fake Codex recorded cwd", existsSync(cwdFile), cwdFile);
+  const output = `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`;
+  assert("PAI launch exits 0 with fake Codex", result.status === 0, result.status === 0 ? "" : output);
+  assert("fake Codex recorded cwd", existsSync(cwdFile), existsSync(cwdFile) ? "" : output);
   assert("framework launch preserves caller cwd", resolve(readFileSync(cwdFile, "utf-8").trim()) === resolve(projectDir), readFileSync(cwdFile, "utf-8").trim());
 } finally {
   const resolved = resolve(root);

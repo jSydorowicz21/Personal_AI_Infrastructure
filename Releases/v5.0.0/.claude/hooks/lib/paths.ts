@@ -15,7 +15,11 @@ import { homedir } from 'os';
 import { join, resolve, sep } from 'path';
 
 function homeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || homedir();
+  const home = process.env.HOME;
+  if (home && existsSync(home)) return home;
+  const userProfile = process.env.USERPROFILE;
+  if (userProfile && existsSync(userProfile)) return userProfile;
+  return home || userProfile || homedir();
 }
 
 /**
@@ -56,11 +60,35 @@ function readFrameworkState(): FrameworkState | null {
   return state;
 }
 
+function normalizeFramework(value: string | undefined): string {
+  return (value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function activeFrameworkHomeEnv(): string {
+  const framework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (framework === 'codex' || framework === 'openai' || framework === 'openaicodex') return process.env.CODEX_HOME || '';
+  if (framework === 'opencode' || framework === 'open') return process.env.OPENCODE_CONFIG_DIR || '';
+  if (framework === 'claude' || framework === 'claudecode') return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || '';
+  return '';
+}
+
+function matchesActiveFrameworkHome(path: string): boolean {
+  const providerHome = activeFrameworkHomeEnv();
+  return Boolean(providerHome && resolve(expandPath(providerHome)) === resolve(path));
+}
+
 function hasStaleFrameworkEnv(): boolean {
   const envFrameworkDir = process.env.PAI_FRAMEWORK_DIR;
-  if (envFrameworkDir) return !existsSync(expandPath(envFrameworkDir));
+  if (envFrameworkDir) {
+    const expanded = expandPath(envFrameworkDir);
+    return !existsSync(expanded) && !matchesActiveFrameworkHome(expanded);
+  }
   const envPaiDir = process.env.PAI_DIR;
-  if (envPaiDir) return !existsSync(expandPath(envPaiDir));
+  if (envPaiDir) {
+    const expanded = expandPath(envPaiDir);
+    const frameworkDir = process.env.PAI_FRAMEWORK_DIR ? expandPath(process.env.PAI_FRAMEWORK_DIR) : '';
+    return !existsSync(expanded) && !(frameworkDir && resolve(expanded) === resolve(frameworkDir, 'PAI') && matchesActiveFrameworkHome(frameworkDir));
+  }
   return false;
 }
 
@@ -97,6 +125,7 @@ export function getDataDir(): string {
       if (!state && (!defaultStateUsable || !hasStaleFrameworkEnv())) return expanded;
       if (state?.root && existsSync(expandPath(state.root))) return expanded;
     }
+    if (!defaultStateUsable || !hasStaleFrameworkEnv()) return expanded;
   }
 
   return defaultDataDir;

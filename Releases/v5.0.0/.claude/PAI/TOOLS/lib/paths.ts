@@ -8,7 +8,11 @@ type FrameworkState = {
 };
 
 export function homeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || homedir();
+  const home = process.env.HOME;
+  if (home && existsSync(home)) return home;
+  const userProfile = process.env.USERPROFILE;
+  if (userProfile && existsSync(userProfile)) return userProfile;
+  return home || userProfile || homedir();
 }
 
 export function expandHome(value: string): string {
@@ -37,12 +41,32 @@ function readFrameworkState(): FrameworkState | null {
   return state;
 }
 
+function normalizeFramework(value: string | undefined): string {
+  return (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function activeFrameworkHomeEnv(): string {
+  const framework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (framework === "codex" || framework === "openai" || framework === "openaicodex") return process.env.CODEX_HOME || "";
+  if (framework === "opencode" || framework === "open") return process.env.OPENCODE_CONFIG_DIR || "";
+  if (framework === "claude" || framework === "claudecode") return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || "";
+  return "";
+}
+
+function matchesActiveFrameworkHome(path: string): boolean {
+  const providerHome = activeFrameworkHomeEnv();
+  return Boolean(providerHome && resolve(expandHome(providerHome)) === resolve(path));
+}
+
 function hasStaleFrameworkEnv(): boolean {
   if (process.env.PAI_FRAMEWORK_DIR) {
-    return !existsSync(expandHome(process.env.PAI_FRAMEWORK_DIR));
+    const frameworkDir = expandHome(process.env.PAI_FRAMEWORK_DIR);
+    return !existsSync(frameworkDir) && !matchesActiveFrameworkHome(frameworkDir);
   }
   if (process.env.PAI_DIR) {
-    return !existsSync(expandHome(process.env.PAI_DIR));
+    const paiDir = expandHome(process.env.PAI_DIR);
+    const frameworkDir = process.env.PAI_FRAMEWORK_DIR ? expandHome(process.env.PAI_FRAMEWORK_DIR) : "";
+    return !existsSync(paiDir) && !(frameworkDir && resolve(paiDir) === resolve(frameworkDir, "PAI") && matchesActiveFrameworkHome(frameworkDir));
   }
   return false;
 }
@@ -78,6 +102,7 @@ export function getPaiDataDir(): string {
       if (!state && (!defaultStateUsable || !hasStaleFrameworkEnv())) return envDataDir;
       if (state?.root && existsSync(expandHome(state.root))) return envDataDir;
     }
+    if (!defaultStateUsable || !hasStaleFrameworkEnv()) return envDataDir;
   }
   return defaultDataDir;
 }
