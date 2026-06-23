@@ -96,6 +96,7 @@ try {
     check("shell profile isolated to temp HOME", existsSync(shellProfile), shellProfile),
     check("shell k alias points to temp Codex", profile.includes(`bun ${JSON.stringify(join(codexHome, "PAI", "TOOLS", "pai.ts"))}`), shellProfile),
     check("shell pai alias points to temp data", profile.includes(`PAI_DATA_DIR=${JSON.stringify(dataDir)}`), shellProfile),
+    check("shell pai alias exports PAI_DIR", profile.includes(`PAI_DIR=${JSON.stringify(join(codexHome, "PAI"))}`), shellProfile),
     check("shared MEMORY link exists", existsSync(join(codexHome, "PAI", "MEMORY")) && lstatSync(join(codexHome, "PAI", "MEMORY")).isSymbolicLink(), join(codexHome, "PAI", "MEMORY")),
     check("shared USER link exists", existsSync(join(codexHome, "PAI", "USER")) && lstatSync(join(codexHome, "PAI", "USER")).isSymbolicLink(), join(codexHome, "PAI", "USER")),
   ];

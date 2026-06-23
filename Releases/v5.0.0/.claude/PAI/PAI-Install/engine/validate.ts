@@ -58,9 +58,10 @@ function shellRcFile(): { path: string; display: string; sourceCommand: string }
   const userShell = process.env.SHELL || "";
   if (process.platform === "win32" && !userShell) {
     const candidates = [
+      process.env.OneDrive ? join(process.env.OneDrive, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1") : "",
       process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
-      join(homedir(), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
       join(homedir(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(homedir(), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
     ].filter(Boolean);
     const path = candidates.find((candidate) => existsSync(candidate)) || candidates[0];
     return {
@@ -549,7 +550,8 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const rcContent = readFileSync(rcFile.path, "utf-8");
       const paiConfigured = rcContent.includes("alias pai") || rcContent.includes("function pai");
       const kConfigured = rcContent.includes("alias k") || rcContent.includes("function k");
-      aliasConfigured = rcContent.includes("# PAI alias") && paiConfigured && kConfigured;
+      const pathConfigured = rcContent.includes("PAI_DIR") && rcContent.includes("Initialize-PAIEnvironment");
+      aliasConfigured = rcContent.includes("# PAI alias") && paiConfigured && kConfigured && pathConfigured;
     } catch {}
   }
 
