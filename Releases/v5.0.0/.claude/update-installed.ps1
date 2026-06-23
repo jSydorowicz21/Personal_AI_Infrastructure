@@ -112,6 +112,19 @@ function Set-PaiUserEnvironment([string]$InstallRoot, [string]$Framework) {
   foreach ($key in $values.Keys) {
     [Environment]::SetEnvironmentVariable($key, $values[$key], $target)
   }
+  if ($target -eq "User") {
+    try {
+      Add-Type -Namespace Pai.Native -Name User32 -MemberDefinition @"
+[DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);
+"@ -ErrorAction SilentlyContinue
+      $result = [UIntPtr]::Zero
+      [Pai.Native.User32]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
+      Info "Broadcast Windows environment change for new terminals."
+    } catch {
+      Warn "Could not broadcast Windows environment change: $($_.Exception.Message)"
+    }
+  }
   Success "Updated PAI environment variables at ${target} scope."
 }
 
