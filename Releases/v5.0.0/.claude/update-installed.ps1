@@ -307,6 +307,95 @@ await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJs
   Success "Regenerated Codex hooks.json from installed generator."
 }
 
+function Get-PowerShellProfileCandidates {
+  $items = @()
+  if ($env:PAI_POWERSHELL_PROFILE) { $items += (Resolve-AbsolutePath $env:PAI_POWERSHELL_PROFILE) }
+  if ($env:OneDrive) {
+    $items += (Join-Path $env:OneDrive "Documents\PowerShell\Microsoft.PowerShell_profile.ps1")
+    $items += (Join-Path $env:OneDrive "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1")
+  }
+  $items += (Join-Path $EffectiveHome "Documents\PowerShell\Microsoft.PowerShell_profile.ps1")
+  $items += (Join-Path $EffectiveHome "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1")
+  $items | Where-Object { $_ } | Select-Object -Unique
+}
+
+function Get-PaiPowerShellBlock([string]$InstallRoot, [string]$Framework) {
+  $state = Read-FrameworkState
+  $dataDir = if ($state -and $state.dataDir) {
+    Resolve-AbsolutePath $state.dataDir
+  } elseif ($env:PAI_DATA_DIR -and (Test-Path -LiteralPath (Join-Path (Resolve-AbsolutePath $env:PAI_DATA_DIR) "framework.json"))) {
+    Resolve-AbsolutePath $env:PAI_DATA_DIR
+  } else {
+    Join-Path $EffectiveHome ".pai"
+  }
+  $paiDir = Join-Path $InstallRoot "PAI"
+  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+  $paiScript = Join-Path $paiDir "TOOLS\pai.ts"
+  $qData = $dataDir.Replace("'", "''")
+  $qRoot = $InstallRoot.Replace("'", "''")
+  $qPai = $paiDir.Replace("'", "''")
+  $qFramework = $Framework.Replace("'", "''")
+  $qConfig = $configDir.Replace("'", "''")
+  $qScript = $paiScript.Replace("'", "''")
+@"
+# PAI aliases
+function Initialize-PAIEnvironment {
+  `$defaultPaiDataDir = '$qData'
+  if (-not `$env:PAI_DATA_DIR -or -not (Test-Path -LiteralPath (Join-Path `$env:PAI_DATA_DIR 'framework.json'))) { `$env:PAI_DATA_DIR = `$defaultPaiDataDir }
+  `$statePath = Join-Path `$env:PAI_DATA_DIR 'framework.json'
+  if (Test-Path -LiteralPath `$statePath) {
+    try {
+      `$state = Get-Content -Raw -LiteralPath `$statePath | ConvertFrom-Json
+      if (`$state.root) {
+        `$env:PAI_FRAMEWORK_DIR = [string]`$state.root
+        `$env:PAI_DIR = Join-Path `$env:PAI_FRAMEWORK_DIR 'PAI'
+      }
+      if (`$state.active) { `$env:PAI_FRAMEWORK = [string]`$state.active }
+      if (`$state.dataDir) { `$env:PAI_DATA_DIR = [string]`$state.dataDir }
+    } catch {}
+  }
+  if (-not `$env:PAI_FRAMEWORK_DIR) { `$env:PAI_FRAMEWORK_DIR = '$qRoot' }
+  if (-not `$env:PAI_DIR) { `$env:PAI_DIR = '$qPai' }
+  if (-not `$env:PAI_FRAMEWORK) { `$env:PAI_FRAMEWORK = '$qFramework' }
+  if (-not `$env:PAI_CONFIG_DIR) { `$env:PAI_CONFIG_DIR = '$qConfig' }
+}
+Initialize-PAIEnvironment
+function Invoke-PAI {
+  Initialize-PAIEnvironment
+  bun '$qScript' @args
+}
+function pai {
+  Invoke-PAI @args
+}
+function k {
+  Invoke-PAI @args
+}
+"@
+}
+
+function Repair-PowerShellProfiles([string]$InstallRoot, [string]$Framework, [string]$BackupRoot) {
+  if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) { return }
+  $block = Get-PaiPowerShellBlock $InstallRoot $Framework
+  foreach ($profilePath in Get-PowerShellProfileCandidates) {
+    if ($DryRun) {
+      Info "DRY RUN repair PowerShell profile $profilePath"
+      continue
+    }
+    if (Test-Path -LiteralPath $profilePath) {
+      Backup-Existing $InstallRoot $profilePath $BackupRoot | Out-Null
+      $content = Get-Content -Raw -LiteralPath $profilePath
+      $content = $content -replace "(?ms)^# PAI aliases.*?(?=^# |\z)", ""
+      $content = $content -replace "(?ms)^function Initialize-PAIEnvironment \{.*?^function k \{.*?^\}", ""
+      $content = $content.TrimEnd() + "`n`n$block`n"
+      Set-Content -LiteralPath $profilePath -Value $content -NoNewline
+    } else {
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $profilePath) | Out-Null
+      Set-Content -LiteralPath $profilePath -Value ($block + "`n") -NoNewline
+    }
+    Success "Repaired PowerShell PAI bootstrap: $profilePath"
+  }
+}
+
 Write-Host ""
 Write-Host "PAI | Installed Hotfix Updater" -ForegroundColor Cyan
 Write-Host ""
@@ -347,6 +436,7 @@ try {
     if ($target.Framework -eq "codex") {
       Regenerate-CodexHooksJson $target.Root $backupRoot
     }
+    Repair-PowerShellProfiles $target.Root $target.Framework $backupRoot
     Verify-Install $target.Root $target.Framework
     Success "Hotfix update complete. Restart the agent session so instructions reload."
   } else {

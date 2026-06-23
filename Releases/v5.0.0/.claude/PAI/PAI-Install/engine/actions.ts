@@ -747,51 +747,56 @@ function yamlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function shellProfile(): { kind: "posix" | "fish" | "powershell"; path: string; display: string } {
+function windowsPowerShellProfileCandidates(): string[] {
+  const home = envHome();
+  return [
+    process.env.OneDrive ? join(process.env.OneDrive, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1") : "",
+    process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
+    join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+    join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+  ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
+}
+
+function shellProfiles(): { kind: "posix" | "fish" | "powershell"; path: string; display: string }[] {
   if (process.platform === "win32" && process.env.PAI_POWERSHELL_PROFILE) {
-    return {
+    return [{
       kind: "powershell",
       path: process.env.PAI_POWERSHELL_PROFILE,
       display: "$PROFILE",
-    };
+    }];
   }
 
   if (process.env.PAI_SHELL_PROFILE) {
     const userShell = process.env.SHELL || "";
-    return {
+    return [{
       kind: userShell.includes("fish") ? "fish" : "posix",
       path: process.env.PAI_SHELL_PROFILE,
       display: process.env.PAI_SHELL_PROFILE,
-    };
+    }];
   }
 
   const userShell = process.env.SHELL || "";
   if (process.platform === "win32" && !userShell) {
-    const home = envHome();
-    const candidates = [
-      process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
-      join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
-      join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
-    ].filter(Boolean);
-    const path = candidates.find((candidate) => existsSync(candidate)) || candidates[0];
-    return {
+    return windowsPowerShellProfileCandidates().map((path) => ({
       kind: "powershell",
       path,
       display: "$PROFILE",
-    };
+    }));
   }
   if (userShell.includes("fish")) {
-    return { kind: "fish", path: join(envHome(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" };
+    return [{ kind: "fish", path: join(envHome(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" }];
   }
   if (userShell.includes("bash")) {
-    return { kind: "posix", path: join(envHome(), ".bashrc"), display: "~/.bashrc" };
+    return [{ kind: "posix", path: join(envHome(), ".bashrc"), display: "~/.bashrc" }];
   }
-  return { kind: "posix", path: join(envHome(), ".zshrc"), display: "~/.zshrc" };
+  return [{ kind: "posix", path: join(envHome(), ".zshrc"), display: "~/.zshrc" }];
 }
 
-function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string): string {
+function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string, framework: string): string {
+  const paiDir = dirname(dirname(paiScript));
+  const frameworkDir = dirname(paiDir);
   if (profileKind === "fish") {
-    const command = `env PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)} $argv`;
+    const command = `env PAI_DIR=${JSON.stringify(paiDir)} PAI_FRAMEWORK_DIR=${JSON.stringify(frameworkDir)} PAI_FRAMEWORK=${JSON.stringify(framework)} PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)} $argv`;
     return [
       `function pai; ${command}; end`,
       `function k; ${command}; end`,
@@ -799,9 +804,34 @@ function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: 
   }
   if (profileKind === "powershell") {
     const escapedDataDir = dataDir.replace(/'/g, "''");
+    const escapedPaiDir = paiDir.replace(/'/g, "''");
+    const escapedFrameworkDir = frameworkDir.replace(/'/g, "''");
+    const escapedFramework = framework.replace(/'/g, "''");
     const escapedPaiScript = paiScript.replace(/'/g, "''");
     return [
+      "function Initialize-PAIEnvironment {",
+      `  $defaultPaiDataDir = '${escapedDataDir}'`,
+      "  if (-not $env:PAI_DATA_DIR -or -not (Test-Path -LiteralPath (Join-Path $env:PAI_DATA_DIR 'framework.json'))) { $env:PAI_DATA_DIR = $defaultPaiDataDir }",
+      "  $statePath = Join-Path $env:PAI_DATA_DIR 'framework.json'",
+      "  if (Test-Path -LiteralPath $statePath) {",
+      "    try {",
+      "      $state = Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json",
+      "      if ($state.root) {",
+      "        $env:PAI_FRAMEWORK_DIR = [string]$state.root",
+      "        $env:PAI_DIR = Join-Path $env:PAI_FRAMEWORK_DIR 'PAI'",
+      "      }",
+      "      if ($state.active) { $env:PAI_FRAMEWORK = [string]$state.active }",
+      "      if ($state.dataDir) { $env:PAI_DATA_DIR = [string]$state.dataDir }",
+      "    } catch {}",
+      "  }",
+      `  if (-not $env:PAI_FRAMEWORK_DIR) { $env:PAI_FRAMEWORK_DIR = '${escapedFrameworkDir}' }`,
+      `  if (-not $env:PAI_DIR) { $env:PAI_DIR = '${escapedPaiDir}' }`,
+      `  if (-not $env:PAI_FRAMEWORK) { $env:PAI_FRAMEWORK = '${escapedFramework}' }`,
+      "  if (-not $env:PAI_CONFIG_DIR) { $env:PAI_CONFIG_DIR = Join-Path $HOME '.config\\PAI' }",
+      "}",
+      "Initialize-PAIEnvironment",
       "function Invoke-PAI {",
+      "  Initialize-PAIEnvironment",
       `  $env:PAI_DATA_DIR = '${escapedDataDir}'`,
       `  bun '${escapedPaiScript}' @args`,
       "}",
@@ -814,8 +844,8 @@ function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: 
     ].join("\n");
   }
   return [
-    `alias pai='PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)}'`,
-    `alias k='PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)}'`,
+    `alias pai='PAI_DIR=${JSON.stringify(paiDir)} PAI_FRAMEWORK_DIR=${JSON.stringify(frameworkDir)} PAI_FRAMEWORK=${JSON.stringify(framework)} PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)}'`,
+    `alias k='PAI_DIR=${JSON.stringify(paiDir)} PAI_FRAMEWORK_DIR=${JSON.stringify(frameworkDir)} PAI_FRAMEWORK=${JSON.stringify(framework)} PAI_DATA_DIR=${JSON.stringify(dataDir)} bun ${JSON.stringify(paiScript)}'`,
   ].join("\n");
 }
 
@@ -2122,29 +2152,33 @@ export async function runConfiguration(
   // Set up shell alias/function (detect bash/zsh/fish/PowerShell)
   await emit({ event: "progress", step: "configuration", percent: 80, detail: "Setting up shell alias..." });
 
-  const profile = shellProfile();
-  const rcPath = profile.path;
   const paiScript = join(paiDir, "PAI", "TOOLS", "pai.ts");
-  const aliasLine = paiShellCommand(profile.kind, dataDir, paiScript);
   const marker = "# PAI aliases";
+  const writtenProfiles: string[] = [];
 
-  if (existsSync(rcPath)) {
-    let content = readFileSync(rcPath, "utf-8");
-    // Remove any existing pai/k alias (old CORE or PAI paths, any marker variant)
-    content = content.replace(/^#\s*(?:PAI|CORE)\s*alias(?:es)?.*\n(?:.*\n)*?(?=\n#|\n?$)/gm, "");
-    content = content.replace(/^alias pai=.*\n?/gm, "");
-    content = content.replace(/^alias k=.*\n?/gm, "");
-    content = content.replace(/^function Invoke-PAI \{[\s\S]*?^\}/gm, "");
-    content = content.replace(/^function pai \{[\s\S]*?^\}/gm, "");
-    content = content.replace(/^function k \{[\s\S]*?^\}/gm, "");
-    // Add fresh alias
-    content = content.trimEnd() + `\n\n${marker}\n${aliasLine}\n`;
-    writeFileSync(rcPath, content);
-  } else {
-    mkdirSync(dirname(rcPath), { recursive: true });
-    writeFileSync(rcPath, `${marker}\n${aliasLine}\n`);
+  for (const profile of shellProfiles()) {
+    const rcPath = profile.path;
+    const aliasLine = paiShellCommand(profile.kind, dataDir, paiScript, target.id);
+    if (existsSync(rcPath)) {
+      let content = readFileSync(rcPath, "utf-8");
+      // Remove any existing pai/k alias (old CORE or PAI paths, any marker variant)
+      content = content.replace(/^#\s*(?:PAI|CORE)\s*alias(?:es)?.*\n(?:.*\n)*?(?=\n#|\n?$)/gm, "");
+      content = content.replace(/^alias pai=.*\n?/gm, "");
+      content = content.replace(/^alias k=.*\n?/gm, "");
+      content = content.replace(/^function Initialize-PAIEnvironment \{[\s\S]*?^\}/gm, "");
+      content = content.replace(/^function Invoke-PAI \{[\s\S]*?^\}/gm, "");
+      content = content.replace(/^function pai \{[\s\S]*?^\}/gm, "");
+      content = content.replace(/^function k \{[\s\S]*?^\}/gm, "");
+      // Add fresh alias
+      content = content.trimEnd() + `\n\n${marker}\n${aliasLine}\n`;
+      writeFileSync(rcPath, content);
+    } else {
+      mkdirSync(dirname(rcPath), { recursive: true });
+      writeFileSync(rcPath, `${marker}\n${aliasLine}\n`);
+    }
+    writtenProfiles.push(rcPath);
   }
-  await emit({ event: "message", content: `Shell aliases pai and k added to ${profile.display}.` });
+  await emit({ event: "message", content: `Shell aliases pai and k added to ${writtenProfiles.length} shell profile(s).` });
 
   // Fix permissions
   await emit({ event: "progress", step: "configuration", percent: 90, detail: "Setting permissions..." });
