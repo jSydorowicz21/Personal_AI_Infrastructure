@@ -4,13 +4,13 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
-import { homedir } from "os";
 import { join, dirname } from "path";
 import type { InstallState, StepId } from "./types";
 import { INSTALLER_VERSION } from "./types";
+import { getPaiConfigDir } from "./frameworks";
 
 const STATE_FILE = join(
-  process.env.PAI_CONFIG_DIR || join(homedir(), ".config", "PAI"),
+  getPaiConfigDir(),
   "PAI-Install",
   "install-state.json"
 );

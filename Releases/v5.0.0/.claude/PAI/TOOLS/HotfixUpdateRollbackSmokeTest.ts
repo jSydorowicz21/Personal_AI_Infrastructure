@@ -180,9 +180,13 @@ const updatedHooksJson = read(join(installRoot, "hooks.json"));
 const hookDataDirs = codexHookDataDirs(updatedHooksJson).map(normalizePathText);
 const expectedHookDataSuffix = normalizePathText(join("home", ".pai"));
 const staleHookDataSegment = normalizePathText(join("stale-env", ".pai"));
+const powerShellAllHostsProfile = join(home, "Documents", "PowerShell", "profile.ps1");
 const powerShellProfile = join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
+const windowsPowerShellAllHostsProfile = join(home, "Documents", "WindowsPowerShell", "profile.ps1");
 const windowsPowerShellProfile = join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1");
+const powerShellAllHostsProfileText = read(powerShellAllHostsProfile);
 const powerShellProfileText = read(powerShellProfile);
+const windowsPowerShellAllHostsProfileText = read(windowsPowerShellAllHostsProfile);
 const windowsPowerShellProfileText = read(windowsPowerShellProfile);
 
 const beforeRollbackChecks: Check[] = [
@@ -201,8 +205,11 @@ const beforeRollbackChecks: Check[] = [
   check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
   check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
   check("updater refreshes PAI environment variables", process.platform !== "win32" || update.stdout.includes("Updated PAI environment variables at Process scope"), "process-scope user env test"),
+  check("hotfix repairs PowerShell all-host profile", process.platform !== "win32" || (powerShellAllHostsProfileText.includes("Initialize-PAIEnvironment") && powerShellAllHostsProfileText.includes("PAI_DIR")), powerShellAllHostsProfile),
   check("hotfix repairs PowerShell profile PAI_DIR", process.platform !== "win32" || (powerShellProfileText.includes("Initialize-PAIEnvironment") && powerShellProfileText.includes("PAI_DIR")), powerShellProfile),
+  check("hotfix repairs WindowsPowerShell all-host profile", process.platform !== "win32" || (windowsPowerShellAllHostsProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellAllHostsProfileText.includes("PAI_DIR")), windowsPowerShellAllHostsProfile),
   check("hotfix repairs WindowsPowerShell profile PAI_DIR", process.platform !== "win32" || (windowsPowerShellProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellProfileText.includes("PAI_DIR")), windowsPowerShellProfile),
+  check("PowerShell bootstrap repairs stale PAI_DIR", process.platform !== "win32" || powerShellAllHostsProfileText.includes("-not (Test-Path -LiteralPath $env:PAI_DIR)"), powerShellAllHostsProfile),
   check("config.toml protected", read(join(installRoot, "config.toml")) === sentinels.config, join(installRoot, "config.toml")),
   check("auth.json protected", read(join(installRoot, "auth.json")) === sentinels.auth, join(installRoot, "auth.json")),
   check("USER protected", read(join(installRoot, "PAI", "USER", "profile.md")) === sentinels.user, join(installRoot, "PAI", "USER", "profile.md")),

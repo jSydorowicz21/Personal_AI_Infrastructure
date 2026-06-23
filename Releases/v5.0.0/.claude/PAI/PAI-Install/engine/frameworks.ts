@@ -5,6 +5,7 @@
  * framework owns the top-level instructions, config, and install root.
  */
 
+import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import type { FrameworkId, FrameworkTarget } from "./types";
@@ -16,6 +17,10 @@ const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   codex: "Codex",
   opencode: "OpenCode",
 };
+
+function homeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
 
 export function normalizeFramework(value: string | undefined | null): FrameworkId | null {
   const normalized = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
@@ -31,8 +36,8 @@ export function defaultFramework(): FrameworkId {
 }
 
 export function getFrameworkTarget(id: FrameworkId = defaultFramework()): FrameworkTarget {
-  const home = homedir();
-  const configDir = process.env.PAI_CONFIG_DIR || join(home, ".config", "PAI");
+  const home = homeDir();
+  const configDir = getPaiConfigDir();
 
   if (id === "codex") {
     return {
@@ -76,7 +81,13 @@ export function getFrameworkTarget(id: FrameworkId = defaultFramework()): Framew
 }
 
 export function getPaiDataDir(): string {
-  return process.env.PAI_DATA_DIR || join(homedir(), ".pai");
+  return process.env.PAI_DATA_DIR || join(homeDir(), ".pai");
+}
+
+export function getPaiConfigDir(): string {
+  return process.env.PAI_CONFIG_DIR && existsSync(process.env.PAI_CONFIG_DIR)
+    ? process.env.PAI_CONFIG_DIR
+    : join(homeDir(), ".config", "PAI");
 }
 
 export function frameworkChoices(): Array<{ label: string; value: FrameworkId; description: string }> {

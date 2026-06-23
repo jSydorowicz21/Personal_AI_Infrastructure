@@ -33,7 +33,7 @@ import { generateCodexHooksJson } from "../PAI-Install/engine/config-gen";
 
 type FrameworkId = "claude" | "codex" | "opencode";
 
-const HOME = homedir();
+const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
 const CURRENT_PAI_DIR = join(import.meta.dir, "..");
 const CURRENT_INSTALL_ROOT = join(CURRENT_PAI_DIR, "..");
 const DATA_DIR = process.env.PAI_DATA_DIR || join(HOME, ".pai");

@@ -756,9 +756,13 @@ function yamlString(value: string): string {
 function windowsPowerShellProfileCandidates(): string[] {
   const home = envHome();
   return [
+    process.env.OneDrive ? join(process.env.OneDrive, "Documents", "PowerShell", "profile.ps1") : "",
     process.env.OneDrive ? join(process.env.OneDrive, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1") : "",
+    process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "profile.ps1") : "",
     process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
+    join(home, "Documents", "PowerShell", "profile.ps1"),
     join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+    join(home, "Documents", "WindowsPowerShell", "profile.ps1"),
     join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
   ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
 }
@@ -843,7 +847,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
   return result.status === 0;
 }
 
-function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string, framework: string): string {
+function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, configDir: string, paiScript: string, framework: string): string {
   const paiDir = dirname(dirname(paiScript));
   const frameworkDir = dirname(paiDir);
   if (profileKind === "fish") {
@@ -855,6 +859,7 @@ function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: 
   }
   if (profileKind === "powershell") {
     const escapedDataDir = dataDir.replace(/'/g, "''");
+    const escapedConfigDir = configDir.replace(/'/g, "''");
     const escapedPaiDir = paiDir.replace(/'/g, "''");
     const escapedFrameworkDir = frameworkDir.replace(/'/g, "''");
     const escapedFramework = framework.replace(/'/g, "''");
@@ -875,10 +880,10 @@ function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: 
       "      if ($state.dataDir) { $env:PAI_DATA_DIR = [string]$state.dataDir }",
       "    } catch {}",
       "  }",
-      `  if (-not $env:PAI_FRAMEWORK_DIR) { $env:PAI_FRAMEWORK_DIR = '${escapedFrameworkDir}' }`,
-      `  if (-not $env:PAI_DIR) { $env:PAI_DIR = '${escapedPaiDir}' }`,
+      `  if (-not $env:PAI_FRAMEWORK_DIR -or -not (Test-Path -LiteralPath $env:PAI_FRAMEWORK_DIR)) { $env:PAI_FRAMEWORK_DIR = '${escapedFrameworkDir}' }`,
+      `  if (-not $env:PAI_DIR -or -not (Test-Path -LiteralPath $env:PAI_DIR)) { $env:PAI_DIR = '${escapedPaiDir}' }`,
       `  if (-not $env:PAI_FRAMEWORK) { $env:PAI_FRAMEWORK = '${escapedFramework}' }`,
-      "  if (-not $env:PAI_CONFIG_DIR) { $env:PAI_CONFIG_DIR = Join-Path $HOME '.config\\PAI' }",
+      `  if (-not $env:PAI_CONFIG_DIR -or -not (Test-Path -LiteralPath $env:PAI_CONFIG_DIR)) { $env:PAI_CONFIG_DIR = '${escapedConfigDir}' }`,
       "}",
       "Initialize-PAIEnvironment",
       "function Invoke-PAI {",
@@ -2208,7 +2213,7 @@ export async function runConfiguration(
 
   for (const profile of shellProfiles()) {
     const rcPath = profile.path;
-    const aliasLine = paiShellCommand(profile.kind, dataDir, paiScript, target.id);
+    const aliasLine = paiShellCommand(profile.kind, dataDir, configDir, paiScript, target.id);
     if (existsSync(rcPath)) {
       let content = readFileSync(rcPath, "utf-8");
       // Remove any existing pai/k alias (old CORE or PAI paths, any marker variant)

@@ -31,19 +31,47 @@ function readJson(path: string): any {
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
+function normalizePathText(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase();
+}
+
+function codexHookConfigDirs(hooksJson: string): string[] {
+  const values: string[] = [];
+  function visit(value: unknown): void {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(/(?:^|\s)PAI_CONFIG_DIR='([^']*)'/g)) {
+        values.push(match[1]);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  }
+  try {
+    visit(JSON.parse(hooksJson));
+  } catch {}
+  return values;
+}
+
 const keep = process.argv.includes("--keep");
 const root = join(tmpdir(), `pai-codex-fresh-install-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const home = join(root, "home");
 const codexHome = join(home, ".codex");
 const dataDir = join(home, ".pai");
 const configDir = join(home, ".config", "PAI");
+const staleConfigDir = join(root, "deleted-config", "PAI");
 const shellProfile = join(home, ".bashrc");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 
 process.env.HOME = home;
 process.env.CODEX_HOME = codexHome;
 process.env.PAI_DATA_DIR = dataDir;
-process.env.PAI_CONFIG_DIR = configDir;
+process.env.PAI_CONFIG_DIR = staleConfigDir;
 process.env.PAI_FRAMEWORK = "codex";
 process.env.PAI_BUNDLE_DIR = releaseRoot;
 process.env.PAI_SHELL_PROFILE = shellProfile;
@@ -81,6 +109,11 @@ try {
   const interviewPrompt = existsSync(interviewPromptPath) ? readFileSync(interviewPromptPath, "utf-8") : "";
   const profile = existsSync(shellProfile) ? readFileSync(shellProfile, "utf-8") : "";
   const frameworkState = existsSync(join(dataDir, "framework.json")) ? readJson(join(dataDir, "framework.json")) : {};
+  const hookConfigDirs = codexHookConfigDirs(hooksJson).map(normalizePathText);
+  const expectedConfigDir = normalizePathText(configDir);
+  const staleConfigSegment = normalizePathText(staleConfigDir);
+  const expectedStatePath = join(configDir, "PAI-Install", "install-state.json");
+  const staleStatePath = join(staleConfigDir, "PAI-Install", "install-state.json");
 
   const checks: Check[] = [
     check("Codex home created", existsSync(codexHome), codexHome),
@@ -91,6 +124,8 @@ try {
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
     check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
     check("PromptProcessing timeout leaves fallback room", hooksJson.includes('"timeout": 35') && hooksJson.includes("--timeout-ms"), join(codexHome, "hooks.json")),
+    check("hooks ignore stale PAI_CONFIG_DIR", hookConfigDirs.length > 0 && hookConfigDirs.every((value) => value === expectedConfigDir && !value.includes(staleConfigSegment)), JSON.stringify(hookConfigDirs)),
+    check("installer state ignores stale PAI_CONFIG_DIR", existsSync(expectedStatePath) && !existsSync(staleStatePath), expectedStatePath),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
