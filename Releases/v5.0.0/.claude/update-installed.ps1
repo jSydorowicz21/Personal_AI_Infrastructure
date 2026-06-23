@@ -300,6 +300,14 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
   $targetRel = $targetRel -replace "/", "\"
   $target = Join-Path $InstallRoot $targetRel
 
+  if ($Entry.transformInstructions -and $Framework -ne "claude") {
+    $frameworkNativeSource = Join-Path $ReleaseRoot $targetRel
+    if (Test-Path -LiteralPath $frameworkNativeSource) {
+      $sourceRel = $targetRel
+      $source = $frameworkNativeSource
+    }
+  }
+
   if (-not (Test-Path -LiteralPath $source)) {
     throw "Manifest source missing: $source"
   }
