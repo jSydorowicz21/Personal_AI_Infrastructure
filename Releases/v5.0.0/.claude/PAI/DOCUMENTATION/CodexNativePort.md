@@ -709,12 +709,15 @@ Current passing state for the Codex/Windows parity branch:
 
 - Windows `CodexBranchValidation.ts`: 17 checks passed.
 - WSL Ubuntu `CodexBranchValidation.ts`: 17 checks passed.
+- GitHub Actions `windows-latest` `CodexBranchValidation.ts`: passed.
+- GitHub Actions `ubuntu-latest` `CodexBranchValidation.ts`: passed.
+- GitHub Actions `macos-latest` `CodexBranchValidation.ts`: passed.
 - `FrameworkSmokeTest.ts`: isolated and shared-sequence switching passed for Claude, Codex, and OpenCode with shared `PAI_DATA_DIR`.
 - `PaiSecurityAuditSmokeTest.ts`: hotfix manifest avoids protected state/config, all manifest sources exist, and managed TypeScript imports are covered.
 - Live Codex doctor: 25 critical checks passed, with optional token reminders only.
 - Pulse `/health`: HTTP 200.
 - Served Pulse assistant page: shows `$Interview` and `~/.pai/USER/DA/`.
 
-## Remaining Parity Boundary
+## Cross-Platform Parity Proof
 
-The Windows and Linux proof paths are live-run in this branch. macOS parity is covered by shared POSIX installer/update paths and the same framework/runtime tests, but a real macOS host was not available in this validation environment. Do not claim macOS native parity as fully proven until `CodexBranchValidation.ts`, `FrameworkSmokeTest.ts`, and `pai.ts doctor` pass on a macOS install.
+The `PAI Codex Validation` workflow runs `CodexBranchValidation.ts` on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Run `27998703578` passed all three jobs on commit `e1eea9572a731744911252f02f37a88955de9c7f`, including the hotfix updater, framework parity smoke, fresh install smoke, installer smoke, security audit, native runtime smoke, and doctor discoverability gates.
