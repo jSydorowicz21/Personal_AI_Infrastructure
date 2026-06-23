@@ -66,21 +66,36 @@ function Test-FrameworkStateUsable($State) {
   return $true
 }
 
+function Test-StaleFrameworkEnvironment {
+  if ($env:PAI_FRAMEWORK_DIR) {
+    $frameworkRoot = Resolve-AbsolutePath $env:PAI_FRAMEWORK_DIR
+    if (-not (Test-Path -LiteralPath $frameworkRoot)) { return $true }
+  }
+  if ($env:PAI_DIR) {
+    $paiRoot = Resolve-AbsolutePath $env:PAI_DIR
+    if (-not (Test-Path -LiteralPath $paiRoot)) { return $true }
+  }
+  return $false
+}
+
 function Resolve-PaiDataDir {
   $defaultDataDir = Join-Path $EffectiveHome ".pai"
   $state = Read-FrameworkState
-  if ((Test-FrameworkStateUsable $state) -and $state.dataDir) {
-    return (Resolve-AbsolutePath $state.dataDir)
-  }
-
   if ($env:PAI_DATA_DIR) {
     $envDataDir = Resolve-AbsolutePath $env:PAI_DATA_DIR
     if (Test-Path -LiteralPath $envDataDir) {
       $envState = Read-FrameworkStateAt $envDataDir
-      if ((-not $envState) -or (Test-FrameworkStateUsable $envState)) {
+      if ((-not $envState) -and ((-not (Test-FrameworkStateUsable $state)) -or (-not (Test-StaleFrameworkEnvironment)))) {
+        return $envDataDir
+      }
+      if (Test-FrameworkStateUsable $envState) {
         return $envDataDir
       }
     }
+  }
+
+  if ((Test-FrameworkStateUsable $state) -and $state.dataDir) {
+    return (Resolve-AbsolutePath $state.dataDir)
   }
 
   return $defaultDataDir

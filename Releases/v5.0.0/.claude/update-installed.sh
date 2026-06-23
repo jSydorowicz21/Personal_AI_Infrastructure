@@ -144,25 +144,36 @@ framework_state_usable() {
   [ -z "$root" ] || [ -e "$root" ]
 }
 
+stale_framework_env() {
+  if [ -n "${PAI_FRAMEWORK_DIR:-}" ] && [ ! -e "$PAI_FRAMEWORK_DIR" ]; then
+    return 0
+  fi
+  if [ -n "${PAI_DIR:-}" ] && [ ! -e "$PAI_DIR" ]; then
+    return 0
+  fi
+  return 1
+}
+
 resolve_pai_data_dir() {
   local default_data_dir="$HOME/.pai"
   local state active root data_dir
   state="$(read_framework_state || true)"
   root="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $2}')"
   data_dir="$(printf '%s' "$state" | awk -F '\t' 'NR==1 {print $3}')"
-  if framework_state_usable "$root" && [ -n "$data_dir" ]; then
-    absolute_path "$data_dir"
-    return 0
-  fi
 
   if [ -n "${PAI_DATA_DIR:-}" ] && [ -e "$PAI_DATA_DIR" ]; then
     local env_state env_root
     env_state="$(read_framework_state_at "$PAI_DATA_DIR" || true)"
     env_root="$(printf '%s' "$env_state" | awk -F '\t' 'NR==1 {print $2}')"
-    if [ -z "$env_state" ] || framework_state_usable "$env_root"; then
+    if { [ -z "$env_state" ] && { ! framework_state_usable "$root" || ! stale_framework_env; }; } || framework_state_usable "$env_root"; then
       absolute_path "$PAI_DATA_DIR"
       return 0
     fi
+  fi
+
+  if framework_state_usable "$root" && [ -n "$data_dir" ]; then
+    absolute_path "$data_dir"
+    return 0
   fi
 
   absolute_path "$default_data_dir"
