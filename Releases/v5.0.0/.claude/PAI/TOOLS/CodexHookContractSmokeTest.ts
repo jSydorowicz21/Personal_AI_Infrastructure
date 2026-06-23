@@ -27,8 +27,12 @@ type Check = {
 const keep = process.argv.includes("--keep");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 const home = process.env.HOME || homedir();
-const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || (existsSync(join(home, ".codex")) ? join(home, ".codex") : releaseRoot);
-const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
+function existingEnvPath(key: string): string {
+  const value = process.env[key];
+  return value && existsSync(value) ? value : "";
+}
+const frameworkRoot = existingEnvPath("PAI_FRAMEWORK_DIR") || existingEnvPath("CODEX_HOME") || (existsSync(join(home, ".codex")) ? join(home, ".codex") : releaseRoot);
+const paiDir = existingEnvPath("PAI_DIR") || join(frameworkRoot, "PAI");
 const adapter = join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts");
 const hooksJsonPath = join(frameworkRoot, "hooks.json");
 const tempRoot = mkdtempSync(join(tmpdir(), "pai-codex-hook-contract-"));
@@ -36,6 +40,8 @@ const tempData = join(tempRoot, "pai-data");
 const tempConfig = join(tempRoot, "config");
 const tempTranscript = join(tempRoot, "transcript.jsonl");
 const fakeBin = join(tempRoot, "bin");
+const missingRtkBin = join(tempRoot, "missing-rtk-bin");
+const rtkMissesPath = join(tempData, "MEMORY", "OBSERVABILITY", "rtk-hook-misses.jsonl");
 const adapterTimeoutHook = "FrameworkHookAdapterTimeoutSmoke.hook.ts";
 const adapterTimeoutHookPath = join(dirname(adapter), adapterTimeoutHook);
 const checks: Check[] = [];
@@ -263,10 +269,54 @@ function runRtkPreToolUseWithSlowRtk() {
     env: {
       ...process.env,
       PATH: `${fakeBin}${delimiter}${process.env.PATH || ""}`,
+      PAI_DATA_DIR: tempData,
       PAI_RTK_REWRITE_TIMEOUT_MS: "100",
     },
   });
   return { result, elapsedMs: Date.now() - started };
+}
+
+function runRtkPreToolUseWithMissingRtk() {
+  mkdirSync(missingRtkBin, { recursive: true });
+  return spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
+    input: JSON.stringify({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status" },
+      cwd: tempRoot,
+      session_id: "hook-contract-rtk-missing",
+    }),
+    encoding: "utf-8",
+    timeout: 5_000,
+    env: {
+      ...process.env,
+      PATH: missingRtkBin,
+      PAI_DATA_DIR: tempData,
+      PAI_RTK_REWRITE_TIMEOUT_MS: "100",
+    },
+  });
+}
+
+function runRtkPreToolUseProxyBypass() {
+  return spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
+    input: JSON.stringify({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "rtk proxy powershell Get-ChildItem" },
+      cwd: tempRoot,
+      session_id: "hook-contract-rtk-proxy",
+    }),
+    encoding: "utf-8",
+    timeout: 5_000,
+    env: {
+      ...process.env,
+      PAI_DATA_DIR: tempData,
+    },
+  });
+}
+
+function rtkMisses(): string {
+  return existsSync(rtkMissesPath) ? readFileSync(rtkMissesPath, "utf-8") : "";
 }
 
 try {
@@ -321,6 +371,20 @@ try {
     "RtkPreToolUse bounds slow rtk rewrite",
     rtkTimeout.result.status === 0 && rtkTimeout.elapsedMs < 3_000,
     `status=${rtkTimeout.result.status ?? "null"} elapsed=${rtkTimeout.elapsedMs}ms`
+  );
+
+  const missingRtk = runRtkPreToolUseWithMissingRtk();
+  check(
+    "RtkPreToolUse records missing rtk",
+    missingRtk.status === 0 && rtkMisses().includes('"reason":"rtk_unavailable_or_timeout"'),
+    `status=${missingRtk.status ?? "null"} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
+  );
+
+  const proxyBypass = runRtkPreToolUseProxyBypass();
+  check(
+    "RtkPreToolUse records rtk proxy bypass",
+    proxyBypass.status === 0 && rtkMisses().includes('"reason":"rtk_command_bypass"'),
+    `status=${proxyBypass.status ?? "null"} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
   );
 
   const adapterTimeout = runAdapterTimeoutProbe();

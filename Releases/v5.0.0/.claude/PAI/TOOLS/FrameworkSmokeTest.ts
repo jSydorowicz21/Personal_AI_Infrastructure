@@ -151,7 +151,29 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     timeout: 20_000,
   });
 
+  const staleHome = join(dirname(data), "opencode-stale-home");
+  const staleDefaultData = join(staleHome, ".pai");
+  const staleEnvData = join(dirname(data), "deleted-opencode-data");
+  mkdirSync(staleDefaultData, { recursive: true });
+  writeFileSync(join(staleDefaultData, "framework.json"), JSON.stringify({ active: "opencode", root, dataDir: data }), "utf-8");
+  const staleEnv = {
+    ...testEnv,
+    HOME: staleHome,
+    USERPROFILE: staleHome,
+    PAI_DATA_DIR: staleEnvData,
+    PAI_DIR: join(dirname(data), "deleted-opencode-root", "PAI"),
+    PAI_FRAMEWORK_DIR: join(dirname(data), "deleted-opencode-root"),
+    PAI_CONFIG_DIR: join(dirname(data), "deleted-opencode-config"),
+  };
+  const staleResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: staleEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+
   const transcriptFiles = findJsonlFiles(join(data, "TRANSCRIPTS", "opencode"));
+  const staleTranscriptFiles = findJsonlFiles(join(staleEnvData, "TRANSCRIPTS", "opencode"));
   const transcriptText = transcriptFiles.map((file) => readFileSync(file, "utf-8")).join("\n");
   const harvest = spawnSync(process.execPath, [join(import.meta.dir, "SessionHarvester.ts"), "--recent", "1", "--dry-run"], {
     cwd: root,
@@ -170,6 +192,11 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       name: "opencode plugin transcript exits 0",
       passed: result.status === 0,
       detail: `status=${result.status ?? "null"} ${result.stderr.trim().slice(0, 120)}`,
+    },
+    {
+      name: "opencode plugin ignores stale env roots",
+      passed: staleResult.status === 0 && staleTranscriptFiles.length === 0 && transcriptFiles.length > 0,
+      detail: `status=${staleResult.status ?? "null"} stale_transcripts=${staleTranscriptFiles.length}`,
     },
     {
       name: "opencode session start persists Kitty env",
@@ -203,7 +230,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     },
     {
       name: "opencode transcript harvestable",
-      passed: harvest.status === 0 && harvest.stdout.includes("2 learning(s)"),
+      passed: harvest.status === 0 && Number(harvest.stdout.match(/(\d+)\s+learning\(s\)/)?.[1] || 0) >= 2,
       detail: `status=${harvest.status ?? "null"}`,
     },
     {
@@ -229,8 +256,15 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     console.log(JSON.stringify({
       toolsPaiDir: tools.getPaiDir(),
       toolsFrameworkDir: tools.getFrameworkDir(),
+      toolsConfigDir: tools.getConfigDir(),
+      toolsEnvPath: tools.getEnvPath(),
+      toolsMemoryDir: tools.getMemoryDir(),
+      toolsUserDir: tools.getUserDir(),
       hooksPaiDir: hooks.getPaiDir(),
       hooksFrameworkDir: hooks.getFrameworkDir(),
+      hooksEnvPath: hooks.getEnvPath(),
+      hooksMemoryDir: hooks.getMemoryDir(),
+      hooksUserDir: hooks.getUserDir(),
       transcriptFrameworkDir: transcripts.getActiveFrameworkRoot("codex")
     }));
   `;
@@ -248,10 +282,16 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
 
   const staleEnv = {
     ...process.env,
+    HOME: join(root, "path-home"),
+    USERPROFILE: join(root, "path-home"),
     PAI_DATA_DIR: data,
     PAI_DIR: join(root, "deleted-framework", "PAI"),
     PAI_FRAMEWORK_DIR: join(root, "deleted-framework"),
+    PAI_CONFIG_DIR: join(root, "deleted-config"),
+    PAI_MEMORY_DIR: join(root, "deleted-memory"),
+    PAI_USER_DIR: join(root, "deleted-user"),
   } as Record<string, string>;
+  writeFileSync(join(root, ".env"), "PAI_FRAMEWORK_ENV=1\n", "utf-8");
   const staleResult = spawnSync(process.execPath, ["-e", script], {
     cwd: root,
     env: staleEnv,
@@ -360,6 +400,26 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       name: "transcript path ignores stale PAI_FRAMEWORK_DIR",
       passed: staleResolved.transcriptFrameworkDir === root,
       detail: JSON.stringify({ root: staleResolved.transcriptFrameworkDir }),
+    },
+    {
+      name: "tools path ignores stale PAI_MEMORY_DIR and PAI_USER_DIR",
+      passed: staleResolved.toolsMemoryDir === join(data, "MEMORY") && staleResolved.toolsUserDir === join(data, "USER"),
+      detail: JSON.stringify({ memory: staleResolved.toolsMemoryDir, user: staleResolved.toolsUserDir }),
+    },
+    {
+      name: "hooks path ignores stale PAI_MEMORY_DIR and PAI_USER_DIR",
+      passed: staleResolved.hooksMemoryDir === join(data, "MEMORY") && staleResolved.hooksUserDir === join(data, "USER"),
+      detail: JSON.stringify({ memory: staleResolved.hooksMemoryDir, user: staleResolved.hooksUserDir }),
+    },
+    {
+      name: "tools path ignores stale PAI_CONFIG_DIR for env path",
+      passed: staleResolved.toolsConfigDir !== join(root, "deleted-config") && staleResolved.toolsEnvPath === join(root, ".env"),
+      detail: JSON.stringify({ config: staleResolved.toolsConfigDir, env: staleResolved.toolsEnvPath }),
+    },
+    {
+      name: "hooks path ignores stale PAI_CONFIG_DIR for env path",
+      passed: staleResolved.hooksEnvPath === join(root, ".env"),
+      detail: JSON.stringify({ env: staleResolved.hooksEnvPath }),
     },
     {
       name: "tools path ignores deleted PAI_DATA_DIR",
@@ -508,9 +568,9 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         detail: "UserPromptSubmit mode hook",
       });
       checks.push({
-        name: "codex PromptProcessing hook has full fallback budget",
-        passed: hooksText.includes('"timeout": 35') && hooksText.includes("--timeout-ms"),
-        detail: "PromptProcessing timeout >= inference + notify fallback",
+        name: "codex PromptProcessing hook leaves adapter headroom",
+        passed: hooksText.includes('"timeout": 40') && hooksText.includes("--timeout-ms") && hooksText.includes("35000"),
+        detail: "outer timeout exceeds child inference + notify fallback budget",
       });
       checks.push({
         name: "codex hooks include ISA checkpoint sync",

@@ -156,6 +156,10 @@ function powerShellEncodedCommand(script: string): string {
   return Buffer.from(script, "utf16le").toString("base64");
 }
 
+function outerHookTimeout(timeout: number): number {
+  return timeout + 5;
+}
+
 function hookCommand(config: PAIConfig, hookFile: string, timeout = 10): string {
   const adapter = `${config.paiDir}/hooks/FrameworkHookAdapter.ts`;
   const env = [
@@ -211,7 +215,7 @@ function commandHook(config: PAIConfig, hookFile: string, timeout = 10): Record<
     type: "command",
     command: hookCommand(config, hookFile, timeout),
     commandWindows: hookCommandWindows(config, hookFile, timeout),
-    timeout,
+    timeout: outerHookTimeout(timeout),
   };
 }
 

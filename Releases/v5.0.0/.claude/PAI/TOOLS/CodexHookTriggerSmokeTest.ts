@@ -19,9 +19,13 @@ type Check = {
 };
 
 const home = homedir();
-const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(home, ".codex");
-const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
-const dataDir = process.env.PAI_DATA_DIR || join(home, ".pai");
+function existingEnvPath(key: string): string {
+  const value = process.env[key];
+  return value && existsSync(value) ? value : "";
+}
+const frameworkRoot = existingEnvPath("PAI_FRAMEWORK_DIR") || existingEnvPath("CODEX_HOME") || join(home, ".codex");
+const paiDir = existingEnvPath("PAI_DIR") || join(frameworkRoot, "PAI");
+const dataDir = existingEnvPath("PAI_DATA_DIR") || join(home, ".pai");
 const adapter = join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts");
 const activityLog = join(dataDir, "MEMORY", "OBSERVABILITY", "tool-activity.jsonl");
 const securityDir = join(dataDir, "MEMORY", "SECURITY");

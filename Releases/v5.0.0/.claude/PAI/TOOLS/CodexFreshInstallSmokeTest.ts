@@ -123,7 +123,7 @@ try {
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
     check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
     check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
-    check("PromptProcessing timeout leaves fallback room", hooksJson.includes('"timeout": 35') && hooksJson.includes("--timeout-ms"), join(codexHome, "hooks.json")),
+    check("PromptProcessing timeout leaves adapter headroom", hooksJson.includes('"timeout": 40') && hooksJson.includes("--timeout-ms") && hooksJson.includes("35000"), join(codexHome, "hooks.json")),
     check("hooks ignore stale PAI_CONFIG_DIR", hookConfigDirs.length > 0 && hookConfigDirs.every((value) => value === expectedConfigDir && !value.includes(staleConfigSegment)), JSON.stringify(hookConfigDirs)),
     check("installer state ignores stale PAI_CONFIG_DIR", existsSync(expectedStatePath) && !existsSync(staleStatePath), expectedStatePath),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),

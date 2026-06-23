@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
+const { appendFileSync, mkdirSync } = require("node:fs");
+const { join } = require("node:path");
+const { homedir } = require("node:os");
 
 const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 1500;
 
@@ -29,6 +32,25 @@ function getCommand(payload) {
   return { input, command: input.command };
 }
 
+function dataDir() {
+  return process.env.PAI_DATA_DIR || join(process.env.HOME || process.env.USERPROFILE || homedir(), ".pai");
+}
+
+function recordMiss(reason, command, detail = "") {
+  try {
+    const dir = join(dataDir(), "MEMORY", "OBSERVABILITY");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, "rtk-hook-misses.jsonl"), JSON.stringify({
+      ts: new Date().toISOString(),
+      reason,
+      detail,
+      command: command.length > 240 ? `${command.slice(0, 237)}...` : command,
+    }) + "\n");
+  } catch {
+    // Observability must never break hook execution.
+  }
+}
+
 function rewriteCommand(command) {
   const result = spawnSync("rtk", ["rewrite", command], {
     encoding: "utf8",
@@ -37,6 +59,7 @@ function rewriteCommand(command) {
   });
 
   if (result.error) {
+    recordMiss("rtk_unavailable_or_timeout", command, result.error.message);
     if (process.env.PAI_HOOK_DEBUG === "1") {
       process.stderr.write(`[RtkPreToolUse] rtk rewrite failed: ${result.error.message}\n`);
     }
@@ -45,10 +68,12 @@ function rewriteCommand(command) {
 
   const rewritten = (result.stdout || "").trim();
   if (!rewritten || rewritten === command.trim()) {
+    recordMiss("not_rewritable", command);
     return null;
   }
 
   if (!rewritten.toLowerCase().startsWith("rtk ")) {
+    recordMiss("non_rtk_rewrite", command, rewritten);
     return null;
   }
 
@@ -91,6 +116,7 @@ async function main() {
   }
 
   if (isRtkCommand(commandInfo.command)) {
+    recordMiss("rtk_command_bypass", commandInfo.command);
     return;
   }
 

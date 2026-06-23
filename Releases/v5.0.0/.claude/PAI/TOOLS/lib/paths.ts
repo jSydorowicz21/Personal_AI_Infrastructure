@@ -83,7 +83,9 @@ export function getPaiDataDir(): string {
 }
 
 export function getConfigDir(): string {
-  return expandHome(process.env.PAI_CONFIG_DIR || join(homeDir(), ".config", "PAI"));
+  const envConfigDir = process.env.PAI_CONFIG_DIR ? expandHome(process.env.PAI_CONFIG_DIR) : "";
+  if (envConfigDir && existsSync(envConfigDir)) return envConfigDir;
+  return join(homeDir(), ".config", "PAI");
 }
 
 export function getEnvPath(): string {
@@ -94,11 +96,15 @@ export function getEnvPath(): string {
 }
 
 export function getMemoryDir(): string {
-  return expandHome(process.env.PAI_MEMORY_DIR || join(getPaiDataDir(), "MEMORY"));
+  const envMemoryDir = process.env.PAI_MEMORY_DIR ? expandHome(process.env.PAI_MEMORY_DIR) : "";
+  if (envMemoryDir && existsSync(envMemoryDir)) return envMemoryDir;
+  return join(getPaiDataDir(), "MEMORY");
 }
 
 export function getUserDir(): string {
-  return expandHome(process.env.PAI_USER_DIR || join(getPaiDataDir(), "USER"));
+  const envUserDir = process.env.PAI_USER_DIR ? expandHome(process.env.PAI_USER_DIR) : "";
+  if (envUserDir && existsSync(envUserDir)) return envUserDir;
+  return join(getPaiDataDir(), "USER");
 }
 
 export function paiPath(...segments: string[]): string {

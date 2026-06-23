@@ -5,19 +5,55 @@
  * OpenCode auto-loads local plugins from ~/.config/opencode/plugins/.
  */
 
-import { appendFileSync, existsSync, mkdirSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join, resolve } from "path";
 import { spawnSync } from "child_process";
 
 type JsonObject = Record<string, any>;
+type FrameworkState = { active?: string; root?: string; dataDir?: string };
 
 const FRAMEWORK = "opencode";
 const ROOT = resolve(import.meta.dir, "..");
-const PAI_DIR = process.env.PAI_DIR || join(ROOT, "PAI");
-const DATA_DIR = process.env.PAI_DATA_DIR || join(homedir(), ".pai");
-const CONFIG_DIR = process.env.PAI_CONFIG_DIR || join(homedir(), ".config", "PAI");
-const SETTINGS_PATH = process.env.PAI_SETTINGS_PATH || join(ROOT, "settings.json");
+const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
+
+function readJson(path: string): JsonObject | null {
+  try {
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function frameworkStateAt(dataDir: string): FrameworkState | null {
+  const parsed = readJson(join(dataDir, "framework.json"));
+  return parsed && typeof parsed === "object" ? parsed as FrameworkState : null;
+}
+
+function existingEnvPath(key: string): string {
+  const value = process.env[key];
+  return value && existsSync(value) ? value : "";
+}
+
+function resolveDataDir(): string {
+  const envData = existingEnvPath("PAI_DATA_DIR");
+  if (envData) {
+    const state = frameworkStateAt(envData);
+    if (!state || !state.root || existsSync(state.root)) return envData;
+  }
+  const defaultData = join(HOME, ".pai");
+  const defaultState = frameworkStateAt(defaultData);
+  if (defaultState?.dataDir && existsSync(defaultState.dataDir)) return defaultState.dataDir;
+  return defaultData;
+}
+
+const DATA_DIR = resolveDataDir();
+const STATE = frameworkStateAt(DATA_DIR);
+const FRAMEWORK_ROOT = STATE?.root && existsSync(STATE.root) ? STATE.root : ROOT;
+const PAI_DIR = existingEnvPath("PAI_DIR") || join(FRAMEWORK_ROOT, "PAI");
+const CONFIG_DIR = existingEnvPath("PAI_CONFIG_DIR") || join(HOME, ".config", "PAI");
+const SETTINGS_PATH = existingEnvPath("PAI_SETTINGS_PATH") || join(FRAMEWORK_ROOT, "settings.json");
 const ADAPTER = join(ROOT, "hooks", "FrameworkHookAdapter.ts");
 
 const PRE_TOOL_HOOKS = new Set(["bash", "shell", "write", "edit", "read", "apply_patch"]);
@@ -34,7 +70,7 @@ function hookEnv(): Record<string, string> {
     PAI_DIR,
     PAI_DATA_DIR: DATA_DIR,
     PAI_FRAMEWORK: FRAMEWORK,
-    PAI_FRAMEWORK_DIR: ROOT,
+    PAI_FRAMEWORK_DIR: FRAMEWORK_ROOT,
     PAI_SETTINGS_PATH: SETTINGS_PATH,
     PAI_CONFIG_DIR: CONFIG_DIR,
   } as Record<string, string>;

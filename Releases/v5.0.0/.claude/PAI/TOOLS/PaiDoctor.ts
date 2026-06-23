@@ -7,8 +7,8 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { getConfigDir, getFrameworkDir, getPaiDataDir, getPaiDir } from "./lib/paths";
 
 type Check = {
   name: string;
@@ -17,10 +17,10 @@ type Check = {
   critical?: boolean;
 };
 
-const home = homedir();
-const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(home, ".codex");
-const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
-const dataDir = process.env.PAI_DATA_DIR || join(home, ".pai");
+const frameworkRoot = getFrameworkDir();
+const paiDir = getPaiDir();
+const dataDir = getPaiDataDir();
+const configDir = getConfigDir();
 const toolsDir = import.meta.dir;
 
 function ok(name: string, passed: boolean, detail: string, critical = true): Check {
@@ -54,7 +54,7 @@ function runBunTool(name: string): Check {
       PAI_FRAMEWORK: "codex",
       PAI_FRAMEWORK_DIR: frameworkRoot,
       PAI_SETTINGS_PATH: join(frameworkRoot, "settings.json"),
-      PAI_CONFIG_DIR: process.env.PAI_CONFIG_DIR || join(home, ".config", "PAI"),
+      PAI_CONFIG_DIR: configDir,
     },
   });
   const output = `${res.stdout || ""}${res.stderr || ""}`.trim().split("\n").slice(-3).join(" | ");
