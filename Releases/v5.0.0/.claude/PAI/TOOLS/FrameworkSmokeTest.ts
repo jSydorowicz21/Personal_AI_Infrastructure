@@ -124,14 +124,8 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       throw new Error("LoadContext did not inject dynamic context into OpenCode prompt");
     }
     writeFileSync(${JSON.stringify(contextMarkerPath)}, "injected", "utf-8");
-    let repeatBlocked = false;
-    try {
-      await hooks["tui.prompt.append"](session, { prompt: repeatedPrompt });
-    } catch {
-      repeatBlocked = true;
-    }
-    if (!repeatBlocked) throw new Error("RepeatDetection did not block repeated OpenCode prompt");
-    writeFileSync(${JSON.stringify(repeatMarkerPath)}, "blocked", "utf-8");
+    await hooks["tui.prompt.append"](session, { prompt: repeatedPrompt });
+    writeFileSync(${JSON.stringify(repeatMarkerPath)}, "advisory", "utf-8");
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "user", content: [{ type: "text", text: "Actually, shared memory should follow OpenCode too." }] } } });
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "assistant", content: [{ type: "text", text: "Important: OpenCode wrote a PAI transcript." }] } } });
     await hooks["tool.execute.after"]({ ...session, tool: "edit" }, { args: { filePath: "PAI/TOOLS/Smoke.ts" }, output: "ok" });
@@ -170,7 +164,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       detail: existsSync(kittySessionPath) ? kittySessionPath : kittyEnvPath,
     },
     {
-      name: "opencode prompt repeat detection blocks",
+      name: "opencode prompt repeat detection stays advisory",
       passed: existsSync(repeatMarkerPath),
       detail: repeatMarkerPath,
     },
@@ -266,6 +260,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     writeFileSync(join(root, "config.toml"), [
       'model = "gpt-5.5"',
       'model_reasoning_effort = "high"',
+      'plan_mode_reasoning_effort = "xhigh"',
       "",
       "[model_providers.custom_local]",
       'name = "Custom Local Provider"',
@@ -343,6 +338,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
   if (framework === "codex") {
     checks.push(checkPath("codex config.toml", join(root, "config.toml")));
     checks.push(checkPath("codex hooks.json", join(root, "hooks.json")));
+    checks.push(checkPath("codex memory delete tool", join(root, "PAI", "TOOLS", "MemoryDelete.ts")));
     checks.push(...checkGeneratedAgents(root, framework));
     if (existsSync(join(root, "hooks.json"))) {
       const hooksText = readFileSync(join(root, "hooks.json"), "utf-8");
@@ -351,12 +347,24 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         passed: hooksText.includes("PAI_DATA_DIR"),
         detail: "hooks.json command env",
       });
+      checks.push({
+        name: "codex hooks include question tab",
+        passed: hooksText.includes("SetQuestionTab.hook.ts"),
+        detail: "AskUserQuestion/request_user_input hook",
+      });
+      checks.push({
+        name: "codex hooks include agent invocation",
+        passed: hooksText.includes("AgentInvocation.hook.ts"),
+        detail: "Agent hook",
+      });
     }
     if (existsSync(join(root, "config.toml"))) {
       const configText = readFileSync(join(root, "config.toml"), "utf-8");
       checks.push({
         name: "codex config preserves existing model",
-        passed: configText.includes('model = "gpt-5.5"') && configText.includes('model_reasoning_effort = "high"'),
+        passed: configText.includes('model = "gpt-5.5"')
+          && configText.includes('model_reasoning_effort = "high"')
+          && configText.includes('plan_mode_reasoning_effort = "xhigh"'),
         detail: "model settings",
       });
       checks.push({

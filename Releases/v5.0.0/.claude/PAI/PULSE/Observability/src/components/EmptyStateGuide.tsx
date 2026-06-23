@@ -21,7 +21,7 @@ export default function EmptyStateGuide({
   section,
   description,
   userDir,
-  interviewCommand = "/interview",
+  interviewCommand = "$Interview",
   daPromptExample,
   hideInterview = false,
 }: EmptyStateGuideProps) {
@@ -48,7 +48,7 @@ export default function EmptyStateGuide({
           <div className="flex items-start gap-2.5 text-sm">
             <MessageSquare className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <span className="text-slate-200">Run </span>
+              <span className="text-slate-200">Type </span>
               <code className="px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 text-xs font-mono">
                 {interviewCommand}
               </code>

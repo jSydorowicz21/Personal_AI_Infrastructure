@@ -265,9 +265,12 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const codexConfigPath = join(paiDir, "config.toml");
       const codexHooksPath = join(paiDir, "hooks.json");
       const codexPromptPath = join(paiDir, "prompts", "cs.md");
+      const codexInterviewPromptPath = join(paiDir, "prompts", "interview.md");
       const codexAgentPath = join(paiDir, "agents", "engineer.toml");
-      const codexSkillPath = join(homedir(), ".agents", "skills", "ContextSearch", "SKILL.md");
+      const codexSkillPath = join(paiDir, "skills", "ContextSearch", "SKILL.md");
+      const memoryDeletePath = join(paiDir, "PAI", "TOOLS", "MemoryDelete.ts");
       const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
+      const codexInterviewPromptContent = existsSync(codexInterviewPromptPath) ? readFileSync(codexInterviewPromptPath, "utf-8") : "";
       checks.push({
         name: "Codex config.toml",
         passed: existsSync(codexConfigPath),
@@ -281,9 +284,9 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         critical: true,
       });
       checks.push({
-        name: "Codex skill link",
+        name: "Codex home skills",
         passed: existsSync(codexSkillPath),
-        detail: existsSync(codexSkillPath) ? "ContextSearch present in ~/.agents/skills" : "ContextSearch missing from ~/.agents/skills",
+        detail: existsSync(codexSkillPath) ? "ContextSearch present in Codex home skills" : "ContextSearch missing from Codex home skills",
         critical: false,
       });
       checks.push({
@@ -297,10 +300,26 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
         critical: false,
       });
       checks.push({
+        name: "Codex Interview skill bridge",
+        passed: existsSync(codexInterviewPromptPath) && codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("'),
+        detail: existsSync(codexInterviewPromptPath)
+          ? codexInterviewPromptContent.includes("$Interview") && !codexInterviewPromptContent.includes('Skill("')
+            ? "prompts/interview.md falls back to Codex skill mention syntax"
+            : "prompts/interview.md does not invoke the Interview skill in Codex form"
+          : "prompts/interview.md missing",
+        critical: false,
+      });
+      checks.push({
         name: "Codex native agents",
         passed: existsSync(codexAgentPath),
         detail: existsSync(codexAgentPath) ? "PAI agents generated as TOML" : "agents/engineer.toml missing",
         critical: false,
+      });
+      checks.push({
+        name: "Codex memory deletion",
+        passed: existsSync(memoryDeletePath),
+        detail: existsSync(memoryDeletePath) ? "MemoryDelete.ts installed" : "PAI/TOOLS/MemoryDelete.ts missing",
+        critical: true,
       });
     } else if (framework.id === "opencode") {
       const openCodeConfigPath = join(paiDir, "opencode.json");

@@ -9,8 +9,8 @@ hook trust state.
 
 [CmdletBinding()]
 param(
-  [string]$RepoUrl = "https://github.com/jSydorowicz21/Personal_AI_Infrastructure.git",
-  [string]$Branch = "pai-codex-windows-installer",
+  [string]$RepoUrl = "https://github.com/haydencj/Personal_AI_Infrastructure.git",
+  [string]$Branch = "pai-codex-flawless-runtime",
   [string]$Framework = "",
   [string]$InstallRoot = "",
   [string]$AgentsSkillsRoot = "",

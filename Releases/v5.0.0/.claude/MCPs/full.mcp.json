@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "brightdata": {
+      "command": "bunx",
+      "args": [
+        "@brightdata/mcp"
+      ],
+      "env_vars": [
+        "API_TOKEN",
+        "PRO_MODE"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    },
+    "apify": {
+      "command": "bunx",
+      "args": [
+        "@apify/actors-mcp-server@latest"
+      ],
+      "env_vars": [
+        "APIFY_TOKEN"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    },
+    "clickup": {
+      "type": "http",
+      "url": "https://mcp.clickup.com/mcp",
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    },
+    "shadcn": {
+      "command": "bunx",
+      "args": [
+        "shadcn@latest",
+        "mcp"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp",
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    }
+  }
+}

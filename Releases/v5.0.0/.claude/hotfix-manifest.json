@@ -21,6 +21,175 @@
       "target": "PAI/TOOLS/pai.ts"
     },
     {
+      "source": "PAI/TOOLS/Inference.ts",
+      "target": "PAI/TOOLS/Inference.ts"
+    },
+    {
+      "source": "PAI/TOOLS/algorithm.ts",
+      "target": "PAI/TOOLS/algorithm.ts"
+    },
+    {
+      "source": "PAI/TOOLS/lib/framework-agent.ts",
+      "target": "PAI/TOOLS/lib/framework-agent.ts"
+    },
+    {
+      "source": "PAI/TOOLS/PaiDoctor.ts",
+      "target": "PAI/TOOLS/PaiDoctor.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
+      "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
+      "target": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexRealSessionHookProof.ts",
+      "target": "PAI/TOOLS/CodexRealSessionHookProof.ts"
+    },
+    {
+      "source": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
+      "target": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
+      "target": "PAI/TOOLS/RepeatDetectionSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
+      "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HookSharedPathSmokeTest.ts",
+      "target": "PAI/TOOLS/HookSharedPathSmokeTest.ts"
+    },
+    {
+      "source": "PAI/PAI-Install/README.md",
+      "target": "PAI/PAI-Install/README.md"
+    },
+    {
+      "source": "PAI/ALGORITHM/LATEST",
+      "target": "PAI/ALGORITHM/LATEST"
+    },
+    {
+      "source": "PAI/ALGORITHM/v6.3.0.md",
+      "target": "PAI/ALGORITHM/v6.3.0.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/CodexNativePort.md",
+      "target": "PAI/DOCUMENTATION/CodexNativePort.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Pulse/PulseSystem.md",
+      "target": "PAI/DOCUMENTATION/Pulse/PulseSystem.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Tools/Cli.md",
+      "target": "PAI/DOCUMENTATION/Tools/Cli.md"
+    },
+    {
+      "source": "PAI/PULSE/PULSE.toml",
+      "target": "PAI/PULSE/PULSE.toml"
+    },
+    {
+      "source": "PAI/PULSE/lib.ts",
+      "target": "PAI/PULSE/lib.ts"
+    },
+    {
+      "source": "PAI/PULSE/pulse.ts",
+      "target": "PAI/PULSE/pulse.ts"
+    },
+    {
+      "source": "PAI/PULSE/setup.ts",
+      "target": "PAI/PULSE/setup.ts"
+    },
+    {
+      "source": "PAI/PULSE/package.json",
+      "target": "PAI/PULSE/package.json"
+    },
+    {
+      "source": "PAI/PULSE/bun.lock",
+      "target": "PAI/PULSE/bun.lock"
+    },
+    {
+      "source": "PAI/PULSE/modules/telegram.ts",
+      "target": "PAI/PULSE/modules/telegram.ts"
+    },
+    {
+      "source": "PAI/PULSE/modules/imessage.ts",
+      "target": "PAI/PULSE/modules/imessage.ts"
+    },
+    {
+      "source": "PAI/PULSE/checks/github-work.ts",
+      "target": "PAI/PULSE/checks/github-work.ts"
+    },
+    {
+      "source": "PAI/PULSE/Observability/next.config.ts",
+      "target": "PAI/PULSE/Observability/next.config.ts"
+    },
+    {
+      "source": "PAI/PULSE/Observability/public/pai-logo.png",
+      "target": "PAI/PULSE/Observability/public/pai-logo.png"
+    },
+    {
+      "source": "PAI/PULSE/Observability/out/pai-logo.png",
+      "target": "PAI/PULSE/Observability/out/pai-logo.png"
+    },
+    {
+      "source": "MCPs",
+      "target": "MCPs"
+    },
+    {
+      "source": "hooks/StartupSelfCheck.hook.ts",
+      "target": "hooks/StartupSelfCheck.hook.ts"
+    },
+    {
+      "source": "hooks/RepeatDetection.hook.ts",
+      "target": "hooks/RepeatDetection.hook.ts"
+    },
+    {
+      "source": "hooks/PromptGuard.hook.ts",
+      "target": "hooks/PromptGuard.hook.ts"
+    },
+    {
+      "source": "README.md",
+      "target": "README.md"
+    },
+    {
+      "source": "RTK.md",
+      "target": "RTK.md"
+    },
+    {
+      "source": "update-installed.sh",
+      "target": "update-installed.sh"
+    },
+    {
+      "source": "update-installed.ps1",
+      "target": "update-installed.ps1"
+    },
+    {
+      "source": "skills/Interceptor",
+      "target": "skills/Interceptor",
+      "mirrorToCodexAgentsSkills": true
+    },
+    {
       "source": "skills/Webdesign",
       "target": "skills/Webdesign",
       "mirrorToCodexAgentsSkills": true

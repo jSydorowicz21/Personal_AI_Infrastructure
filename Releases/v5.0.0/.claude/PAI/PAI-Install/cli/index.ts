@@ -305,8 +305,9 @@ export async function runCLI(): Promise<void> {
     print(`  ${c.gray}and how you think. Two paths to do that:${c.reset}`);
     print("");
     print(`  ${c.lightBlue}${c.bold}Fast path — let the DA interview you:${c.reset}`);
+    const interviewCommand = state.collected.framework === "codex" ? "$Interview" : "/interview";
     print(`  ${c.gray}1.${c.reset} Run ${c.bold}${launchCommand()}${c.reset}${c.gray} to launch PAI.${c.reset}`);
-    print(`  ${c.gray}2.${c.reset} Type ${c.bold}/interview${c.reset}${c.gray} — the DA walks through TELOS, identity, projects, preferences. Pause and resume anytime.${c.reset}`);
+    print(`  ${c.gray}2.${c.reset} Type ${c.bold}${interviewCommand}${c.reset}${c.gray} — the DA walks through TELOS, identity, projects, preferences. Pause and resume anytime.${c.reset}`);
     print(`     ${c.gray}(Already have goals/journals/notes in Obsidian, Notion, etc.? Run the ${c.bold}Migrate${c.reset}${c.gray} skill first so the interview fills gaps instead of asking you to re-type.)${c.reset}`);
     print("");
     print(`  ${c.lightBlue}${c.bold}Manual path — edit the files yourself:${c.reset}`);

@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "brightdata": {
+      "command": "bunx",
+      "args": [
+        "@brightdata/mcp"
+      ],
+      "env_vars": [
+        "API_TOKEN",
+        "PRO_MODE"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    },
+    "apify": {
+      "command": "bunx",
+      "args": [
+        "@apify/actors-mcp-server@latest"
+      ],
+      "env_vars": [
+        "APIFY_TOKEN"
+      ],
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 120
+    }
+  }
+}

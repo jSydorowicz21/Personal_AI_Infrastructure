@@ -186,6 +186,8 @@ That's it. The installer wizard handles Bun, Git, framework selection, agent CLI
 
 **Prefer to inspect first?** [Read the script](https://ourpai.ai/install.sh) before piping it.
 
+After install, or any time startup reports a PAI self-check warning, run `k doctor` for full local diagnostics across config, hooks, Pulse, MCP profiles, and Codex runtime smoke tests.
+
 ### Update an existing install
 
 For small fixes after PAI is already installed, use the hotfix updater instead of re-running the full installer. It fetches the release bundle, reads `hotfix-manifest.json`, backs up touched files under `~/.pai/BACKUPS/`, and overlays only managed PAI files. It does not overwrite `USER`, `MEMORY`, auth, env files, framework config, or hook trust state.
@@ -202,10 +204,10 @@ macOS/Linux/WSL:
 bash ./Releases/v5.0.0/.claude/update-installed.sh --framework codex --source-dir .
 ```
 
-From a machine that already has PAI installed but needs the latest updater from this fork:
+From a machine that already has PAI installed but needs the latest updater from this branch:
 
 ```powershell
-$u = "https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.ps1"
+$u = "https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.ps1"
 $p = Join-Path $env:TEMP "pai-update-installed.ps1"
 Invoke-WebRequest $u -OutFile $p
 powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
@@ -214,12 +216,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
 macOS/Linux/WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jSydorowicz21/Personal_AI_Infrastructure/pai-codex-windows-installer/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
+curl -fsSL https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
 ```
 
 Use `-Framework claude` or `-Framework opencode` for those targets, or omit `-Framework` to let the updater read `~/.pai/framework.json`.
 
 Use `--framework claude` or `--framework opencode` with the shell updater. When the source directory points at a git checkout, the updater runs `git fetch --prune` and `git pull --ff-only` before copying files. Pass `-NoPull` in PowerShell or `--no-pull` in Bash when testing uncommitted local changes.
+
+Rollback restores the files touched by the hotfix from the newest backup:
+
+```bash
+BACKUP="$(ls -dt ~/.pai/BACKUPS/hotfix-* | head -1)"
+cp -a "$BACKUP"/. "$CODEX_HOME"/
+```
+
+PowerShell:
+
+```powershell
+$backup = Get-ChildItem "$HOME\.pai\BACKUPS" -Directory -Filter "hotfix-*" | Sort-Object Name -Descending | Select-Object -First 1
+Get-ChildItem -LiteralPath $backup.FullName -Force | Copy-Item -Destination $env:CODEX_HOME -Recurse -Force
+```
 
 ### Manual install (clone + run)
 

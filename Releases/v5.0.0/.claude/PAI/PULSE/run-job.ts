@@ -29,7 +29,7 @@ try {
   }
 } catch {}
 
-import { loadConfig, spawnClaude, spawnScript, dispatch, isSentinel, log } from "./lib"
+import { loadConfig, spawnAI, spawnScript, dispatch, isSentinel, log } from "./lib"
 
 const jobName = process.argv[2]
 if (!jobName) {
@@ -49,8 +49,8 @@ log("info", `Manual run: ${job.name}`, { type: job.type })
 const start = Date.now()
 
 let output: string
-if (job.type === "claude") {
-  output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+if (job.type === "claude" || job.type === "ai") {
+  output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
 } else {
   output = await spawnScript(job.command!)
 }

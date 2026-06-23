@@ -1,0 +1,25 @@
+name: PAI Codex Validation
+
+on:
+  push:
+    branches:
+      - pai-codex-flawless-runtime
+  pull_request:
+    paths:
+      - ".github/workflows/pai-codex-validation.yml"
+      - "README.md"
+      - "Releases/v5.0.0/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run Codex branch validation
+        run: bun Releases/v5.0.0/.claude/PAI/TOOLS/CodexBranchValidation.ts

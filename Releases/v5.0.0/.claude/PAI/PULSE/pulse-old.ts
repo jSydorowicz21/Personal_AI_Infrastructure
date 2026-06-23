@@ -41,7 +41,7 @@ import {
   dispatch,
   isSentinel,
   spawnScript,
-  spawnClaude,
+  spawnAI,
 } from "./lib"
 
 // ── Constants ──
@@ -239,8 +239,8 @@ async function main() {
       try {
         let output: string
 
-        if (job.type === "claude") {
-          output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+        if (job.type === "claude" || job.type === "ai") {
+          output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
         } else {
           output = await spawnScript(job.command!)
         }

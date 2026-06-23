@@ -27,7 +27,7 @@
 import { join, extname, isAbsolute } from "path"
 import { readFileSync, readdirSync, existsSync, realpathSync } from "fs"
 import YAML from "yaml"
-import { getFrameworkDir, getMemoryDir, getPaiDir, getUserDir, memoryPath, userPath } from "../../TOOLS/lib/paths"
+import { getFrameworkDir, getMemoryDir, getPaiDataDir, getPaiDir, getUserDir, memoryPath, userPath } from "../../TOOLS/lib/paths"
 
 // Bun is always the runtime here (Pulse launches this via `bun`). The Next
 // tsconfig's DOM+esnext lib doesn't include bun-types, so declare the minimal
@@ -52,6 +52,7 @@ export interface ObservabilityConfig {
 // ── Path Construction ──
 
 const HOME = process.env.HOME ?? ""
+const PAI_DATA_DIR = getPaiDataDir()
 const PAI_DIR = getPaiDir()
 const FRAMEWORK_DIR = getFrameworkDir()
 const MEMORY_DIR = getMemoryDir()
@@ -70,6 +71,7 @@ const SETTINGS_PATH = join(FRAMEWORK_DIR, "settings.json")
 const LADDER_DIR = join(HOME, "Projects", "Ladder")
 
 const DEFAULT_DASHBOARD_DIR = join(PAI_DIR, "PULSE", "Observability", "out")
+const FRAMEWORK_STATE_PATH = join(PAI_DATA_DIR, "framework.json")
 
 // ── In-Memory Store (hook-pushed state/events) ──
 
@@ -145,6 +147,17 @@ function existsSafe(path: string): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+function activeFramework(): string {
+  if (process.env.PAI_FRAMEWORK) return process.env.PAI_FRAMEWORK
+  try {
+    if (!existsSync(FRAMEWORK_STATE_PATH)) return "claude"
+    const parsed = JSON.parse(readFileSync(FRAMEWORK_STATE_PATH, "utf-8"))
+    return typeof parsed?.active === "string" ? parsed.active : "claude"
+  } catch {
+    return "claude"
   }
 }
 
@@ -2467,7 +2480,7 @@ function handleLifeCardApi(): Response {
 //      build. The flag is baked into the static export via Next.js, so
 //      releases ship banner-on regardless of runtime state.
 //   2. Runtime marker file - `USER/.template-mode`. Written by
-//      `install.sh` on fresh install; deleted by `/interview` on completion.
+//      `install.sh` on fresh install; deleted by the Interview command on completion.
 // Either signal flips templateMode → banner renders. DA name pulled from
 // USER/DA_IDENTITY.md so the copy reads in the user's voice.
 function handleOnboardingState(): Response {
@@ -2495,7 +2508,7 @@ function handleOnboardingState(): Response {
   return Response.json({
     templateMode,
     daName,
-    interviewCommand: "/interview",
+    interviewCommand: activeFramework() === "codex" ? "$Interview" : "/interview",
   })
 }
 

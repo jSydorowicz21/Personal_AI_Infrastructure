@@ -7,9 +7,9 @@
  * A unified CLI for executing Algorithm sessions against ISAs.
  *
  * MODES:
- *   loop        — Autonomous iteration via `claude -p` (SDK). Runs until all
+ *   loop        — Autonomous iteration via the active framework CLI. Runs until all
  *                 ISC criteria pass or maxIterations reached. No human needed.
- *   interactive — Launches a full interactive `claude` session with ISA context
+ *   interactive — Launches the active framework with ISA context
  *                 loaded as the initial prompt. Human-in-the-loop.
  *   ideate      — Evolutionary ideation with tunable parameters. Launches an
  *                 interactive session with parameter configuration controlling
@@ -29,7 +29,7 @@
  *
  * USAGE:
  *   algorithm -m loop -p <ISA> [-n 128]        Autonomous loop execution
- *   algorithm -m interactive -p <ISA>           Interactive claude session
+ *   algorithm -m interactive -p <ISA>           Interactive framework session
  *   algorithm -m ideate -p <ISA> [--preset X]   Evolutionary ideation session
  *   algorithm new -t <title> [-e <effort>]      Create a new ISA
  *   algorithm status [-p <ISA>]                 Show ISA status
@@ -52,6 +52,11 @@ import { spawnSync, spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { generateISATemplate } from "../../hooks/lib/isa-template";
 import { memoryPath } from "./lib/paths";
+import {
+  buildFrameworkAgentCommand,
+  DEFAULT_AGENT_TOOLS,
+  DEFAULT_WORKER_TOOLS,
+} from "./lib/framework-agent";
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
@@ -327,7 +332,7 @@ Usage:
 
 Modes:
   loop          Autonomous iteration — no human interaction
-  interactive   Full claude session with ISA context loaded
+  interactive   Full framework session with ISA context loaded
   ideate        Evolutionary ideation with tunable parameters
   optimize      Autonomous metric optimization (Karpathy autoresearch pattern)
 
@@ -824,18 +829,19 @@ async function runParallelIteration(
   iteration: number,
 ): Promise<void> {
   const startTime = Date.now();
-  // BILLING: subscription, not API. Remove --bare (forces ANTHROPIC_API_KEY),
-  // strip the key from inherited env (bun auto-loads .env).
-  const workerEnv: Record<string, string> = { ...process.env } as Record<string, string>;
-  delete workerEnv.ANTHROPIC_API_KEY;
   const processes = assignments.map(assignment => {
     const criterion = assignment.criteriaDetails[0]; // One criterion per agent
     const prompt = buildWorkerPrompt(isaPath, assignment.agentId, criterion, iteration);
-    const proc = Bun.spawn(["claude", "-p", prompt,
-      "--allowedTools", "Edit,Write,Bash,Read,Glob,Grep,WebFetch,WebSearch,NotebookEdit",
-    ], {
+    const spec = buildFrameworkAgentCommand(prompt, {
       cwd: dirname(isaPath),
-      env: workerEnv,
+      mode: "print",
+      allowedTools: DEFAULT_WORKER_TOOLS,
+      sandbox: "workspace-write",
+    });
+    const proc = Bun.spawn([spec.command, ...spec.args], {
+      cwd: dirname(isaPath),
+      env: spec.env,
+      stdin: spec.input ? new Blob([spec.input]) : "ignore",
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -1312,14 +1318,19 @@ async function runLoop(isaPath: string, maxOverride?: number, agentCount: number
 
     // ── Sequential path: single agent (existing behavior) ──
     const prompt = buildIterationPrompt(absPath, newIteration, max);
+    const spec = buildFrameworkAgentCommand(prompt, {
+      cwd: dirname(absPath),
+      mode: "print",
+      allowedTools: DEFAULT_AGENT_TOOLS,
+      sandbox: "workspace-write",
+    });
 
-    const result = spawnSync("claude", [
-      "-p", "--bare", prompt,
-      "--allowedTools", "Edit,Write,Bash,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate,TaskUpdate,TaskList,NotebookEdit",
-    ], {
+    const result = spawnSync(spec.command, spec.args, {
       stdio: ["pipe", "pipe", "pipe"],
+      input: spec.input,
       timeout: 600_000, // 10 minute timeout per iteration
       cwd: dirname(absPath), // Run from ISA's directory context
+      env: spec.env,
     });
 
     const iterEndTime = Date.now();
@@ -1340,7 +1351,7 @@ async function runLoop(isaPath: string, maxOverride?: number, agentCount: number
 
     if (result.status !== 0) {
       const stderr = result.stderr?.toString().trim();
-      console.error(`\x1b[31m  claude -p exited with status ${result.status}\x1b[0m`);
+      console.error(`\x1b[31m  ${spec.label} exited with status ${result.status}\x1b[0m`);
       if (stderr) console.error(`  ${stderr.slice(0, 200)}`);
       if (!state.loopHistory) state.loopHistory = [];
       state.loopHistory.push({
@@ -1423,17 +1434,23 @@ function runInteractive(isaPath: string): void {
   console.log(`\x1b[36m\u25CB\x1b[0m THE ALGORITHM (interactive mode) \u2014 ${isaTitle}`);
   console.log(`  ISA: ${absPath}`);
   console.log(`  Progress: ${criteria.passing}/${criteria.total}`);
-  console.log(`  Launching claude...\n`);
-
-  // Launch interactive claude session with ISA context
-  const child = spawn("claude", [
-    prompt,
-    "--allowedTools", "Edit,Write,Bash,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate,TaskUpdate,TaskList,NotebookEdit",
-  ], {
-    stdio: "inherit",
+  const spec = buildFrameworkAgentCommand(prompt, {
     cwd: dirname(absPath),
-    env: { ...process.env, CLAUDECODE: undefined },
+    mode: "interactive",
+    allowedTools: DEFAULT_AGENT_TOOLS,
+    sandbox: "workspace-write",
   });
+  console.log(`  Launching ${spec.label}...\n`);
+
+  const child = spawn(spec.command, spec.args, {
+    stdio: spec.input ? ["pipe", "inherit", "inherit"] : "inherit",
+    cwd: dirname(absPath),
+    env: spec.env,
+  });
+  if (spec.input && child.stdin) {
+    child.stdin.write(spec.input);
+    child.stdin.end();
+  }
 
   child.on("exit", (code) => {
     if (code === 0) {
@@ -1489,17 +1506,23 @@ function runIdeate(
   for (const [k, v] of Object.entries(resolvedParams)) {
     console.log(`    ${k}: ${typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(2)) : v}`);
   }
-  console.log(`  Launching claude...\n`);
-
-  // Launch interactive claude session with ideate context
-  const child = spawn("claude", [
-    prompt,
-    "--allowedTools", "Edit,Write,Bash,Read,Glob,Grep,WebFetch,WebSearch,Task,TaskCreate,TaskUpdate,TaskList,NotebookEdit",
-  ], {
-    stdio: "inherit",
+  const spec = buildFrameworkAgentCommand(prompt, {
     cwd: dirname(absPath),
-    env: { ...process.env, CLAUDECODE: undefined },
+    mode: "interactive",
+    allowedTools: DEFAULT_AGENT_TOOLS,
+    sandbox: "workspace-write",
   });
+  console.log(`  Launching ${spec.label}...\n`);
+
+  const child = spawn(spec.command, spec.args, {
+    stdio: spec.input ? ["pipe", "inherit", "inherit"] : "inherit",
+    cwd: dirname(absPath),
+    env: spec.env,
+  });
+  if (spec.input && child.stdin) {
+    child.stdin.write(spec.input);
+    child.stdin.end();
+  }
 
   child.on("exit", (code) => {
     if (code === 0) {

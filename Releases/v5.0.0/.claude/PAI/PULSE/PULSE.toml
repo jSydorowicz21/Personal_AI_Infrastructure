@@ -4,9 +4,11 @@
 # One process handles: cron jobs, voice, chat, observability, hooks, DA.
 #
 # type = "script" → runs command, $0 cost
-# type = "claude" → spawns claude --print, costs tokens
+# type = "ai" → runs active framework inference, costs tokens
 # output = voice | telegram | ntfy | email | log
 # Sentinels: NO_ACTION, NO_URGENT, NO_EVENTS → suppress dispatch
+
+port = 31337
 
 # ── Module Configuration ──
 
@@ -89,7 +91,7 @@ enabled = true
 [[job]]
 name = "memory-consolidation"
 schedule = "0 3 * * *"
-type = "claude"
+type = "ai"
 prompt = "Run learning consolidation: execute `bun run $PAI_DIR/TOOLS/SessionHarvester.ts --recent 20` then `bun run $PAI_DIR/TOOLS/LearningPatternSynthesis.ts --week`. Summarize what was learned and any patterns found."
 model = "sonnet"
 output = "log"

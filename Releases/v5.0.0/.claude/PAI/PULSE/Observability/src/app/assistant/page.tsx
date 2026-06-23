@@ -309,7 +309,7 @@ export default function AssistantPage() {
               { label: "Status", value: health.status === "ok" ? "Online" : health.status, trend: health.status === "ok" ? "up" : "down" },
               { label: "DA Tasks", value: String(tasksData?.by_source.da ?? 0), trend: "flat" as const },
               { label: "Cron Jobs", value: String(tasksData?.by_source.pulse ?? 0), trend: "flat" as const },
-              { label: "CC Triggers", value: String(tasksData?.by_source["claude-code"] ?? 0), trend: "flat" as const },
+              { label: "Framework Triggers", value: String(tasksData?.by_source["claude-code"] ?? 0), trend: "flat" as const },
             ].map(({ label, value, trend }) => (
               <div key={label} className="telos-card metric" style={{ cursor: "default" }}>
                 <div className="metric-top">
@@ -447,7 +447,7 @@ export default function AssistantPage() {
             </Section>
 
             {(tasksData?.by_source["claude-code"] ?? 0) > 0 && (
-              <Section title="Claude Code Triggers" icon={Terminal} dimension="freedom">
+              <Section title="Framework Triggers" icon={Terminal} dimension="freedom">
                 <div className="space-y-1">
                   {(tasksData?.tasks.filter((t) => t.source === "claude-code") ?? []).map((task, i) => (
                     <div key={i} className="flex items-center gap-4 px-4 py-3 rounded-md">

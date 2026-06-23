@@ -33,7 +33,7 @@ export default function TemplateOnboarding() {
   };
 
   const daName = state.daName || "your DA";
-  const cmd = state.interviewCommand || "/interview";
+  const cmd = state.interviewCommand || "$Interview";
 
   return (
     <div className="border-b border-blue-500/30 bg-gradient-to-r from-blue-950/60 via-slate-950/70 to-blue-950/60">

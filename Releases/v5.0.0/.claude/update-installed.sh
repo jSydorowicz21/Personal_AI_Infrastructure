@@ -9,8 +9,8 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/jSydorowicz21/Personal_AI_Infrastructure.git"
-BRANCH="pai-codex-windows-installer"
+REPO_URL="https://github.com/haydencj/Personal_AI_Infrastructure.git"
+BRANCH="pai-codex-flawless-runtime"
 FRAMEWORK=""
 INSTALL_ROOT=""
 AGENTS_SKILLS_ROOT=""

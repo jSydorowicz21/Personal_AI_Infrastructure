@@ -89,7 +89,7 @@ export function frameworkChoices(): Array<{ label: string; value: FrameworkId; d
     {
       label: "Codex",
       value: "codex",
-      description: "Installs PAI into CODEX_HOME or ~/.codex, writes AGENTS.md/config.toml, and syncs skills to ~/.agents/skills.",
+      description: "Installs PAI into CODEX_HOME or ~/.codex, writes AGENTS.md/config.toml, and keeps skills in the Codex home.",
     },
     {
       label: "OpenCode",
@@ -103,18 +103,16 @@ export function frameworkCliInstallCommands(id: FrameworkId): string[] {
   switch (id) {
     case "claude":
       return [
-        "npm install -g @anthropic-ai/claude-code",
         "bun install -g @anthropic-ai/claude-code",
       ];
     case "codex":
       return [
         "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
-        "npm install -g @openai/codex",
+        "bun install -g @openai/codex",
       ];
     case "opencode":
       return [
         "curl -fsSL https://opencode.ai/install | bash",
-        "npm install -g opencode-ai",
         "bun install -g opencode-ai",
       ];
   }

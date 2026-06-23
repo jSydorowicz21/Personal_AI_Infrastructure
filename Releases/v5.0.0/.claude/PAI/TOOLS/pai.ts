@@ -17,6 +17,8 @@
  *   pai profiles         List available profiles
  *   pai mcp list         List available MCPs
  *   pai mcp set <profile>  Set MCP profile
+ *   pai doctor           Verify local PAI runtime health
+ *   pai memory delete    Delete a memory file and redact local cache/log copies
  */
 
 import { spawn, spawnSync } from "bun";
@@ -62,9 +64,9 @@ const MCP_SHORTCUTS: Record<string, string> = {
 // Profile descriptions
 const PROFILE_DESCRIPTIONS: Record<string, string> = {
   none: "No MCPs (maximum performance)",
-  minimal: "Essential MCPs (content, daemon, Foundry)",
-  "dev-work": "Development tools (Shadcn, Codex, Supabase)",
-  security: "Security tools (httpx, naabu)",
+  minimal: "No external MCPs; base PAI tools only",
+  "dev-work": "Development tools (Shadcn, Supabase)",
+  security: "Reserved security profile; no bundled external MCPs",
   research: "Research tools (Brightdata, Apify)",
   clickup: "Official ClickUp MCP (tasks, time tracking, docs)",
   full: "All available MCPs",
@@ -141,12 +143,17 @@ function frameworkRoot(id: FrameworkId): string {
   const state = readFrameworkState();
   const stateFramework = state?.active || state?.framework;
   if (state?.root && stateFramework === id) return state.root;
+  if (id === "codex" && process.env.CODEX_HOME) return process.env.CODEX_HOME;
+  if (id === "opencode" && process.env.OPENCODE_CONFIG_DIR) return process.env.OPENCODE_CONFIG_DIR;
+  if (id === "claude" && (process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME)) {
+    return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME!;
+  }
   const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
   const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
   if (frameworkDirOverride && envFramework === id) return frameworkDirOverride;
-  if (id === "codex") return process.env.CODEX_HOME || join(HOME, ".codex");
-  if (id === "opencode") return process.env.OPENCODE_CONFIG_DIR || join(HOME, ".config", "opencode");
-  return process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || join(HOME, ".claude");
+  if (id === "codex") return join(HOME, ".codex");
+  if (id === "opencode") return join(HOME, ".config", "opencode");
+  return join(HOME, ".claude");
 }
 
 function frameworkCommand(id: FrameworkId): string {
@@ -571,13 +578,29 @@ function generateCodexHooks(root: string): Record<string, any> {
           hooks: [
             codexCommandHook(root, "KittyEnvPersist.hook.ts"),
             codexCommandHook(root, "LoadContext.hook.ts", 20),
+            codexCommandHook(root, "StartupSelfCheck.hook.ts", 5),
           ],
         },
       ],
       PreToolUse: [
         {
-          matcher: "Bash|Shell|Write|Edit|MultiEdit|Read|apply_patch",
+          matcher: "Bash|Shell",
+          hooks: [
+            codexCommandHook(root, "SecurityPipeline.hook.ts"),
+            codexCommandHook(root, "ContextReduction.hook.sh"),
+          ],
+        },
+        {
+          matcher: "Write|Edit|MultiEdit|Read|apply_patch",
           hooks: [codexCommandHook(root, "SecurityPipeline.hook.ts")],
+        },
+        {
+          matcher: "AskUserQuestion|request_user_input",
+          hooks: [codexCommandHook(root, "SetQuestionTab.hook.ts", 5)],
+        },
+        {
+          matcher: "Agent",
+          hooks: [codexCommandHook(root, "AgentInvocation.hook.ts", 5)],
         },
       ],
       PostToolUse: [
@@ -688,14 +711,23 @@ function isLegacyPaiOnlyCodexConfig(content: string): boolean {
 function codexRootConfigToml(existing = ""): string {
   const lines = [
     CODEX_ROOT_BEGIN,
-    "# PAI uses AGENTS.md for Codex instructions.",
+    "# PAI uses AGENTS.md plus RTK.md for Codex instructions.",
     "# PAI hooks are written to hooks.json.",
   ];
   if (!rootTomlHasKey(existing, "project_doc_fallback_filenames")) {
-    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"CLAUDE.md\"]");
+    lines.push("project_doc_fallback_filenames = [\"AGENTS.md\", \"RTK.md\", \"CLAUDE.md\"]");
   }
   if (!rootTomlHasKey(existing, "project_doc_max_bytes")) {
     lines.push("project_doc_max_bytes = 65536");
+  }
+  if (!rootTomlHasKey(existing, "model")) {
+    lines.push('model = "gpt-5.5"');
+  }
+  if (!rootTomlHasKey(existing, "model_reasoning_effort")) {
+    lines.push('model_reasoning_effort = "high"');
+  }
+  if (!rootTomlHasKey(existing, "plan_mode_reasoning_effort")) {
+    lines.push('plan_mode_reasoning_effort = "xhigh"');
   }
   lines.push(CODEX_ROOT_END);
   return lines.join("\n");
@@ -889,18 +921,6 @@ function ensureFrameworkInstall(id: FrameworkId): string {
   linkDirectory(join(root, "PAI", "USER"), join(DATA_DIR, "USER"));
 
   if (id === "codex") {
-    const codexSkills = join(HOME, ".agents", "skills");
-    mkdirSync(codexSkills, { recursive: true });
-    const sourceSkills = join(root, "skills");
-    if (existsSync(sourceSkills)) {
-      for (const entry of readdirSync(sourceSkills, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const src = join(sourceSkills, entry.name);
-        if (!existsSync(join(src, "SKILL.md"))) continue;
-        const dst = join(codexSkills, entry.name);
-        if (!existsSync(dst)) createDirectoryLink(src, dst);
-      }
-    }
     syncCodexPrompts(root);
     syncCodexAgents(root);
   } else if (id === "opencode") {
@@ -1099,6 +1119,7 @@ function setMcpProfile(profile: string) {
 }
 
 function setMcpCustom(mcpNames: string[]) {
+  const MCP_DIR = getMcpDir();
   const files: string[] = [];
 
   for (const name of mcpNames) {
@@ -1482,24 +1503,69 @@ function cmdFramework(subCommand?: string, subArg?: string) {
   error("Usage: k framework status | k framework switch claude|codex|opencode");
 }
 
+function cmdMemory(args: string[]) {
+  const subCommand = args[0];
+  if (subCommand !== "delete" && subCommand !== "redact") {
+    error("Usage: k memory delete --path <MEMORY path> --patterns-file <file> | k memory redact --text <literal>");
+  }
+
+  const tool = join(CURRENT_PAI_DIR, "TOOLS", "MemoryDelete.ts");
+  const result = spawnSync([process.execPath, tool, ...args.slice(1)], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      PAI_DIR: CURRENT_PAI_DIR,
+      PAI_DATA_DIR: DATA_DIR,
+      PAI_FRAMEWORK: getActiveFramework(),
+      PAI_FRAMEWORK_DIR: frameworkRoot(getActiveFramework()),
+    },
+  });
+  process.exit(result.exitCode ?? 1);
+}
+
+function cmdDoctor() {
+  const activeFramework = getActiveFramework();
+  const activeRoot = frameworkRoot(activeFramework);
+  const tool = join(CURRENT_PAI_DIR, "TOOLS", "PaiDoctor.ts");
+  const result = spawnSync([process.execPath, tool], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      PAI_DIR: CURRENT_PAI_DIR,
+      PAI_DATA_DIR: DATA_DIR,
+      PAI_FRAMEWORK: activeFramework,
+      PAI_FRAMEWORK_DIR: activeRoot,
+      PAI_SETTINGS_PATH: join(activeRoot, "settings.json"),
+      PAI_CONFIG_DIR: CONFIG_DIR,
+    },
+  });
+  process.exit(result.exitCode ?? 1);
+}
+
 async function cmdPrompt(prompt: string) {
   // One-shot prompt execution
   // NOTE: No --dangerously-skip-permissions - rely on settings.json permissions
-  // BILLING: subscription, not API. Removed --bare (forces ANTHROPIC_API_KEY),
-  // strip the key from inherited env.
+  // BILLING: subscription/session auth, not API. Strip API credentials from inherited env.
   const activeFramework = getActiveFramework();
   const activeRoot = ensureFrameworkInstall(activeFramework);
-  const args = activeFramework === "claude"
-    ? ["claude", "-p", prompt]
-    : activeFramework === "codex"
-      ? ["codex", "exec", prompt]
-      : ["opencode", "run", prompt];
+  const args = activeFramework === "codex"
+    ? [frameworkCommand(activeFramework), "exec", "--sandbox", "workspace-write", "--skip-git-repo-check", "--cd", process.cwd(), "-"]
+    : activeFramework === "opencode"
+      ? [frameworkCommand(activeFramework), "run", "-"]
+      : [frameworkCommand(activeFramework), "-p", prompt];
 
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
   Object.assign(env, frameworkEnv(activeRoot, activeFramework));
   delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN;
   const proc = spawn(frameworkSpawnArgs(args), {
-    stdio: ["inherit", "inherit", "inherit"],
+    stdin: activeFramework === "codex" || activeFramework === "opencode" ? new Blob([prompt]) : "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
     env,
   });
 
@@ -1525,6 +1591,9 @@ COMMANDS:
   k version, -v            Show version information
   k framework status       Show active framework and global memory path
   k framework switch codex Switch framework (claude|codex|opencode)
+  k memory delete          Delete a memory file and redact cache/log copies
+  k memory redact          Redact exact literals from PAI cache/log files
+  k doctor                 Run PAI runtime diagnostics (config, hooks, Pulse, MCPs)
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
@@ -1532,15 +1601,22 @@ COMMANDS:
   k -w, --wallpaper        List/switch wallpapers (Kitty + macOS)
   k help, -h               Show this help
 
+TROUBLESHOOTING:
+  If startup reports a PAI self-check warning, run:
+    k doctor
+
+  Optional credential reminders are warnings, not failures. Critical failures
+  point at the config, hook, Pulse, or install surface that needs repair.
+
 MCP SHORTCUTS:
   bd, brightdata           Bright Data scraping
   ap, apify                Apify automation
   cu, clickup              Official ClickUp (tasks, time tracking, docs)
   dev                      Development tools
-  sec, security            Security tools
+  sec, security            Reserved security profile
   research                 Research tools (BD + Apify)
   full                     All MCPs
-  min, minimal             Essential MCPs only
+  min, minimal             Base PAI tools only
   none                     No MCPs
 
 EXAMPLES:
@@ -1551,6 +1627,8 @@ EXAMPLES:
   k -d                     Start with native permission bypass enabled
   k mcp set research       Switch to research profile
   k framework switch codex Switch to Codex while keeping ~/.pai/MEMORY
+  k memory delete --path MEMORY/RELATIONSHIP/note.md --patterns-file /tmp/patterns.txt
+  k doctor                 Run full local PAI runtime diagnostics
   k update                 Update active framework CLI
   k prompt "What time is it?"   One-shot prompt
   k -w                     List available wallpapers
@@ -1582,6 +1660,7 @@ async function main() {
   let subArg: string | undefined;
   let promptText: string | undefined;
   let wallpaperArgs: string[] = [];
+  let passthroughArgs: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -1641,6 +1720,14 @@ async function main() {
         subCommand = args[++i];
         subArg = args[++i];
         break;
+      case "memory":
+        command = "memory";
+        passthroughArgs = args.slice(i + 1);
+        i = args.length; // Exit loop
+        break;
+      case "doctor":
+        command = "doctor";
+        break;
       case "prompt":
       case "-p":
         command = "prompt";
@@ -1686,6 +1773,12 @@ async function main() {
       } else {
         error("Usage: k mcp list | k mcp set <profile>");
       }
+      break;
+    case "memory":
+      cmdMemory(passthroughArgs);
+      break;
+    case "doctor":
+      cmdDoctor();
       break;
     case "prompt":
       if (!promptText) {

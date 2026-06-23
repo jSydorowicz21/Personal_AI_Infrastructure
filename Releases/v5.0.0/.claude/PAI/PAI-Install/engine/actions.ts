@@ -91,6 +91,10 @@ function displayPath(path: string): string {
   return path.replace(homedir(), "~");
 }
 
+function envHome(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
 async function emitSectionHeader(
   emit: EngineEventHandler,
   sectionId: string,
@@ -709,6 +713,15 @@ function frameworkInstructionContent(content: string, target: FrameworkTarget): 
     .replace(/\$PAI_FRAMEWORK_DIR\/PAI/g, "$PAI_DIR");
 }
 
+function mergeFrameworkInstruction(existing: string, generated: string): string {
+  const trimmedExisting = existing.trim();
+  if (!trimmedExisting) return generated;
+  if (trimmedExisting.includes("Personal AI Infrastructure") || trimmedExisting.includes("@PAI/USER/")) {
+    return generated;
+  }
+  return `${trimmedExisting}\n\n# PAI Managed Instructions\n\n${generated.trim()}\n`;
+}
+
 function yamlString(value: string): string {
   return JSON.stringify(value);
 }
@@ -722,12 +735,22 @@ function shellProfile(): { kind: "posix" | "fish" | "powershell"; path: string; 
     };
   }
 
+  if (process.env.PAI_SHELL_PROFILE) {
+    const userShell = process.env.SHELL || "";
+    return {
+      kind: userShell.includes("fish") ? "fish" : "posix",
+      path: process.env.PAI_SHELL_PROFILE,
+      display: process.env.PAI_SHELL_PROFILE,
+    };
+  }
+
   const userShell = process.env.SHELL || "";
   if (process.platform === "win32" && !userShell) {
+    const home = envHome();
     const candidates = [
       process.env.OneDrive ? join(process.env.OneDrive, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1") : "",
-      join(homedir(), "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
-      join(homedir(), "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1"),
+      join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1"),
     ].filter(Boolean);
     const path = candidates.find((candidate) => existsSync(candidate)) || candidates[0];
     return {
@@ -737,12 +760,12 @@ function shellProfile(): { kind: "posix" | "fish" | "powershell"; path: string; 
     };
   }
   if (userShell.includes("fish")) {
-    return { kind: "fish", path: join(homedir(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" };
+    return { kind: "fish", path: join(envHome(), ".config", "fish", "config.fish"), display: "~/.config/fish/config.fish" };
   }
   if (userShell.includes("bash")) {
-    return { kind: "posix", path: join(homedir(), ".bashrc"), display: "~/.bashrc" };
+    return { kind: "posix", path: join(envHome(), ".bashrc"), display: "~/.bashrc" };
   }
-  return { kind: "posix", path: join(homedir(), ".zshrc"), display: "~/.zshrc" };
+  return { kind: "posix", path: join(envHome(), ".zshrc"), display: "~/.zshrc" };
 }
 
 function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, paiScript: string): string {
@@ -905,6 +928,10 @@ async function ensureGlobalPaiDataLinks(
     ];
 
     let copied = 0;
+    const bundledUserDir = join(paiDir, "PAI", "USER");
+    if (existsSync(bundledUserDir)) {
+      copied += copyMissing(bundledUserDir, userDir);
+    }
     for (const local of memoryLinks) {
       copied += ensureLinkedDirectory(local, memoryDir).copied;
     }
@@ -980,7 +1007,13 @@ export async function migrateUserContentFromBackup(
 }
 
 function pathLooksLikeExistingPaiRoot(paiDir: string, settingsFile = "settings.json"): boolean {
-  return existsSync(join(paiDir, settingsFile)) || existsSync(join(paiDir, "skills")) || existsSync(join(paiDir, "PAI", "USER"));
+  const settingsPath = join(paiDir, settingsFile);
+  if (existsSync(settingsPath)) {
+    if (settingsFile !== "config.toml") return true;
+    return true;
+  }
+
+  return existsSync(join(paiDir, "skills", "ContextSearch", "SKILL.md")) || existsSync(join(paiDir, "PAI", "USER"));
 }
 
 export async function moveExistingClaudeToBackup(
@@ -1032,6 +1065,7 @@ export async function moveExistingClaudeToBackup(
     ".env",
     "CLAUDE.md",
     "AGENTS.md",
+    "RTK.md",
   ];
 
   for (const relPath of removableRoots) {
@@ -1575,6 +1609,10 @@ export async function runRepository(
   );
   const target = state.detection?.framework || getFrameworkTarget(state.collected.framework);
   const paiDir = state.detection?.paiDir || target.installRoot;
+  const preservedCodexConfigPath = target.id === "codex" ? join(paiDir, "config.toml") : "";
+  const preservedCodexConfig = preservedCodexConfigPath && existsSync(preservedCodexConfigPath)
+    ? readFileSync(preservedCodexConfigPath, "utf-8")
+    : "";
 
   await moveExistingClaudeToBackup(state, emit);
 
@@ -1610,6 +1648,9 @@ export async function runRepository(
     });
     try {
       const stats = await installFromLocalBundle(localBundle, paiDir, emit);
+      if (preservedCodexConfigPath && preservedCodexConfig) {
+        writeFileSync(preservedCodexConfigPath, preservedCodexConfig);
+      }
       await emit({
         event: "message",
         content: `Installed ${stats.files} files from local bundle (${(stats.bytes / 1024 / 1024).toFixed(1)} MB).`,
@@ -1930,34 +1971,26 @@ export async function runConfiguration(
       const targetInstructionPath = join(paiDir, target.instructionFile);
       const content = frameworkInstructionContent(readFileSync(claudeMdPath, "utf-8"), target)
         .replace(/^#\s*CLAUDE\.md\b.*$/m, `# ${target.instructionFile}`);
-      writeFileSync(targetInstructionPath, content);
+      const existingInstruction = existsSync(targetInstructionPath) ? readFileSync(targetInstructionPath, "utf-8") : "";
+      writeFileSync(targetInstructionPath, mergeFrameworkInstruction(existingInstruction, content));
       await emit({ event: "message", content: `${target.instructionFile} generated for ${target.displayName}.` });
     } catch {}
   }
 
-  if (target.id === "codex") {
-    const sourceSkillsDir = join(paiDir, "skills");
-    const codexSkillsDir = join(homedir(), ".agents", "skills");
-    if (existsSync(sourceSkillsDir)) {
+  if (target.id === "codex" || target.id === "opencode") {
+    const sourceRtkPath = join(paiDir, "RTK.md");
+    if (existsSync(sourceRtkPath)) {
       try {
-        mkdirSync(codexSkillsDir, { recursive: true });
-        let linked = 0;
-        for (const entry of readdirSync(sourceSkillsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const src = join(sourceSkillsDir, entry.name);
-          if (!existsSync(join(src, "SKILL.md"))) continue;
-          const dst = join(codexSkillsDir, entry.name);
-          if (existsSync(dst)) continue;
-          symlinkSync(src, dst, process.platform === "win32" ? "junction" : "dir");
-          linked++;
-        }
-        await emit({ event: "message", content: `Linked ${linked} PAI skills into ~/.agents/skills for Codex.` });
+        writeFileSync(join(target.installRoot, "RTK.md"), readFileSync(sourceRtkPath, "utf-8"));
+        await emit({ event: "message", content: "RTK.md installed for Codex/OpenCode command-reduction instructions." });
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        await emit({ event: "message", content: `Could not link PAI skills into ~/.agents/skills: ${reason}` });
+        await emit({ event: "message", content: `Could not install RTK.md: ${reason}` });
       }
     }
+  }
 
+  if (target.id === "codex") {
     try {
       const syncedPrompts = syncCodexPrompts(paiDir);
       await emit({ event: "message", content: `Synced ${syncedPrompts} command prompt(s) into Codex prompts.` });
@@ -2171,10 +2204,10 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
     return false;
   }
 
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && process.platform !== "linux") {
     await emit({
       event: "message",
-      content: `Pulse auto-install is currently macOS-only. Skipping service setup. To run Pulse manually: ${pulseManualStartCommand(paiDir)}`,
+      content: `Pulse auto-install is currently macOS/Linux/Windows-only. Skipping service setup. To run Pulse manually: ${pulseManualStartCommand(paiDir)}`,
     });
     return false;
   }
@@ -2195,6 +2228,13 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
       const child = spawn("bash", [manageScript, "install"], {
         cwd: pulseDir,
         stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          PAI_DIR: join(paiDir, "PAI"),
+          PAI_FRAMEWORK_DIR: paiDir,
+          PAI_DATA_DIR: getPaiDataDir(),
+          PAI_FRAMEWORK: process.env.PAI_FRAMEWORK || "codex",
+        },
       });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 30000);
       child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
@@ -2213,10 +2253,10 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
         return true;
       }
     }
-    // Pulse plist installed but never bound :31337. Surface this as an install
+    // Pulse service installed but never bound :31337. Surface this as an install
     // failure rather than silently reporting success — the user will hit
     // mysterious 'voice not working' / 'pulse not starting' otherwise.
-    await emit({ event: "message", content: `Pulse plist installed but port 31337 did not bind within 10s. Check ${pulseStderrLog}. Voice and dashboard will not work until this is resolved.` });
+    await emit({ event: "message", content: `Pulse service installed but port 31337 did not bind within 10s. Check ${pulseStderrLog}. Voice and dashboard will not work until this is resolved.` });
     return false;
   } catch {
     await emit({ event: "message", content: "Could not install Pulse. Voice notifications will not be available." });
@@ -2492,14 +2532,16 @@ export async function runVoiceSetup(
       ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications (TTS via ElevenLabs), and runs observability + scheduled jobs. Installing it as a launchd agent makes it auto-start on login and stay running across reboots."
       : process.platform === "win32"
         ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Installing it on Windows starts Pulse now and tries to register a per-user startup task."
-        : `Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Auto-install is currently macOS/Windows-only; on this OS you can run it manually later with: ${pulseInstallCommand}`,
+        : process.platform === "linux"
+          ? "Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Installing it on Linux registers a per-user systemd service when available."
+          : `Pulse is the unified PAI runtime: it serves the Life Dashboard at http://localhost:31337, handles voice notifications, and runs observability + scheduled jobs. Auto-install is currently macOS/Linux/Windows-only; on this OS you can run it manually later with: ${pulseInstallCommand}`,
   });
 
   let voiceServerReady = false;
   if (process.env.PAI_SKIP_PULSE_INSTALL === "1") {
     await emit({ event: "message", content: `Pulse install skipped by PAI_SKIP_PULSE_INSTALL. Start it later with: ${pulseInstallCommand}` });
-  } else if (process.platform === "darwin" || process.platform === "win32") {
-    const serviceLabel = process.platform === "darwin" ? "system launchd service" : "Windows startup task";
+  } else if (process.platform === "darwin" || process.platform === "win32" || process.platform === "linux") {
+    const serviceLabel = process.platform === "darwin" ? "system launchd service" : process.platform === "linux" ? "Linux user service" : "Windows startup task";
     const installPulseChoice = await getChoice("install-pulse", `Install Pulse as a ${serviceLabel}?`, [
       { label: "Yes — install Pulse (recommended)", value: "yes", description: "Starts now and auto-starts on login when supported. Voice + Dashboard + Observability." },
       { label: "Skip — don't install Pulse now", value: "skip", description: `Voice notifications will not work until you run: ${pulseInstallCommand}` },
@@ -2977,6 +3019,7 @@ export async function runTelegramSetup(
   try {
     writeEnvKey(envPath, "TELEGRAM_BOT_TOKEN", token);
     writeEnvKey(envPath, "TELEGRAM_ALLOWED_USERS", allowedUsers);
+    writeEnvKey(envPath, "TELEGRAM_PRINCIPAL_CHAT_ID", allowedUsers.split(",")[0]?.trim() || allowedUsers);
     await emit({ event: "message", content: `Telegram credentials written to ${envPath}.` });
   } catch (err: any) {
     await emit({ event: "message", content: `Could not write .env: ${err?.message || err}. Telegram bot will not start.` });
