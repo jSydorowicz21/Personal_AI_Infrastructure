@@ -87,13 +87,11 @@ const keep = process.argv.includes("--keep");
 const remote = process.argv.includes("--remote");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 const repoRoot = resolve(releaseRoot, "..", "..", "..");
-const repoSourceRoot = existsSync(join(repoRoot, "Releases", "v5.0.0", ".claude", "hotfix-manifest.json"))
-  ? repoRoot
-  : releaseRoot;
 const root = join(tmpdir(), `pai-hotfix-rollback-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const home = join(root, "home");
 const oneDriveRoot = join(home, "OneDrive");
 const installRoot = join(root, "old-codex");
+const installedSourceRoot = join(root, "installed-source");
 const dataDir = join(home, ".pai");
 const configDir = join(home, ".config", "PAI");
 const staleEnvDataDir = join(root, "stale-env", ".pai");
@@ -112,6 +110,9 @@ const sentinels = {
 mkdirSync(installRoot, { recursive: true });
 mkdirSync(dataDir, { recursive: true });
 mkdirSync(staleEnvDataDir, { recursive: true });
+cpSync(releaseRoot, installedSourceRoot, { recursive: true, force: true });
+write(join(installedSourceRoot, "CLAUDE.md"), "**MANDATORY FIRST ACTION:** Read `PAI/ALGORITHM/LATEST` from the current directory.");
+write(join(installedSourceRoot, "AGENTS.md"), "**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` from the active PAI subsystem directory.");
 write(join(dataDir, "framework.json"), JSON.stringify({ active: "codex", root: installRoot, dataDir }, null, 2));
 write(join(staleEnvDataDir, "framework.json"), JSON.stringify({
   active: "codex",
@@ -152,8 +153,8 @@ const updateArgs = process.platform === "win32"
       "--no-pull",
     ];
 if (!remote) {
-  if (process.platform === "win32") updateArgs.push("-SourceDir", repoSourceRoot);
-  else updateArgs.push("--source-dir", repoSourceRoot);
+  if (process.platform === "win32") updateArgs.push("-SourceDir", installedSourceRoot);
+  else updateArgs.push("--source-dir", installedSourceRoot);
 }
 
 const update = spawnSync(updateCommand, updateArgs, {
