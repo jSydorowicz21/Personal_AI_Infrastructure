@@ -550,7 +550,8 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const rcContent = readFileSync(rcFile.path, "utf-8");
       const paiConfigured = rcContent.includes("alias pai") || rcContent.includes("function pai");
       const kConfigured = rcContent.includes("alias k") || rcContent.includes("function k");
-      const pathConfigured = rcContent.includes("PAI_DIR") && rcContent.includes("Initialize-PAIEnvironment");
+      const pathConfigured = rcContent.includes("PAI_DIR")
+        && (process.platform !== "win32" || rcContent.includes("Initialize-PAIEnvironment"));
       aliasConfigured = rcContent.includes("# PAI alias") && paiConfigured && kConfigured && pathConfigured;
     } catch {}
   }
