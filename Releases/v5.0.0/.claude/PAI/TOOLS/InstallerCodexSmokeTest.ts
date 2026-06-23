@@ -106,7 +106,7 @@ enabled = true
   assert("Codex interview prompt invokes skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
-  assert("Codex ContextReduction hook", hooks.includes("ContextReduction.hook.sh"));
+  assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));
   assert("Codex StartupSelfCheck hook", hooks.includes("StartupSelfCheck.hook.ts"));

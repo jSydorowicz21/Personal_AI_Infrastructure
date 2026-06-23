@@ -205,6 +205,7 @@ function main(): void {
       "PAI/TOOLS/MemoryDelete.ts",
       "hooks/FrameworkHookAdapter.ts",
       "hooks/ToolActivityTracker.hook.ts",
+      "hooks/RtkPreToolUse.hook.js",
       "--target=bun",
       "--outdir",
       join(tempRoot, "build"),

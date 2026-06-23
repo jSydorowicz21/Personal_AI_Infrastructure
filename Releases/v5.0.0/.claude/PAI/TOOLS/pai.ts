@@ -587,7 +587,7 @@ function generateCodexHooks(root: string): Record<string, any> {
           matcher: "Bash|Shell",
           hooks: [
             codexCommandHook(root, "SecurityPipeline.hook.ts"),
-            codexCommandHook(root, "ContextReduction.hook.sh"),
+            codexCommandHook(root, "RtkPreToolUse.hook.js"),
           ],
         },
         {

@@ -71,7 +71,7 @@ function configuredHooks(): HookCase[] {
     { event: "SessionStart", matcher: "startup|resume", target: "LoadContext.hook.ts" },
     { event: "SessionStart", matcher: "startup|resume", target: "StartupSelfCheck.hook.ts" },
     { event: "PreToolUse", matcher: "Bash|Shell", target: "SecurityPipeline.hook.ts" },
-    { event: "PreToolUse", matcher: "Bash|Shell", target: "ContextReduction.hook.sh" },
+    { event: "PreToolUse", matcher: "Bash|Shell", target: "RtkPreToolUse.hook.js" },
     { event: "PreToolUse", matcher: "Write|Edit|MultiEdit|Read|apply_patch", target: "SecurityPipeline.hook.ts" },
     { event: "PreToolUse", matcher: "AskUserQuestion|request_user_input", target: "SetQuestionTab.hook.ts" },
     { event: "PreToolUse", matcher: "Agent", target: "AgentInvocation.hook.ts" },

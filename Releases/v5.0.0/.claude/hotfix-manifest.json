@@ -193,6 +193,10 @@
       "target": "hooks/ContextReduction.hook.sh"
     },
     {
+      "source": "hooks/RtkPreToolUse.hook.js",
+      "target": "hooks/RtkPreToolUse.hook.js"
+    },
+    {
       "source": "hooks/ToolActivityTracker.hook.ts",
       "target": "hooks/ToolActivityTracker.hook.ts"
     },

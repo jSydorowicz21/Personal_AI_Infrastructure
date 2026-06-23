@@ -186,6 +186,7 @@ function hotfixManifestAudit(): void {
     "PAI/TOOLS/MemoryDelete.ts",
     "hooks/FrameworkHookAdapter.ts",
     "hooks/ContextReduction.hook.sh",
+    "hooks/RtkPreToolUse.hook.js",
     "hooks/ToolActivityTracker.hook.ts",
   ];
   const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));

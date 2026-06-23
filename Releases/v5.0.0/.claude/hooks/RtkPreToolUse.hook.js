@@ -57,20 +57,6 @@ function emitUpdatedInput(payload, input, rewrittenCommand) {
   process.stdout.write(`${JSON.stringify(response)}\n`);
 }
 
-function emitDeny(command) {
-  const response = {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        `RTK is required for shell commands. Retry using an RTK-native command, or use ` +
-        `rtk proxy <command> when exact raw output is required. Blocked command: ${command}`,
-    },
-  };
-
-  process.stdout.write(`${JSON.stringify(response)}\n`);
-}
-
 async function main() {
   const raw = await readStdin();
   if (!raw.trim()) {
@@ -95,7 +81,6 @@ async function main() {
 
   const rewritten = rewriteCommand(commandInfo.command);
   if (!rewritten) {
-    emitDeny(commandInfo.command);
     return;
   }
 

@@ -237,7 +237,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           matcher: "Bash|Shell",
           hooks: [
             commandHook(config, "SecurityPipeline.hook.ts"),
-            commandHook(config, "ContextReduction.hook.sh"),
+            commandHook(config, "RtkPreToolUse.hook.js"),
           ],
         },
         {
