@@ -87,6 +87,11 @@ function checkGeneratedAgents(root: string, framework: Framework): Check[] {
       passed: generatedText.includes("$PAI_FRAMEWORK_DIR") || generatedText.includes("$PAI_DIR"),
       detail: "agent startup paths",
     },
+    {
+      name: `${framework} agents include PAI_DIR fallback bootstrap`,
+      passed: framework === "claude" || (generatedText.includes("PAI path bootstrap") && generatedText.includes("$PAI_DATA_DIR/framework.json")),
+      detail: framework === "claude" ? "Claude settings provides PAI_DIR" : "agent fallback paths",
+    },
   ];
 }
 

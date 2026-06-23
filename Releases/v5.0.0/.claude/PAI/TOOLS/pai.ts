@@ -313,9 +313,20 @@ function slugifyAgentName(name: string): string {
     .replace(/^-+|-+$/g, "") || "pai-agent";
 }
 
+function paiPathBootstrap(frameworkRootFallback: string): string {
+  return [
+    "PAI path bootstrap: If `$PAI_DIR` is unset, resolve it before reading PAI files.",
+    "Use `$PAI_DATA_DIR` if set; otherwise use `~/.pai`.",
+    "Read `$PAI_DATA_DIR/framework.json`; if it has `root`, treat `$PAI_DIR` as `<root>/PAI` and `$PAI_FRAMEWORK_DIR` as `<root>`.",
+    `If framework state is missing, treat \`$PAI_DIR\` as \`${frameworkRootFallback}/PAI\`.`,
+    "Treat `$PAI_DATA_DIR/MEMORY` and `$PAI_DATA_DIR/USER` as the shared memory and user-context roots.",
+  ].join("\n");
+}
+
 function codexAgentInstructions(initialPrompt: string | undefined, body: string): string {
   const parts = [
     "This PAI agent was generated from the shared Claude-style PAI agent definition for Codex.",
+    paiPathBootstrap("~/.codex"),
     initialPrompt ? `Startup context: ${initialPrompt}` : "",
     body,
   ].filter(Boolean);
@@ -347,6 +358,7 @@ function codexPromptContent(description: string, body: string): string {
 function openCodeInstructions(initialPrompt: string | undefined, body: string): string {
   const parts = [
     "This PAI agent was generated from the shared Claude-style PAI agent definition for OpenCode.",
+    paiPathBootstrap("~/.config/opencode"),
     initialPrompt ? `Startup context: ${initialPrompt}` : "",
     body,
   ].filter(Boolean);
@@ -392,7 +404,7 @@ function syncCodexAgents(root: string): number {
     const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(sourcePath, "utf-8"));
     const name = frontmatter.name || basename(entry.name, ".md");
     const dst = join(agentsDir, `${slugifyAgentName(name)}.toml`);
-    if (existsSync(dst)) continue;
+    if (existsSync(dst) && !shouldReplaceGeneratedPaiFile(dst)) continue;
     const description = frontmatter.description || `PAI ${name} agent.`;
     const instructions = codexAgentInstructions(frontmatter.initialPrompt, body);
     writeFileSync(dst, [
