@@ -83,6 +83,15 @@ function copyDirectoryContents(source: string, destination: string): void {
   }
 }
 
+function copyInstalledSourceFixture(source: string, destination: string): void {
+  const skipSegments = new Set([".git", ".tmp", "node_modules"]);
+  cpSync(source, destination, {
+    recursive: true,
+    force: true,
+    filter: (path) => !path.split(/[\\/]+/).some((segment) => skipSegments.has(segment)),
+  });
+}
+
 const keep = process.argv.includes("--keep");
 const remote = process.argv.includes("--remote");
 const releaseRoot = resolve(import.meta.dir, "..", "..");
@@ -110,7 +119,7 @@ const sentinels = {
 mkdirSync(installRoot, { recursive: true });
 mkdirSync(dataDir, { recursive: true });
 mkdirSync(staleEnvDataDir, { recursive: true });
-cpSync(releaseRoot, installedSourceRoot, { recursive: true, force: true });
+copyInstalledSourceFixture(releaseRoot, installedSourceRoot);
 write(join(installedSourceRoot, "CLAUDE.md"), "**MANDATORY FIRST ACTION:** Read `PAI/ALGORITHM/LATEST` from the current directory.");
 write(join(installedSourceRoot, "AGENTS.md"), "**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` from the active PAI subsystem directory.");
 write(join(dataDir, "framework.json"), JSON.stringify({ active: "codex", root: installRoot, dataDir }, null, 2));
