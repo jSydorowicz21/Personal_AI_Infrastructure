@@ -152,7 +152,10 @@ export function getEnvPath(): string {
   if (envPath) return expandPath(envPath);
 
   const configDir = process.env.PAI_CONFIG_DIR;
-  if (configDir) return join(expandPath(configDir), '.env');
+  if (configDir) {
+    const configEnv = join(expandPath(configDir), '.env');
+    if (existsSync(configEnv)) return configEnv;
+  }
 
   return join(getFrameworkDir(), '.env');
 }
@@ -183,7 +186,10 @@ export function getSkillsDir(): string {
  */
 export function getMemoryDir(): string {
   const memoryDir = process.env.PAI_MEMORY_DIR;
-  if (memoryDir) return expandPath(memoryDir);
+  if (memoryDir) {
+    const expanded = expandPath(memoryDir);
+    if (existsSync(expanded)) return expanded;
+  }
 
   return join(getDataDir(), 'MEMORY');
 }
@@ -193,7 +199,10 @@ export function getMemoryDir(): string {
  */
 export function getUserDir(): string {
   const userDir = process.env.PAI_USER_DIR;
-  if (userDir) return expandPath(userDir);
+  if (userDir) {
+    const expanded = expandPath(userDir);
+    if (existsSync(expanded)) return expanded;
+  }
 
   return join(getDataDir(), 'USER');
 }

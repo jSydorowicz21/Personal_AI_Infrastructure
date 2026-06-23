@@ -28,6 +28,8 @@ import { pushStateToTargets, pushEventsToTargets } from './lib/observability-tra
 import { setPhaseTab } from './lib/tab-setter';
 import type { AlgorithmTabPhase } from './lib/tab-constants';
 
+const OBSERVABILITY_PUSH_BUDGET_MS = Number(process.env.PAI_ISA_SYNC_PUSH_BUDGET_MS || '750');
+
 let input: any;
 try {
   input = JSON.parse(readFileSync(0, 'utf-8'));
@@ -69,8 +71,11 @@ async function main() {
   // Sync frontmatter + criteria to work.json (pass session_id for session name lookup)
   syncToWorkJson(fm, isaPath, content, input.session_id);
 
-  // Push to observability targets (awaited so process.exit doesn't kill the fetch)
-  await Promise.all([pushStateToTargets(), pushEventsToTargets()]).catch(() => {});
+  // Push to observability targets without letting external IO stall PostToolUse.
+  await Promise.race([
+    Promise.all([pushStateToTargets(), pushEventsToTargets()]).catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, OBSERVABILITY_PUSH_BUDGET_MS)),
+  ]);
 
   // Update tab color when algorithm phase changes
   const VALID_PHASES = new Set(['OBSERVE', 'THINK', 'PLAN', 'BUILD', 'EXECUTE', 'VERIFY', 'LEARN', 'COMPLETE']);

@@ -108,7 +108,7 @@ enabled = true
   assert("Codex interview prompt invokes skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
-  assert("Codex PromptProcessing timeout", hooks.includes('"timeout": 35') && hooks.includes("--timeout-ms"));
+  assert("Codex PromptProcessing timeout headroom", hooks.includes('"timeout": 40') && hooks.includes("--timeout-ms") && hooks.includes("35000"));
   assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));

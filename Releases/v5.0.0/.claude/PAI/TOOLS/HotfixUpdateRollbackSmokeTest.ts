@@ -200,7 +200,7 @@ const beforeRollbackChecks: Check[] = [
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
   check("hooks.json regenerated with PromptProcessing", updatedHooksJson.includes("PromptProcessing.hook.ts"), join(installRoot, "hooks.json")),
-  check("PromptProcessing timeout leaves fallback room", updatedHooksJson.includes('"timeout": 35') && updatedHooksJson.includes("--timeout-ms"), join(installRoot, "hooks.json")),
+  check("PromptProcessing timeout leaves adapter headroom", updatedHooksJson.includes('"timeout": 40') && updatedHooksJson.includes("--timeout-ms") && updatedHooksJson.includes("35000"), join(installRoot, "hooks.json")),
   check("hooks.json regenerated with ISA sync hooks", updatedHooksJson.includes("ISASync.hook.ts") && updatedHooksJson.includes("CheckpointPerISC.hook.ts"), join(installRoot, "hooks.json")),
   check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
   check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
