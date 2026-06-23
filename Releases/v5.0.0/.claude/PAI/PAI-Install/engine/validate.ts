@@ -9,7 +9,7 @@ import { spawnSync } from "child_process";
 import type { InstallState, ValidationCheck, InstallSummary, EngineEventHandler } from "./types";
 import { PAI_VERSION } from "./types";
 import { homedir, tmpdir } from "os";
-import { getPaiDataDir } from "./frameworks";
+import { getPaiConfigDir, getPaiDataDir } from "./frameworks";
 import type { FrameworkTarget } from "./types";
 
 /**
@@ -176,7 +176,7 @@ function checkSecurityHookSmoke(
 }
 
 function stateConfigDirFallback(_paiDir: string): string {
-  return process.env.PAI_CONFIG_DIR || join(homedir(), ".config", "PAI");
+  return getPaiConfigDir();
 }
 
 function checkOpenCodePluginBuild(paiDir: string): { passed: boolean; detail: string } {

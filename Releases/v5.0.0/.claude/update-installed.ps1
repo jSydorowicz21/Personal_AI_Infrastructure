@@ -419,10 +419,14 @@ function Get-PowerShellProfileCandidates {
   $items = @()
   if ($env:PAI_POWERSHELL_PROFILE) { $items += (Resolve-AbsolutePath $env:PAI_POWERSHELL_PROFILE) }
   if ($env:OneDrive) {
+    $items += (Join-Path $env:OneDrive "Documents\PowerShell\profile.ps1")
     $items += (Join-Path $env:OneDrive "Documents\PowerShell\Microsoft.PowerShell_profile.ps1")
+    $items += (Join-Path $env:OneDrive "Documents\WindowsPowerShell\profile.ps1")
     $items += (Join-Path $env:OneDrive "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1")
   }
+  $items += (Join-Path $EffectiveHome "Documents\PowerShell\profile.ps1")
   $items += (Join-Path $EffectiveHome "Documents\PowerShell\Microsoft.PowerShell_profile.ps1")
+  $items += (Join-Path $EffectiveHome "Documents\WindowsPowerShell\profile.ps1")
   $items += (Join-Path $EffectiveHome "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1")
   $items | Where-Object { $_ } | Select-Object -Unique
 }
@@ -455,10 +459,10 @@ function Initialize-PAIEnvironment {
       if (`$state.dataDir) { `$env:PAI_DATA_DIR = [string]`$state.dataDir }
     } catch {}
   }
-  if (-not `$env:PAI_FRAMEWORK_DIR) { `$env:PAI_FRAMEWORK_DIR = '$qRoot' }
-  if (-not `$env:PAI_DIR) { `$env:PAI_DIR = '$qPai' }
+  if (-not `$env:PAI_FRAMEWORK_DIR -or -not (Test-Path -LiteralPath `$env:PAI_FRAMEWORK_DIR)) { `$env:PAI_FRAMEWORK_DIR = '$qRoot' }
+  if (-not `$env:PAI_DIR -or -not (Test-Path -LiteralPath `$env:PAI_DIR)) { `$env:PAI_DIR = '$qPai' }
   if (-not `$env:PAI_FRAMEWORK) { `$env:PAI_FRAMEWORK = '$qFramework' }
-  if (-not `$env:PAI_CONFIG_DIR) { `$env:PAI_CONFIG_DIR = '$qConfig' }
+  if (-not `$env:PAI_CONFIG_DIR -or -not (Test-Path -LiteralPath `$env:PAI_CONFIG_DIR)) { `$env:PAI_CONFIG_DIR = '$qConfig' }
 }
 Initialize-PAIEnvironment
 function Invoke-PAI {
