@@ -225,11 +225,13 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
   const script = `
     const tools = await import(${JSON.stringify(toolsPath)});
     const hooks = await import(${JSON.stringify(hooksPath)});
+    const transcripts = await import(${JSON.stringify(join(import.meta.dir, "lib", "transcripts.ts"))});
     console.log(JSON.stringify({
       toolsPaiDir: tools.getPaiDir(),
       toolsFrameworkDir: tools.getFrameworkDir(),
       hooksPaiDir: hooks.getPaiDir(),
-      hooksFrameworkDir: hooks.getFrameworkDir()
+      hooksFrameworkDir: hooks.getFrameworkDir(),
+      transcriptFrameworkDir: transcripts.getActiveFrameworkRoot("codex")
     }));
   `;
   const result = spawnSync(process.execPath, ["-e", script], {
@@ -284,6 +286,23 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     staleDataResolved = JSON.parse(staleDataResult.stdout.trim());
   } catch {}
 
+  const emptyExistingData = join(root, "empty-data");
+  mkdirSync(emptyExistingData, { recursive: true });
+  const emptyExistingDataEnv = {
+    ...staleDataEnv,
+    PAI_DATA_DIR: emptyExistingData,
+  } as Record<string, string>;
+  const emptyExistingDataResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: emptyExistingDataEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  let emptyExistingDataResolved: Record<string, string> = {};
+  try {
+    emptyExistingDataResolved = JSON.parse(emptyExistingDataResult.stdout.trim());
+  } catch {}
+
   const staleExistingData = join(root, "stale-data");
   mkdirSync(staleExistingData, { recursive: true });
   writeFileSync(
@@ -323,6 +342,11 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       detail: JSON.stringify({ pai: resolved.hooksPaiDir, root: resolved.hooksFrameworkDir }),
     },
     {
+      name: "transcript path fallback uses framework.json",
+      passed: resolved.transcriptFrameworkDir === root,
+      detail: JSON.stringify({ root: resolved.transcriptFrameworkDir }),
+    },
+    {
       name: "tools path ignores stale PAI_DIR when framework state exists",
       passed: staleResolved.toolsPaiDir === join(root, "PAI") && staleResolved.toolsFrameworkDir === root,
       detail: JSON.stringify({ pai: staleResolved.toolsPaiDir, root: staleResolved.toolsFrameworkDir }),
@@ -333,6 +357,11 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       detail: JSON.stringify({ pai: staleResolved.hooksPaiDir, root: staleResolved.hooksFrameworkDir }),
     },
     {
+      name: "transcript path ignores stale PAI_FRAMEWORK_DIR",
+      passed: staleResolved.transcriptFrameworkDir === root,
+      detail: JSON.stringify({ root: staleResolved.transcriptFrameworkDir }),
+    },
+    {
       name: "tools path ignores deleted PAI_DATA_DIR",
       passed: staleDataResolved.toolsPaiDir === join(root, "PAI") && staleDataResolved.toolsFrameworkDir === root,
       detail: JSON.stringify({ pai: staleDataResolved.toolsPaiDir, root: staleDataResolved.toolsFrameworkDir }),
@@ -341,6 +370,16 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       name: "hooks path ignores deleted PAI_DATA_DIR",
       passed: staleDataResolved.hooksPaiDir === join(root, "PAI") && staleDataResolved.hooksFrameworkDir === root,
       detail: JSON.stringify({ pai: staleDataResolved.hooksPaiDir, root: staleDataResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path ignores empty PAI_DATA_DIR when default state exists",
+      passed: emptyExistingDataResolved.toolsPaiDir === join(root, "PAI") && emptyExistingDataResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({ pai: emptyExistingDataResolved.toolsPaiDir, root: emptyExistingDataResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path ignores empty PAI_DATA_DIR when default state exists",
+      passed: emptyExistingDataResolved.hooksPaiDir === join(root, "PAI") && emptyExistingDataResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({ pai: emptyExistingDataResolved.hooksPaiDir, root: emptyExistingDataResolved.hooksFrameworkDir }),
     },
     {
       name: "tools path ignores invalid PAI_DATA_DIR framework state",
@@ -388,6 +427,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
     PAI_FRAMEWORK_DIR: root,
+    PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
   if (framework === "claude") env.CLAUDE_HOME = root;
   if (framework === "codex") env.CODEX_HOME = root;
@@ -466,6 +506,11 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         name: "codex hooks include mode classification",
         passed: hooksText.includes("PromptProcessing.hook.ts"),
         detail: "UserPromptSubmit mode hook",
+      });
+      checks.push({
+        name: "codex PromptProcessing hook has full fallback budget",
+        passed: hooksText.includes('"timeout": 35') && hooksText.includes("--timeout-ms"),
+        detail: "PromptProcessing timeout >= inference + notify fallback",
       });
       checks.push({
         name: "codex hooks include ISA checkpoint sync",
@@ -547,6 +592,7 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
     PAI_FRAMEWORK_DIR: root,
+    PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
   if (framework === "claude") env.CLAUDE_HOME = root;
   if (framework === "codex") env.CODEX_HOME = root;

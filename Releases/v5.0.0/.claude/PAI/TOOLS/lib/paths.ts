@@ -37,6 +37,16 @@ function readFrameworkState(): FrameworkState | null {
   return state;
 }
 
+function hasStaleFrameworkEnv(): boolean {
+  if (process.env.PAI_FRAMEWORK_DIR) {
+    return !existsSync(expandHome(process.env.PAI_FRAMEWORK_DIR));
+  }
+  if (process.env.PAI_DIR) {
+    return !existsSync(expandHome(process.env.PAI_DIR));
+  }
+  return false;
+}
+
 export function getPaiDir(): string {
   const frameworkRoot = readFrameworkState()?.root;
   if (frameworkRoot) return join(expandHome(frameworkRoot), "PAI");
@@ -58,14 +68,18 @@ export function getFrameworkDir(): string {
 }
 
 export function getPaiDataDir(): string {
+  const defaultDataDir = join(homeDir(), ".pai");
+  const defaultState = readFrameworkStateAt(defaultDataDir);
+  const defaultStateUsable = Boolean(defaultState?.root && existsSync(expandHome(defaultState.root)));
   if (process.env.PAI_DATA_DIR) {
     const envDataDir = expandHome(process.env.PAI_DATA_DIR);
     if (existsSync(envDataDir)) {
       const state = readFrameworkStateAt(envDataDir);
-      if (!state?.root || existsSync(expandHome(state.root))) return envDataDir;
+      if (!state && (!defaultStateUsable || !hasStaleFrameworkEnv())) return envDataDir;
+      if (state?.root && existsSync(expandHome(state.root))) return envDataDir;
     }
   }
-  return join(homeDir(), ".pai");
+  return defaultDataDir;
 }
 
 export function getConfigDir(): string {

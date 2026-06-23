@@ -303,7 +303,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           hooks: [
             commandHook(config, "PromptGuard.hook.ts", 5),
             commandHook(config, "RepeatDetection.hook.ts", 5),
-            commandHook(config, "PromptProcessing.hook.ts", 20),
+            commandHook(config, "PromptProcessing.hook.ts", 35),
           ],
         },
       ],

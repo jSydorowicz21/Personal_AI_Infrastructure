@@ -46,6 +46,75 @@ function Read-FrameworkState {
   }
 }
 
+function Read-FrameworkStateAt([string]$DataDir) {
+  $statePath = Join-Path $DataDir "framework.json"
+  if (-not (Test-Path -LiteralPath $statePath)) { return $null }
+  try {
+    return Get-Content -Raw -LiteralPath $statePath | ConvertFrom-Json
+  } catch {
+    Warn "Could not read ${statePath}: $($_.Exception.Message)"
+    return $null
+  }
+}
+
+function Test-FrameworkStateUsable($State) {
+  if (-not $State) { return $false }
+  if ($State.root) {
+    $root = Resolve-AbsolutePath $State.root
+    if (-not (Test-Path -LiteralPath $root)) { return $false }
+  }
+  return $true
+}
+
+function Resolve-PaiDataDir {
+  $defaultDataDir = Join-Path $EffectiveHome ".pai"
+  $state = Read-FrameworkState
+  if ((Test-FrameworkStateUsable $state) -and $state.dataDir) {
+    return (Resolve-AbsolutePath $state.dataDir)
+  }
+
+  if ($env:PAI_DATA_DIR) {
+    $envDataDir = Resolve-AbsolutePath $env:PAI_DATA_DIR
+    if (Test-Path -LiteralPath $envDataDir) {
+      $envState = Read-FrameworkStateAt $envDataDir
+      if ((-not $envState) -or (Test-FrameworkStateUsable $envState)) {
+        return $envDataDir
+      }
+    }
+  }
+
+  return $defaultDataDir
+}
+
+function Set-PaiUserEnvironment([string]$InstallRoot, [string]$Framework) {
+  $dataDir = Resolve-PaiDataDir
+  $paiDir = Join-Path $InstallRoot "PAI"
+  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+
+  $values = @{
+    PAI_DIR = $paiDir
+    PAI_FRAMEWORK_DIR = $InstallRoot
+    PAI_FRAMEWORK = $Framework
+    PAI_DATA_DIR = $dataDir
+    PAI_CONFIG_DIR = $configDir
+  }
+
+  foreach ($key in $values.Keys) {
+    Set-Item -Path "Env:$key" -Value $values[$key]
+  }
+
+  if ($env:PAI_SKIP_USER_ENV_UPDATE -eq "1") {
+    Info "Skipped Windows user environment update by request."
+    return
+  }
+
+  $target = if ($env:PAI_USER_ENV_TARGET -eq "Process") { "Process" } else { "User" }
+  foreach ($key in $values.Keys) {
+    [Environment]::SetEnvironmentVariable($key, $values[$key], $target)
+  }
+  Success "Updated PAI environment variables at ${target} scope."
+}
+
 function Normalize-Framework([string]$Value) {
   $v = ($Value | ForEach-Object { "$_".Trim().ToLowerInvariant() }) -replace "[\s_-]+", ""
   switch ($v) {
@@ -252,6 +321,9 @@ function Verify-Install([string]$InstallRoot, [string]$Framework) {
   if (Test-Path -LiteralPath $instruction) {
     $text = Get-Content -Raw -LiteralPath $instruction
     if ($text -notmatch '\$PAI_DIR/ALGORITHM/LATEST') {
+      if ($Framework -eq "codex") {
+        throw "Instruction file does not mention `$PAI_DIR/ALGORITHM/LATEST: $instruction"
+      }
       Warn "Instruction file does not mention `$PAI_DIR/ALGORITHM/LATEST: $instruction"
     } else {
       Success "Instruction file points at `$PAI_DIR/ALGORITHM/LATEST."
@@ -294,7 +366,7 @@ await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJs
 '@
   Set-Content -LiteralPath $scriptPath -Value $script -NoNewline
 
-  $dataDir = if ($env:PAI_DATA_DIR) { Resolve-AbsolutePath $env:PAI_DATA_DIR } else { Join-Path $EffectiveHome ".pai" }
+  $dataDir = Resolve-PaiDataDir
   $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
 
   Push-Location $InstallRoot
@@ -320,14 +392,7 @@ function Get-PowerShellProfileCandidates {
 }
 
 function Get-PaiPowerShellBlock([string]$InstallRoot, [string]$Framework) {
-  $state = Read-FrameworkState
-  $dataDir = if ($state -and $state.dataDir) {
-    Resolve-AbsolutePath $state.dataDir
-  } elseif ($env:PAI_DATA_DIR -and (Test-Path -LiteralPath (Join-Path (Resolve-AbsolutePath $env:PAI_DATA_DIR) "framework.json"))) {
-    Resolve-AbsolutePath $env:PAI_DATA_DIR
-  } else {
-    Join-Path $EffectiveHome ".pai"
-  }
+  $dataDir = Resolve-PaiDataDir
   $paiDir = Join-Path $InstallRoot "PAI"
   $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
   $paiScript = Join-Path $paiDir "TOOLS\pai.ts"
@@ -436,6 +501,7 @@ try {
     if ($target.Framework -eq "codex") {
       Regenerate-CodexHooksJson $target.Root $backupRoot
     }
+    Set-PaiUserEnvironment $target.Root $target.Framework
     Repair-PowerShellProfiles $target.Root $target.Framework $backupRoot
     Verify-Install $target.Root $target.Framework
     Success "Hotfix update complete. Restart the agent session so instructions reload."
