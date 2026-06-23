@@ -31,6 +31,21 @@ function readJson(path: string): any {
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
+function outputText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Uint8Array) return new TextDecoder().decode(value);
+  return String(value);
+}
+
+function parseJsonOutput(value: unknown): Record<string, string> {
+  try {
+    return JSON.parse(outputText(value).trim());
+  } catch {
+    return {};
+  }
+}
+
 function checkPath(name: string, path: string): Check {
   return {
     name,
@@ -191,7 +206,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     {
       name: "opencode plugin transcript exits 0",
       passed: result.status === 0,
-      detail: `status=${result.status ?? "null"} ${result.stderr.trim().slice(0, 120)}`,
+      detail: `status=${result.status ?? "null"} ${outputText(result.stderr).trim().slice(0, 120)}`,
     },
     {
       name: "opencode plugin ignores stale env roots",
@@ -230,18 +245,19 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     },
     {
       name: "opencode transcript harvestable",
-      passed: harvest.status === 0 && Number(harvest.stdout.match(/(\d+)\s+learning\(s\)/)?.[1] || 0) >= 2,
+      passed: harvest.status === 0 && Number(outputText(harvest.stdout).match(/(\d+)\s+learning\(s\)/)?.[1] || 0) >= 2,
       detail: `status=${harvest.status ?? "null"}`,
     },
     {
       name: "opencode transcript activity parse",
-      passed: activity.status === 0 && activity.stdout.includes("PAI/TOOLS/Smoke.ts"),
+      passed: activity.status === 0 && outputText(activity.stdout).includes("PAI/TOOLS/Smoke.ts"),
       detail: `status=${activity.status ?? "null"}`,
     },
   ];
 }
 
 function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
+  mkdirSync(root, { recursive: true });
   const toolsPath = join(import.meta.dir, "lib", "paths.ts");
   const hooksPath = join(import.meta.dir, "..", "..", "hooks", "lib", "paths.ts");
   const env = { ...process.env, PAI_DATA_DIR: data } as Record<string, string>;
@@ -275,10 +291,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     timeout: 20_000,
   });
 
-  let resolved: Record<string, string> = {};
-  try {
-    resolved = JSON.parse(result.stdout.trim());
-  } catch {}
+  const resolved = parseJsonOutput(result.stdout);
 
   const staleEnv = {
     ...process.env,
@@ -298,10 +311,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     encoding: "utf-8",
     timeout: 20_000,
   });
-  let staleResolved: Record<string, string> = {};
-  try {
-    staleResolved = JSON.parse(staleResult.stdout.trim());
-  } catch {}
+  const staleResolved = parseJsonOutput(staleResult.stdout);
 
   const home = join(root, "home");
   const homeData = join(home, ".pai");
@@ -321,10 +331,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     encoding: "utf-8",
     timeout: 20_000,
   });
-  let staleDataResolved: Record<string, string> = {};
-  try {
-    staleDataResolved = JSON.parse(staleDataResult.stdout.trim());
-  } catch {}
+  const staleDataResolved = parseJsonOutput(staleDataResult.stdout);
 
   const emptyExistingData = join(root, "empty-data");
   mkdirSync(emptyExistingData, { recursive: true });
@@ -338,10 +345,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     encoding: "utf-8",
     timeout: 20_000,
   });
-  let emptyExistingDataResolved: Record<string, string> = {};
-  try {
-    emptyExistingDataResolved = JSON.parse(emptyExistingDataResult.stdout.trim());
-  } catch {}
+  const emptyExistingDataResolved = parseJsonOutput(emptyExistingDataResult.stdout);
 
   const staleExistingData = join(root, "stale-data");
   mkdirSync(staleExistingData, { recursive: true });
@@ -360,16 +364,13 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     encoding: "utf-8",
     timeout: 20_000,
   });
-  let staleExistingDataResolved: Record<string, string> = {};
-  try {
-    staleExistingDataResolved = JSON.parse(staleExistingDataResult.stdout.trim());
-  } catch {}
+  const staleExistingDataResolved = parseJsonOutput(staleExistingDataResult.stdout);
 
   return [
     {
       name: "path fallback exits 0",
       passed: result.status === 0,
-      detail: `status=${result.status ?? "null"} ${result.stderr.trim().slice(0, 120)}`,
+      detail: `status=${result.status ?? "null"} ${outputText(result.stderr).trim().slice(0, 120)}`,
     },
     {
       name: "tools path fallback uses framework.json",
@@ -771,8 +772,9 @@ for (const [index, framework] of frameworks.entries()) {
   const result = isolatedResults[index];
   printResult(`${framework} isolated`, result.checks);
   failed += result.checks.filter((check) => !check.passed).length;
-  if (result.stderr.trim()) {
-    console.log(`${framework} stderr:\n${result.stderr.trim()}`);
+  const stderr = outputText(result.stderr).trim();
+  if (stderr) {
+    console.log(`${framework} stderr:\n${stderr}`);
   }
 }
 
@@ -780,8 +782,9 @@ for (const [index, framework] of frameworks.entries()) {
   const result = sequenceResults[index];
   printResult(`${framework} shared switch`, result.checks);
   failed += result.checks.filter((check) => !check.passed).length;
-  if (result.stderr.trim()) {
-    console.log(`${framework} shared-switch stderr:\n${result.stderr.trim()}`);
+  const stderr = outputText(result.stderr).trim();
+  if (stderr) {
+    console.log(`${framework} shared-switch stderr:\n${stderr}`);
   }
 }
 

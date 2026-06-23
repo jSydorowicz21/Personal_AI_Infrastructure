@@ -12,13 +12,28 @@ function assert(name: string, condition: boolean, detail = ""): void {
 const root = mkdtempSync(join(tmpdir(), "pai-memory-delete-smoke-"));
 let keep = false;
 
+function smokeEnv(data: string, home: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    PAI_DATA_DIR: data,
+    PAI_MEMORY_DIR: "",
+    PAI_USER_DIR: "",
+    PAI_FRAMEWORK_DIR: "",
+    PAI_DIR: "",
+  };
+}
+
 try {
-  const data = join(root, ".pai");
+  const home = join(root, "home");
+  const data = join(home, ".pai");
   const memory = join(data, "MEMORY");
   const fact = "SMOKE_DELETE_FACT_do_not_remember_12345";
   const note = join(memory, "RELATIONSHIP", "manual-memory.jsonl");
   const patterns = join(root, "patterns.txt");
 
+  mkdirSync(home, { recursive: true });
   mkdirSync(dirname(note), { recursive: true });
   mkdirSync(join(memory, "STATE"), { recursive: true });
   mkdirSync(join(memory, "VOICE"), { recursive: true });
@@ -37,7 +52,7 @@ try {
     "--patterns-file",
     patterns,
   ], {
-    env: { ...process.env, PAI_DATA_DIR: data },
+    env: smokeEnv(data, home),
     encoding: "utf-8",
     timeout: 20_000,
   });
@@ -66,7 +81,7 @@ try {
     "x",
     "--dry-run",
   ], {
-    env: { ...process.env, PAI_DATA_DIR: data },
+    env: smokeEnv(data, home),
     encoding: "utf-8",
     timeout: 20_000,
   });
