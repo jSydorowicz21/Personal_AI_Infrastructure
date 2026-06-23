@@ -1,4 +1,5 @@
 import { getActiveFramework, type FrameworkId } from "./transcripts";
+import { getConfigDir, getFrameworkDir, getPaiDataDir, getPaiDir } from "./paths";
 
 export type FrameworkAgentMode = "print" | "interactive";
 
@@ -39,6 +40,11 @@ export function frameworkAgentEnv(source: NodeJS.ProcessEnv = process.env): Reco
   delete env.CLAUDECODE;
   delete env.ANTHROPIC_API_KEY;
   delete env.ANTHROPIC_AUTH_TOKEN;
+  env.PAI_DIR = getPaiDir();
+  env.PAI_DATA_DIR = getPaiDataDir();
+  env.PAI_FRAMEWORK = getActiveFramework();
+  env.PAI_FRAMEWORK_DIR = getFrameworkDir();
+  env.PAI_CONFIG_DIR = getConfigDir();
   return env;
 }
 

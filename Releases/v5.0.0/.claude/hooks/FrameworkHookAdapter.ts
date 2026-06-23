@@ -19,6 +19,11 @@ function argValue(name: string): string | undefined {
   return process.argv[index + 1];
 }
 
+function timeoutMs(): number {
+  const raw = Number(argValue("--timeout-ms") || process.env.PAI_HOOK_CHILD_TIMEOUT_MS || "");
+  return Number.isFinite(raw) && raw > 0 ? raw : 15_000;
+}
+
 function eventName(input: JsonObject): string {
   return (
     input.hook_event_name ||
@@ -136,6 +141,7 @@ function lastAssistantMessage(input: JsonObject): string {
 
 function normalize(input: JsonObject, framework: string): JsonObject {
   const normalizedCwd = cwd(input);
+  const normalizedToolResult = toolResult(input);
   return {
     ...input,
     framework,
@@ -152,7 +158,8 @@ function normalize(input: JsonObject, framework: string): JsonObject {
     hook_event_name: eventName(input),
     tool_name: toolName(input),
     tool_input: toolInput(input),
-    tool_result: toolResult(input),
+    tool_result: normalizedToolResult,
+    tool_response: normalizedToolResult,
     prompt: promptText(input),
   };
 }
@@ -194,6 +201,7 @@ async function main() {
   const child = spawnSync(runner, childArgs, {
     input: JSON.stringify(normalize(input, framework)),
     stdio: ["pipe", "inherit", "inherit"],
+    timeout: timeoutMs(),
     env: {
       ...process.env,
       PAI_FRAMEWORK: framework,

@@ -152,7 +152,11 @@ function powerShellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function hookCommand(config: PAIConfig, hookFile: string): string {
+function powerShellEncodedCommand(script: string): string {
+  return Buffer.from(script, "utf16le").toString("base64");
+}
+
+function hookCommand(config: PAIConfig, hookFile: string, timeout = 10): string {
   const adapter = `${config.paiDir}/hooks/FrameworkHookAdapter.ts`;
   const env = [
     ["PAI_DIR", `${config.paiDir}/PAI`],
@@ -171,10 +175,12 @@ function hookCommand(config: PAIConfig, hookFile: string): string {
     shellSingleQuote(config.framework),
     "--target",
     shellSingleQuote(hookFile),
+    "--timeout-ms",
+    shellSingleQuote(String(timeout * 1000)),
   ].join(" ");
 }
 
-function hookCommandWindows(config: PAIConfig, hookFile: string): string {
+function hookCommandWindows(config: PAIConfig, hookFile: string, timeout = 10): string {
   const adapter = `${config.paiDir}\\hooks\\FrameworkHookAdapter.ts`;
   const env = [
     ["PAI_DIR", `${config.paiDir}\\PAI`],
@@ -188,24 +194,23 @@ function hookCommandWindows(config: PAIConfig, hookFile: string): string {
   const envAssignments = env
     .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
     .join(" ");
+  const script = `${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework ${powerShellSingleQuote(config.framework)} --target ${powerShellSingleQuote(hookFile)} --timeout-ms ${powerShellSingleQuote(String(timeout * 1000))}`;
 
   return [
     "powershell",
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",
-    "-Command",
-    powerShellSingleQuote(
-      `${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework ${powerShellSingleQuote(config.framework)} --target ${powerShellSingleQuote(hookFile)}`
-    ),
+    "-EncodedCommand",
+    powerShellEncodedCommand(script),
   ].join(" ");
 }
 
 function commandHook(config: PAIConfig, hookFile: string, timeout = 10): Record<string, any> {
   return {
     type: "command",
-    command: hookCommand(config, hookFile),
-    commandWindows: hookCommandWindows(config, hookFile),
+    command: hookCommand(config, hookFile, timeout),
+    commandWindows: hookCommandWindows(config, hookFile, timeout),
     timeout,
   };
 }

@@ -192,6 +192,15 @@ function hotfixManifestAudit(): void {
   const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));
   check("hotfix manifest includes parity runtime files", missingManagedSources.length === 0, missingManagedSources.length ? missingManagedSources.join(", ") : requiredManagedSources.join(", "));
 
+  const configGenPath = join(releaseRoot, "PAI", "PAI-Install", "engine", "config-gen.ts");
+  const configGenText = readFileSync(configGenPath, "utf-8");
+  const generatedHookTargets = [...configGenText.matchAll(/commandHook\(config,\s+"([^"]+)"/g)]
+    .map((match) => `hooks/${match[1]}`)
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .sort();
+  const missingGeneratedHooks = generatedHookTargets.filter((source) => !isManifestCovered(source));
+  check("hotfix manifest covers generated Codex hook targets", missingGeneratedHooks.length === 0, missingGeneratedHooks.length ? missingGeneratedHooks.join(", ") : generatedHookTargets.join(", "));
+
   const unresolvedImports: string[] = [];
   for (const source of sourceEntries) {
     const fullPath = join(releaseRoot, source);

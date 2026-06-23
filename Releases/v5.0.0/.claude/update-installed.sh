@@ -366,6 +366,46 @@ verify_install() {
   fi
 }
 
+regenerate_codex_hooks_json() {
+  local install_root="$1"
+  local backup_root="$2"
+  command -v bun >/dev/null 2>&1 || fail "Bun is required to regenerate Codex hooks.json after hotfix update."
+
+  local script_path="$backup_root/regenerate-codex-hooks.ts"
+  cat > "$script_path" <<'TS'
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const root = process.argv[2];
+const dataDir = process.argv[3];
+const configDir = process.argv[4];
+
+if (!root || !dataDir || !configDir) {
+  console.error("Usage: regenerate-codex-hooks.ts <install-root> <data-dir> <config-dir>");
+  process.exit(1);
+}
+
+const { generateCodexHooksJson } = await import(pathToFileURL(join(root, "PAI", "PAI-Install", "engine", "config-gen.ts")).href);
+const config = {
+  framework: "codex",
+  principalName: "",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  aiName: "PAI",
+  catchphrase: "",
+  paiDir: root,
+  configDir,
+  dataDir,
+};
+
+await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJson(config), null, 2)}\n`);
+TS
+
+  local data_dir="${PAI_DATA_DIR:-$HOME/.pai}"
+  local config_dir="${PAI_CONFIG_DIR:-$HOME/.config/PAI}"
+  (cd "$install_root" && bun "$script_path" "$install_root" "$data_dir" "$config_dir")
+  success "Regenerated Codex hooks.json from installed generator."
+}
+
 printf '\nPAI | Installed Hotfix Updater\n\n'
 
 target="$(resolve_target)"
@@ -395,6 +435,9 @@ while IFS=$'\t' read -r source_rel target_rel transform mirror; do
 done < <(manifest_entries "$manifest_file" "$target_framework")
 
 if [ "$DRY_RUN" -eq 0 ]; then
+  if [ "$target_framework" = "codex" ]; then
+    regenerate_codex_hooks_json "$target_root" "$backup_root"
+  fi
   verify_install "$target_root" "$target_framework"
   success "Hotfix update complete. Restart the agent session so instructions reload."
 else

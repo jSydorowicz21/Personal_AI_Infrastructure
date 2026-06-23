@@ -22,9 +22,9 @@ export function expandPath(path: string): string {
   const home = homedir();
 
   return path
-    .replace(/^\$HOME(?=\/|$)/, home)
-    .replace(/^\$\{HOME\}(?=\/|$)/, home)
-    .replace(/^~(?=\/|$)/, home);
+    .replace(/^\$HOME(?=\/|\\|$)/, home)
+    .replace(/^\$\{HOME\}(?=\/|\\|$)/, home)
+    .replace(/^~(?=\/|\\|$)/, home);
 }
 
 type FrameworkState = {

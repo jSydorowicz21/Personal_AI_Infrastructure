@@ -41,6 +41,10 @@
       "target": "PAI/TOOLS/PaiDoctor.ts"
     },
     {
+      "source": "PAI/TOOLS/TranscriptParser.ts",
+      "target": "PAI/TOOLS/TranscriptParser.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },
@@ -189,16 +193,80 @@
       "target": "hooks/FrameworkHookAdapter.ts"
     },
     {
+      "source": "hooks/AgentInvocation.hook.ts",
+      "target": "hooks/AgentInvocation.hook.ts"
+    },
+    {
+      "source": "hooks/CheckpointPerISC.hook.ts",
+      "target": "hooks/CheckpointPerISC.hook.ts"
+    },
+    {
+      "source": "hooks/ContentScanner.hook.ts",
+      "target": "hooks/ContentScanner.hook.ts"
+    },
+    {
       "source": "hooks/ContextReduction.hook.sh",
       "target": "hooks/ContextReduction.hook.sh"
+    },
+    {
+      "source": "hooks/DocIntegrity.hook.ts",
+      "target": "hooks/DocIntegrity.hook.ts"
+    },
+    {
+      "source": "hooks/ISASync.hook.ts",
+      "target": "hooks/ISASync.hook.ts"
+    },
+    {
+      "source": "hooks/KittyEnvPersist.hook.ts",
+      "target": "hooks/KittyEnvPersist.hook.ts"
+    },
+    {
+      "source": "hooks/LastResponseCache.hook.ts",
+      "target": "hooks/LastResponseCache.hook.ts"
+    },
+    {
+      "source": "hooks/LoadContext.hook.ts",
+      "target": "hooks/LoadContext.hook.ts"
+    },
+    {
+      "source": "hooks/PreCompact.hook.ts",
+      "target": "hooks/PreCompact.hook.ts"
+    },
+    {
+      "source": "hooks/PromptProcessing.hook.ts",
+      "target": "hooks/PromptProcessing.hook.ts"
+    },
+    {
+      "source": "hooks/QuestionAnswered.hook.ts",
+      "target": "hooks/QuestionAnswered.hook.ts"
+    },
+    {
+      "source": "hooks/ResponseTabReset.hook.ts",
+      "target": "hooks/ResponseTabReset.hook.ts"
     },
     {
       "source": "hooks/RtkPreToolUse.hook.js",
       "target": "hooks/RtkPreToolUse.hook.js"
     },
     {
+      "source": "hooks/SecurityPipeline.hook.ts",
+      "target": "hooks/SecurityPipeline.hook.ts"
+    },
+    {
+      "source": "hooks/SetQuestionTab.hook.ts",
+      "target": "hooks/SetQuestionTab.hook.ts"
+    },
+    {
+      "source": "hooks/TelosSummarySync.hook.ts",
+      "target": "hooks/TelosSummarySync.hook.ts"
+    },
+    {
       "source": "hooks/ToolActivityTracker.hook.ts",
       "target": "hooks/ToolActivityTracker.hook.ts"
+    },
+    {
+      "source": "hooks/VoiceCompletion.hook.ts",
+      "target": "hooks/VoiceCompletion.hook.ts"
     },
     {
       "source": "hooks/StartupSelfCheck.hook.ts",
@@ -207,6 +275,10 @@
     {
       "source": "hooks/lib",
       "target": "hooks/lib"
+    },
+    {
+      "source": "hooks/handlers",
+      "target": "hooks/handlers"
     },
     {
       "source": "hooks/security",

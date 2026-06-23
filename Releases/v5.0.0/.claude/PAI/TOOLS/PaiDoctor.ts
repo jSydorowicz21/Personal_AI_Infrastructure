@@ -36,7 +36,8 @@ function readJson(path: string): any {
 }
 
 function timeoutForTool(name: string): number {
-  if (name === "CodexRealSessionHookProof.ts") return 120_000;
+  if (name === "CodexRealSessionHookProof.ts") return 180_000;
+  if (name === "HotfixUpdateRollbackSmokeTest.ts") return 180_000;
   if (name === "CodexFreshInstallSmokeTest.ts") return 120_000;
   return 60_000;
 }

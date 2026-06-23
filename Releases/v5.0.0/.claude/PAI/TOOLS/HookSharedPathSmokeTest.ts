@@ -4,7 +4,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -30,6 +30,7 @@ const root = uniqueRoot();
 const data = join(root, "pai-data");
 const framework = join(root, "framework");
 const paiDir = join(framework, "PAI");
+const home = process.env.HOME || homedir();
 
 mkdirSync(join(data, "MEMORY", "WORK", "20260617-120000_shared-hook-path"), { recursive: true });
 mkdirSync(join(data, "USER"), { recursive: true });
@@ -124,6 +125,11 @@ const checks: Check[] = [
     name: "hook user dir uses PAI_DATA_DIR",
     passed: paths.getUserDir() === join(data, "USER"),
     detail: paths.getUserDir(),
+  },
+  {
+    name: "hook path expands Windows HOME separators",
+    passed: paths.expandPath("$HOME\\.codex\\PAI") === join(home, ".codex", "PAI"),
+    detail: paths.expandPath("$HOME\\.codex\\PAI"),
   },
   {
     name: "isa work dir uses shared MEMORY",

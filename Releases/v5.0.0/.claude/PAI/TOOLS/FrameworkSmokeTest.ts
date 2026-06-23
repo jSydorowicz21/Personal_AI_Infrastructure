@@ -7,9 +7,9 @@
  * framework gets native config while sharing the same PAI data shape.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 type Framework = "claude" | "codex" | "opencode";
@@ -37,6 +37,14 @@ function checkPath(name: string, path: string): Check {
     passed: existsSync(path),
     detail: path,
   };
+}
+
+function sameRealPath(left: string, right: string): boolean {
+  try {
+    return existsSync(left) && existsSync(right) && realpathSync(left) === realpathSync(right);
+  } catch {
+    return false;
+  }
 }
 
 function findJsonlFiles(dir: string): string[] {
@@ -362,6 +370,21 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         passed: hooksText.includes("AgentInvocation.hook.ts"),
         detail: "Agent hook",
       });
+      checks.push({
+        name: "codex hooks include mode classification",
+        passed: hooksText.includes("PromptProcessing.hook.ts"),
+        detail: "UserPromptSubmit mode hook",
+      });
+      checks.push({
+        name: "codex hooks include ISA checkpoint sync",
+        passed: hooksText.includes("ISASync.hook.ts") && hooksText.includes("CheckpointPerISC.hook.ts"),
+        detail: "PostToolUse write hooks",
+      });
+      checks.push({
+        name: "codex Windows hook commands use encoded PowerShell",
+        passed: hooksText.includes("-EncodedCommand") && !hooksText.includes("-Command"),
+        detail: "commandWindows quoting",
+      });
     }
     if (existsSync(join(root, "config.toml"))) {
       const configText = readFileSync(join(root, "config.toml"), "utf-8");
@@ -454,6 +477,14 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
   writeFileSync(join(staleHooksDir, "FrameworkHookAdapter.ts"), "stale", "utf-8");
   const customHookPath = join(staleHooksDir, "CustomLocalOnly.hook.ts");
   writeFileSync(customHookPath, "custom", "utf-8");
+  const oldData = join(base, "old-pai-data");
+  const oldUser = join(oldData, "USER");
+  mkdirSync(oldUser, { recursive: true });
+  for (const staleUserLink of [join(root, "USER"), join(root, "PAI", "USER")]) {
+    rmSync(staleUserLink, { recursive: true, force: true });
+    mkdirSync(dirname(staleUserLink), { recursive: true });
+    symlinkSync(oldUser, staleUserLink, process.platform === "win32" ? "junction" : "dir");
+  }
 
   const second = spawnSync(process.execPath, [paiTool, "framework", "switch", framework], {
     cwd: join(import.meta.dir, "..", ".."),
@@ -468,6 +499,9 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
   const sourceHook = readFileSync(join(import.meta.dir, "..", "..", "hooks", "FrameworkHookAdapter.ts"), "utf-8");
   const refreshedHookPath = join(root, "hooks", "FrameworkHookAdapter.ts");
   const refreshedHook = existsSync(refreshedHookPath) ? readFileSync(refreshedHookPath, "utf-8") : "";
+  const linkedUser = join(root, "USER");
+  const linkedPaiUser = join(root, "PAI", "USER");
+  const expectedUser = join(data, "USER");
 
   return [
     {
@@ -494,6 +528,16 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
       name: `${framework} managed framework directory preserves custom files`,
       passed: existsSync(customHookPath) && readFileSync(customHookPath, "utf-8") === "custom",
       detail: customHookPath,
+    },
+    {
+      name: `${framework} framework USER link retargets stale link`,
+      passed: sameRealPath(linkedUser, expectedUser),
+      detail: linkedUser,
+    },
+    {
+      name: `${framework} PAI USER link retargets stale link`,
+      passed: sameRealPath(linkedPaiUser, expectedUser),
+      detail: linkedPaiUser,
     },
   ];
 }

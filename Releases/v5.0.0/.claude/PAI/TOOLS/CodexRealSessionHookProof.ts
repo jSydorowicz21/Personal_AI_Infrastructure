@@ -52,6 +52,18 @@ function runDetail(): string {
   return outputTail(run.stdout || "", run.stderr || "") || `status=${run.status ?? "null"}`;
 }
 
+function waitForLogMarker(beforeLength: number, needle: string, timeoutMs = 15_000): string {
+  const started = Date.now();
+  let text = readLog();
+  while (Date.now() - started < timeoutMs) {
+    const delta = text.slice(beforeLength);
+    if (delta.includes(needle)) return delta;
+    Bun.sleepSync(250);
+    text = readLog();
+  }
+  return text.slice(beforeLength);
+}
+
 mkdirSync(join(dataDir, "MEMORY", "OBSERVABILITY"), { recursive: true });
 
 const codexPath = Bun.which("codex") || "";
@@ -88,7 +100,7 @@ const run = codexPath
   ? spawnSync(spawnCommand, spawnArgs, {
       input: prompt,
       encoding: "utf-8",
-      timeout: 90_000,
+      timeout: 120_000,
       env: {
         ...process.env,
         CODEX_HOME: frameworkRoot,
@@ -102,8 +114,7 @@ const run = codexPath
     })
   : null;
 
-const afterLog = readLog();
-const logDelta = afterLog.slice(beforeLog.length);
+const logDelta = waitForLogMarker(beforeLog.length, marker);
 
 const checks: Check[] = [
   check("codex executable found", Boolean(codexPath), codexPath || "$PATH"),

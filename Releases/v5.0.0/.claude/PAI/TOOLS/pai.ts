@@ -25,6 +25,7 @@ import { spawn, spawnSync } from "bun";
 import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { join, basename, dirname, delimiter, extname, resolve } from "path";
+import { generateCodexHooksJson } from "../PAI-Install/engine/config-gen";
 
 // ============================================================================
 // Configuration
@@ -248,7 +249,16 @@ function linkDirectory(localPath: string, globalPath: string): number {
   mkdirSync(globalPath, { recursive: true });
   if (existsSync(localPath)) {
     const stat = lstatSync(localPath);
-    if (stat.isSymbolicLink()) return 0;
+    if (stat.isSymbolicLink()) {
+      try {
+        if (realpathSync(localPath) === realpathSync(globalPath)) return 0;
+      } catch {
+        // Broken or inaccessible links are replaced below.
+      }
+      rmSync(localPath, { recursive: true, force: true });
+      symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
+      return 0;
+    }
     const copied = copyMissing(localPath, globalPath);
     rmSync(localPath, { recursive: true, force: true });
     symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
@@ -568,6 +578,10 @@ function powerShellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+function powerShellEncodedCommand(script: string): string {
+  return Buffer.from(script, "utf16le").toString("base64");
+}
+
 function frameworkEnv(root: string, id: FrameworkId): Record<string, string> {
   return {
     PAI_DIR: join(root, "PAI"),
@@ -599,13 +613,14 @@ function codexHookCommandWindows(root: string, hookFile: string): string {
   const envAssignments = Object.entries(env)
     .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
     .join(" ");
+  const script = `${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`;
   return [
     "powershell",
     "-NoProfile",
     "-ExecutionPolicy",
     "Bypass",
-    "-Command",
-    powerShellSingleQuote(`${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`),
+    "-EncodedCommand",
+    powerShellEncodedCommand(script),
   ].join(" ");
 }
 
@@ -619,78 +634,16 @@ function codexCommandHook(root: string, hookFile: string, timeout = 10): Record<
 }
 
 function generateCodexHooks(root: string): Record<string, any> {
-  return {
-    hooks: {
-      SessionStart: [
-        {
-          matcher: "startup|resume",
-          hooks: [
-            codexCommandHook(root, "KittyEnvPersist.hook.ts"),
-            codexCommandHook(root, "LoadContext.hook.ts", 20),
-            codexCommandHook(root, "StartupSelfCheck.hook.ts", 5),
-          ],
-        },
-      ],
-      PreToolUse: [
-        {
-          matcher: "Bash|Shell",
-          hooks: [
-            codexCommandHook(root, "SecurityPipeline.hook.ts"),
-            codexCommandHook(root, "RtkPreToolUse.hook.js"),
-          ],
-        },
-        {
-          matcher: "Write|Edit|MultiEdit|Read|apply_patch",
-          hooks: [codexCommandHook(root, "SecurityPipeline.hook.ts")],
-        },
-        {
-          matcher: "AskUserQuestion|request_user_input",
-          hooks: [codexCommandHook(root, "SetQuestionTab.hook.ts", 5)],
-        },
-        {
-          matcher: "Agent",
-          hooks: [codexCommandHook(root, "AgentInvocation.hook.ts", 5)],
-        },
-      ],
-      PostToolUse: [
-        {
-          matcher: "WebFetch|WebSearch",
-          hooks: [codexCommandHook(root, "ContentScanner.hook.ts", 5)],
-        },
-        {
-          matcher: "Write|Edit|MultiEdit|apply_patch",
-          hooks: [codexCommandHook(root, "TelosSummarySync.hook.ts", 5)],
-        },
-        {
-          hooks: [codexCommandHook(root, "ToolActivityTracker.hook.ts", 5)],
-        },
-      ],
-      UserPromptSubmit: [
-        {
-          hooks: [
-            codexCommandHook(root, "PromptGuard.hook.ts", 5),
-            codexCommandHook(root, "RepeatDetection.hook.ts", 5),
-          ],
-        },
-      ],
-      PreCompact: [
-        {
-          matcher: "*",
-          hooks: [codexCommandHook(root, "PreCompact.hook.ts", 10)],
-        },
-      ],
-      Stop: [
-        {
-          hooks: [
-            codexCommandHook(root, "LastResponseCache.hook.ts", 10),
-            codexCommandHook(root, "ResponseTabReset.hook.ts", 10),
-            codexCommandHook(root, "VoiceCompletion.hook.ts", 10),
-            codexCommandHook(root, "DocIntegrity.hook.ts", 20),
-          ],
-        },
-      ],
-    },
-  };
+  return generateCodexHooksJson({
+    framework: "codex",
+    principalName: "",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    aiName: "PAI",
+    catchphrase: "",
+    paiDir: root,
+    configDir: CONFIG_DIR,
+    dataDir: DATA_DIR,
+  });
 }
 
 function tomlString(value: string): string {

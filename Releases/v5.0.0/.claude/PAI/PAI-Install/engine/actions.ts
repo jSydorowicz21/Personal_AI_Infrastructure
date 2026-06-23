@@ -596,7 +596,16 @@ function ensureLinkedDirectory(localPath: string, globalPath: string): { copied:
     try {
       const stat = lstatSync(localPath);
       if (stat.isSymbolicLink()) {
-        return { copied: 0, linked: true, skipped: true };
+        try {
+          if (realpathSync(localPath) === realpathSync(globalPath)) {
+            return { copied: 0, linked: true, skipped: true };
+          }
+        } catch {
+          // Broken or inaccessible links are replaced below.
+        }
+        rmSync(localPath, { recursive: true, force: true });
+        symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
+        return { copied: 0, linked: true, skipped: false };
       }
     } catch {}
   }

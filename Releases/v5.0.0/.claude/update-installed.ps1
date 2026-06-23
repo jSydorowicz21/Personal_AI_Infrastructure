@@ -259,6 +259,54 @@ function Verify-Install([string]$InstallRoot, [string]$Framework) {
   }
 }
 
+function Regenerate-CodexHooksJson([string]$InstallRoot, [string]$BackupRoot) {
+  if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    throw "Bun is required to regenerate Codex hooks.json after hotfix update."
+  }
+
+  $scriptPath = Join-Path $BackupRoot "regenerate-codex-hooks.ts"
+  $script = @'
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+
+const root = process.argv[2];
+const dataDir = process.argv[3];
+const configDir = process.argv[4];
+
+if (!root || !dataDir || !configDir) {
+  console.error("Usage: regenerate-codex-hooks.ts <install-root> <data-dir> <config-dir>");
+  process.exit(1);
+}
+
+const { generateCodexHooksJson } = await import(pathToFileURL(join(root, "PAI", "PAI-Install", "engine", "config-gen.ts")).href);
+const config = {
+  framework: "codex",
+  principalName: "",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  aiName: "PAI",
+  catchphrase: "",
+  paiDir: root,
+  configDir,
+  dataDir,
+};
+
+await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJson(config), null, 2)}\n`);
+'@
+  Set-Content -LiteralPath $scriptPath -Value $script -NoNewline
+
+  $dataDir = if ($env:PAI_DATA_DIR) { Resolve-AbsolutePath $env:PAI_DATA_DIR } else { Join-Path $EffectiveHome ".pai" }
+  $configDir = if ($env:PAI_CONFIG_DIR) { Resolve-AbsolutePath $env:PAI_CONFIG_DIR } else { Join-Path $EffectiveHome ".config\PAI" }
+
+  Push-Location $InstallRoot
+  try {
+    & bun $scriptPath $InstallRoot $dataDir $configDir | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Codex hooks.json regeneration failed" }
+  } finally {
+    Pop-Location
+  }
+  Success "Regenerated Codex hooks.json from installed generator."
+}
+
 Write-Host ""
 Write-Host "PAI | Installed Hotfix Updater" -ForegroundColor Cyan
 Write-Host ""
@@ -296,6 +344,9 @@ try {
   }
 
   if (-not $DryRun) {
+    if ($target.Framework -eq "codex") {
+      Regenerate-CodexHooksJson $target.Root $backupRoot
+    }
     Verify-Install $target.Root $target.Framework
     Success "Hotfix update complete. Restart the agent session so instructions reload."
   } else {

@@ -75,7 +75,7 @@ const checks: Check[] = [
   check("StartupSelfCheck hook exists", existsSync(hookPath), hookPath),
   check("live hooks.json registers StartupSelfCheck", hooksJson.includes("StartupSelfCheck.hook.ts") || branchCi, branchCi ? "branch CI verifies generated hooks via installer smokes" : hooksJsonPath),
   check("installer hook generator registers StartupSelfCheck", configGen.includes("StartupSelfCheck.hook.ts"), configGenPath),
-  check("pai tool hook generator registers StartupSelfCheck", paiTool.includes("StartupSelfCheck.hook.ts"), paiToolPath),
+  check("pai tool reuses canonical hook generator", paiTool.includes("generateCodexHooksJson"), paiToolPath),
   check("self-check exits cleanly", run.status === 0, `status=${run.status ?? "null"}`),
   check("self-check reports missing AGENTS.md", output.includes("AGENTS.md exists"), output.trim().split("\n").slice(0, 4).join(" | ")),
   check("self-check points to k doctor", output.includes("k doctor"), output.trim().split("\n").slice(-2).join(" | ")),

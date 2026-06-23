@@ -78,6 +78,7 @@ const activityRun = runHook("ToolActivityTracker.hook.ts", {
   hook_event_name: "PostToolUse",
   tool_name: "Bash",
   tool_input: { command: "echo pai-hook-trigger-smoke" },
+  toolResult: { stdout: "pai-hook-trigger-stdout", stderr: "", exitCode: 0 },
   cwd: home,
   session_id: `hook-trigger-smoke-${Date.now()}`,
 });
@@ -100,6 +101,7 @@ const checks = [
   check("FrameworkHookAdapter exists", existsSync(adapter), adapter),
   check("ToolActivityTracker hook exits cleanly", activityRun.status === 0, `status=${activityRun.status ?? "null"}`),
   check("ToolActivityTracker records hook-trigger smoke", afterActivity >= beforeActivity && activityText.includes("pai-hook-trigger-smoke"), activityLog),
+  check("ToolActivityTracker records normalized tool response", activityText.includes("pai-hook-trigger-stdout"), activityLog),
   check("SecurityPipeline audit hook exits cleanly", securityRun.status === 0, `status=${securityRun.status ?? "null"}`),
   check("SecurityPipeline records outbound audit", afterSecurity >= beforeSecurity, securityDir),
 ];

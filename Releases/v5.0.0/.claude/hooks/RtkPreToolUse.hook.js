@@ -2,6 +2,13 @@
 
 const { spawnSync } = require("node:child_process");
 
+const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 1500;
+
+function rewriteTimeoutMs() {
+  const raw = Number(process.env.PAI_RTK_REWRITE_TIMEOUT_MS || "");
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RTK_REWRITE_TIMEOUT_MS;
+}
+
 function readStdin() {
   return new Promise((resolve, reject) => {
     let data = "";
@@ -26,7 +33,15 @@ function rewriteCommand(command) {
   const result = spawnSync("rtk", ["rewrite", command], {
     encoding: "utf8",
     windowsHide: true,
+    timeout: rewriteTimeoutMs(),
   });
+
+  if (result.error) {
+    if (process.env.PAI_HOOK_DEBUG === "1") {
+      process.stderr.write(`[RtkPreToolUse] rtk rewrite failed: ${result.error.message}\n`);
+    }
+    return null;
+  }
 
   const rewritten = (result.stdout || "").trim();
   if (!rewritten || rewritten === command.trim()) {

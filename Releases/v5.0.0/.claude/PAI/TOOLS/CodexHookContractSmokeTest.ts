@@ -7,9 +7,9 @@
  * should return a hard-block exit.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 type HookCase = {
@@ -35,6 +35,7 @@ const tempRoot = mkdtempSync(join(tmpdir(), "pai-codex-hook-contract-"));
 const tempData = join(tempRoot, "pai-data");
 const tempConfig = join(tempRoot, "config");
 const tempTranscript = join(tempRoot, "transcript.jsonl");
+const fakeBin = join(tempRoot, "bin");
 const checks: Check[] = [];
 
 function check(name: string, passed: boolean, detail: string): void {
@@ -190,9 +191,46 @@ function runHook(target: string, payload: Record<string, any>) {
   });
 }
 
+function writeSlowRtk(): void {
+  mkdirSync(fakeBin, { recursive: true });
+  const slowScript = join(fakeBin, "rtk-slow.js");
+  writeFileSync(slowScript, "setTimeout(() => {}, 10_000);\n");
+
+  if (process.platform === "win32") {
+    writeFileSync(join(fakeBin, "rtk.cmd"), `@echo off\r\n"${process.execPath}" "%~dp0rtk-slow.js" %*\r\n`);
+    return;
+  }
+
+  const wrapper = join(fakeBin, "rtk");
+  writeFileSync(wrapper, `#!/usr/bin/env sh\n"${process.execPath}" "$(dirname "$0")/rtk-slow.js" "$@"\n`);
+  chmodSync(wrapper, 0o755);
+}
+
+function runRtkPreToolUseWithSlowRtk() {
+  const started = Date.now();
+  const result = spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
+    input: JSON.stringify({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status" },
+      cwd: tempRoot,
+      session_id: "hook-contract-rtk-timeout",
+    }),
+    encoding: "utf-8",
+    timeout: 5_000,
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}${delimiter}${process.env.PATH || ""}`,
+      PAI_RTK_REWRITE_TIMEOUT_MS: "100",
+    },
+  });
+  return { result, elapsedMs: Date.now() - started };
+}
+
 try {
   mkdirSync(join(tempData, "MEMORY", "OBSERVABILITY"), { recursive: true });
   mkdirSync(join(tempData, "USER"), { recursive: true });
+  writeSlowRtk();
   writeFileSync(join(tempData, "USER", "OPINIONS.md"), "");
   writeFileSync(tempTranscript, JSON.stringify({
     type: "assistant",
@@ -230,6 +268,13 @@ try {
     cwd: tempRoot,
   });
   check("SecurityPipeline hard-blocks pipe-to-shell", toolBlock.status === 2, `status=${toolBlock.status ?? "null"}`);
+
+  const rtkTimeout = runRtkPreToolUseWithSlowRtk();
+  check(
+    "RtkPreToolUse bounds slow rtk rewrite",
+    rtkTimeout.result.status === 0 && rtkTimeout.elapsedMs < 3_000,
+    `status=${rtkTimeout.result.status ?? "null"} elapsed=${rtkTimeout.elapsedMs}ms`
+  );
 
   const failed = checks.filter((item) => !item.passed);
   if (failed.length > 0) {
