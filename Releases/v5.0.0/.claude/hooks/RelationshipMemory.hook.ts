@@ -30,7 +30,7 @@
 
 import { writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { getPaiDir } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getPSTComponents } from './lib/time';
 import { getDAName, getPrincipalName } from './lib/identity';
 import { parseTranscript } from '../PAI/TOOLS/TranscriptParser';
@@ -202,9 +202,9 @@ function formatNotes(notes: RelationshipNote[]): string {
 /**
  * Ensure relationship memory directory exists
  */
-function ensureRelationshipDir(paiDir: string): string {
+function ensureRelationshipDir(): string {
   const { year, month, day } = getPSTComponents();
-  const monthDir = join(paiDir, 'MEMORY', 'RELATIONSHIP', `${year}-${month}`);
+  const monthDir = memoryPath('RELATIONSHIP', `${year}-${month}`);
 
   if (!existsSync(monthDir)) {
     mkdirSync(monthDir, { recursive: true });
@@ -261,8 +261,7 @@ async function main() {
     }
 
     // Write to daily relationship file
-    const paiDir = getPaiDir();
-    const filepath = ensureRelationshipDir(paiDir);
+    const filepath = ensureRelationshipDir();
     initDailyFile(filepath);
 
     const formatted = formatNotes(notes);

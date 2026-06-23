@@ -23,10 +23,10 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { memoryPath, userPath } from './lib/paths';
 
-const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude');
-const OPINIONS_FILE = join(PAI_DIR, 'PAI/USER/OPINIONS.md');
-const RELATIONSHIP_LOG = join(PAI_DIR, 'MEMORY/RELATIONSHIP');
+const OPINIONS_FILE = userPath('OPINIONS.md');
+const RELATIONSHIP_LOG = memoryPath('RELATIONSHIP');
 
 interface Evidence {
   date: string;

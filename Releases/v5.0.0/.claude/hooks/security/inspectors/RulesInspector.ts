@@ -8,11 +8,11 @@
  */
 import type { Inspector, InspectionContext, InspectionResult } from '../types.ts';
 import { ALLOW, deny } from '../types.ts';
-import { paiPath } from '../../lib/paths.ts';
+import { userPath } from '../../lib/paths.ts';
 import { inference } from '../../../PAI/TOOLS/Inference.ts';
 import { readFileSync, existsSync } from 'fs';
 
-const RULES_PATH = paiPath('USER', 'SECURITY', 'SECURITY_RULES.md');
+const RULES_PATH = userPath('SECURITY', 'SECURITY_RULES.md');
 
 const SYSTEM_PROMPT = `You are a security policy evaluator. Given a tool call and a set of user-written security rules, determine if the tool call should be ALLOWED or BLOCKED.
 

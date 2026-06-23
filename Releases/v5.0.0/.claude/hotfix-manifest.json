@@ -1,0 +1,326 @@
+{
+  "version": 1,
+  "releaseRoot": "Releases/v5.0.0/.claude",
+  "description": "Managed files safe to overlay into an existing PAI install without touching USER, MEMORY, settings, auth, hooks state, or framework config.",
+  "entries": [
+    {
+      "source": "hotfix-manifest.json",
+      "target": "hotfix-manifest.json"
+    },
+    {
+      "source": "CLAUDE.md",
+      "targets": {
+        "claude": "CLAUDE.md",
+        "codex": "AGENTS.md",
+        "opencode": "AGENTS.md"
+      },
+      "transformInstructions": true
+    },
+    {
+      "source": "PAI/PAI_SYSTEM_PROMPT.md",
+      "target": "PAI/PAI_SYSTEM_PROMPT.md"
+    },
+    {
+      "source": "PAI/TOOLS/pai.ts",
+      "target": "PAI/TOOLS/pai.ts"
+    },
+    {
+      "source": "PAI/TOOLS/Inference.ts",
+      "target": "PAI/TOOLS/Inference.ts"
+    },
+    {
+      "source": "PAI/TOOLS/algorithm.ts",
+      "target": "PAI/TOOLS/algorithm.ts"
+    },
+    {
+      "source": "PAI/TOOLS/lib",
+      "target": "PAI/TOOLS/lib"
+    },
+    {
+      "source": "PAI/TOOLS/PaiDoctor.ts",
+      "target": "PAI/TOOLS/PaiDoctor.ts"
+    },
+    {
+      "source": "PAI/TOOLS/TranscriptParser.ts",
+      "target": "PAI/TOOLS/TranscriptParser.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
+      "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
+      "target": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexHookTriggerSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexRealSessionHookProof.ts",
+      "target": "PAI/TOOLS/CodexRealSessionHookProof.ts"
+    },
+    {
+      "source": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
+      "target": "PAI/TOOLS/StartupSelfCheckSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
+      "target": "PAI/TOOLS/RepeatDetectionSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
+      "target": "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/HookSharedPathSmokeTest.ts",
+      "target": "PAI/TOOLS/HookSharedPathSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/MemoryDelete.ts",
+      "target": "PAI/TOOLS/MemoryDelete.ts"
+    },
+    {
+      "source": "PAI/TOOLS/FrameworkSmokeTest.ts",
+      "target": "PAI/TOOLS/FrameworkSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CodexBranchValidation.ts",
+      "target": "PAI/TOOLS/CodexBranchValidation.ts"
+    },
+    {
+      "source": "PAI/PAI-Install",
+      "target": "PAI/PAI-Install"
+    },
+    {
+      "source": "PAI/ALGORITHM/LATEST",
+      "target": "PAI/ALGORITHM/LATEST"
+    },
+    {
+      "source": "PAI/ALGORITHM/v6.3.0.md",
+      "target": "PAI/ALGORITHM/v6.3.0.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/CodexNativePort.md",
+      "target": "PAI/DOCUMENTATION/CodexNativePort.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Pulse/PulseSystem.md",
+      "target": "PAI/DOCUMENTATION/Pulse/PulseSystem.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Tools/Cli.md",
+      "target": "PAI/DOCUMENTATION/Tools/Cli.md"
+    },
+    {
+      "source": "PAI/PULSE/PULSE.toml",
+      "target": "PAI/PULSE/PULSE.toml"
+    },
+    {
+      "source": "PAI/PULSE/lib.ts",
+      "target": "PAI/PULSE/lib.ts"
+    },
+    {
+      "source": "PAI/PULSE/pulse.ts",
+      "target": "PAI/PULSE/pulse.ts"
+    },
+    {
+      "source": "PAI/PULSE/setup.ts",
+      "target": "PAI/PULSE/setup.ts"
+    },
+    {
+      "source": "PAI/PULSE/manage.ps1",
+      "target": "PAI/PULSE/manage.ps1"
+    },
+    {
+      "source": "PAI/PULSE/toml.ts",
+      "target": "PAI/PULSE/toml.ts"
+    },
+    {
+      "source": "PAI/PULSE/package.json",
+      "target": "PAI/PULSE/package.json"
+    },
+    {
+      "source": "PAI/PULSE/bun.lock",
+      "target": "PAI/PULSE/bun.lock"
+    },
+    {
+      "source": "PAI/PULSE/Assistant",
+      "target": "PAI/PULSE/Assistant"
+    },
+    {
+      "source": "PAI/PULSE/checks",
+      "target": "PAI/PULSE/checks"
+    },
+    {
+      "source": "PAI/PULSE/lib",
+      "target": "PAI/PULSE/lib"
+    },
+    {
+      "source": "PAI/PULSE/modules",
+      "target": "PAI/PULSE/modules"
+    },
+    {
+      "source": "PAI/PULSE/Observability",
+      "target": "PAI/PULSE/Observability"
+    },
+    {
+      "source": "PAI/PULSE/Performance",
+      "target": "PAI/PULSE/Performance"
+    },
+    {
+      "source": "PAI/PULSE/VoiceServer",
+      "target": "PAI/PULSE/VoiceServer"
+    },
+    {
+      "source": "MCPs",
+      "target": "MCPs"
+    },
+    {
+      "source": "hooks/FrameworkHookAdapter.ts",
+      "target": "hooks/FrameworkHookAdapter.ts"
+    },
+    {
+      "source": "hooks/AgentInvocation.hook.ts",
+      "target": "hooks/AgentInvocation.hook.ts"
+    },
+    {
+      "source": "hooks/CheckpointPerISC.hook.ts",
+      "target": "hooks/CheckpointPerISC.hook.ts"
+    },
+    {
+      "source": "hooks/ContentScanner.hook.ts",
+      "target": "hooks/ContentScanner.hook.ts"
+    },
+    {
+      "source": "hooks/ContextReduction.hook.sh",
+      "target": "hooks/ContextReduction.hook.sh"
+    },
+    {
+      "source": "hooks/DocIntegrity.hook.ts",
+      "target": "hooks/DocIntegrity.hook.ts"
+    },
+    {
+      "source": "hooks/ISASync.hook.ts",
+      "target": "hooks/ISASync.hook.ts"
+    },
+    {
+      "source": "hooks/KittyEnvPersist.hook.ts",
+      "target": "hooks/KittyEnvPersist.hook.ts"
+    },
+    {
+      "source": "hooks/LastResponseCache.hook.ts",
+      "target": "hooks/LastResponseCache.hook.ts"
+    },
+    {
+      "source": "hooks/LoadContext.hook.ts",
+      "target": "hooks/LoadContext.hook.ts"
+    },
+    {
+      "source": "hooks/PreCompact.hook.ts",
+      "target": "hooks/PreCompact.hook.ts"
+    },
+    {
+      "source": "hooks/PromptProcessing.hook.ts",
+      "target": "hooks/PromptProcessing.hook.ts"
+    },
+    {
+      "source": "hooks/QuestionAnswered.hook.ts",
+      "target": "hooks/QuestionAnswered.hook.ts"
+    },
+    {
+      "source": "hooks/ResponseTabReset.hook.ts",
+      "target": "hooks/ResponseTabReset.hook.ts"
+    },
+    {
+      "source": "hooks/RtkPreToolUse.hook.js",
+      "target": "hooks/RtkPreToolUse.hook.js"
+    },
+    {
+      "source": "hooks/SecurityPipeline.hook.ts",
+      "target": "hooks/SecurityPipeline.hook.ts"
+    },
+    {
+      "source": "hooks/SetQuestionTab.hook.ts",
+      "target": "hooks/SetQuestionTab.hook.ts"
+    },
+    {
+      "source": "hooks/TelosSummarySync.hook.ts",
+      "target": "hooks/TelosSummarySync.hook.ts"
+    },
+    {
+      "source": "hooks/ToolActivityTracker.hook.ts",
+      "target": "hooks/ToolActivityTracker.hook.ts"
+    },
+    {
+      "source": "hooks/VoiceCompletion.hook.ts",
+      "target": "hooks/VoiceCompletion.hook.ts"
+    },
+    {
+      "source": "hooks/StartupSelfCheck.hook.ts",
+      "target": "hooks/StartupSelfCheck.hook.ts"
+    },
+    {
+      "source": "hooks/lib",
+      "target": "hooks/lib"
+    },
+    {
+      "source": "hooks/handlers",
+      "target": "hooks/handlers"
+    },
+    {
+      "source": "hooks/security",
+      "target": "hooks/security"
+    },
+    {
+      "source": "hooks/RepeatDetection.hook.ts",
+      "target": "hooks/RepeatDetection.hook.ts"
+    },
+    {
+      "source": "hooks/PromptGuard.hook.ts",
+      "target": "hooks/PromptGuard.hook.ts"
+    },
+    {
+      "source": "README.md",
+      "target": "README.md"
+    },
+    {
+      "source": "RTK.md",
+      "target": "RTK.md"
+    },
+    {
+      "source": "commands",
+      "target": "commands"
+    },
+    {
+      "source": "update-installed.sh",
+      "target": "update-installed.sh"
+    },
+    {
+      "source": "update-installed.ps1",
+      "target": "update-installed.ps1"
+    },
+    {
+      "source": "skills/Interceptor",
+      "target": "skills/Interceptor",
+      "mirrorToCodexAgentsSkills": true
+    },
+    {
+      "source": "skills/Webdesign",
+      "target": "skills/Webdesign",
+      "mirrorToCodexAgentsSkills": true
+    }
+  ]
+}

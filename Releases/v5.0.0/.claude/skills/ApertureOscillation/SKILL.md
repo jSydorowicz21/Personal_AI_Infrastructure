@@ -1,13 +1,13 @@
 ---
 name: ApertureOscillation
-description: "3-pass scope oscillation that holds a question constant while shifting the scope envelope — narrow/tactical, wide/strategic, then synthesis — to surface design tensions invisible at any single zoom level. Requires two distinct inputs: the tactical target (what you're building) and strategic context (the larger system it serves). Pass 1 captures the component's own internal logic. Pass 2 reveals what the system needs it to be. Pass 3 finds where those views diverge — that delta is the output. Produces: design tensions, scope recommendations, and coherence assessments. Single workflow: Workflows/Oscillate.md. BPE-fragile — quarterly test recommended to verify smarter models don't naturally oscillate scope without prompting. Best integration point: Algorithm OBSERVE phase (before ISC) or THINK phase (before approach commitment). NOT a lens rotation (that's IterativeDepth) and NOT idea generation (that's BeCreative). NOT FOR deep incident causal chains (use RootCauseAnalysis) or assumption decomposition (use FirstPrinciples). USE WHEN aperture oscillation, oscillate scope, zoom in and out, tactical vs strategic, scope framing, design tension, architecture decision, feature fits system, system coherence check, local vs global design, build this inside that, wrong scope, design review, scope negotiation."
+description: "Shift between narrow, broad, analytical, creative, and synthesis views to escape local optima. USE WHEN stuck, overfocused, underexplored, framing a hard problem, needing alternate perspectives, or deliberately oscillating between detail and system-level views."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/ApertureOscillation/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/ApertureOscillation/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -103,7 +103,7 @@ Pass 3 (Synthesis): Tension — standalone webhook service vs. Arbol action. Res
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ApertureOscillation","workflow":"Oscillate","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ApertureOscillation","workflow":"Oscillate","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

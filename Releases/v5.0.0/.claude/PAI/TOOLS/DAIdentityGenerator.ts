@@ -10,9 +10,10 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
-import { parse as parseYaml } from "yaml";
+import { userPath } from "./lib/paths";
 
-const PAI_DA_DIR = join(process.env.HOME!, ".claude", "PAI", "USER", "DA");
+const PAI_DA_DIR = userPath("DA");
+const parseYaml = Bun.YAML.parse;
 
 function loadYaml<T>(path: string): T {
   if (!existsSync(path)) {

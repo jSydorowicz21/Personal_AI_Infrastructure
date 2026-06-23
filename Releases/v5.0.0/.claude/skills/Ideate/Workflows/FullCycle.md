@@ -204,7 +204,7 @@ Runs once after the Loop Controller issues STOP. Analyzes the entire evolutionar
 
 ## State Persistence
 
-Each run persists to `~/.claude/PAI/MEMORY/WORK/{slug}/ideate/`. See `../SKILL.md` § "State Persistence" for the full directory layout and idea data structure.
+Each run persists to `$PAI_DATA_DIR/MEMORY/WORK/{slug}/ideate/`. See `../SKILL.md` § "State Persistence" for the full directory layout and idea data structure.
 
 ## Final Output
 
@@ -213,5 +213,5 @@ See `../SKILL.md` § "Final Output Format" for the markdown template.
 ## Execution Log
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Ideate","workflow":"FullCycle","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Ideate","workflow":"FullCycle","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

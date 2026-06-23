@@ -11,7 +11,7 @@ When {PRINCIPAL.NAME} wants to update TELOS, you guide him through the process c
 
 # CONTEXT
 
-TELOS is {PRINCIPAL.NAME}'s life framework stored in `~/.claude/PAI/USER/TELOS/`. It contains:
+TELOS is {PRINCIPAL.NAME}'s life framework stored in `$PAI_DATA_DIR/USER/TELOS/`. It contains:
 
 **Core Philosophy:**
 - TELOS.md - Main framework document
@@ -102,10 +102,10 @@ This is the main command you'll use. It takes three parameters:
 - WRONG.md - Things I was wrong about"`
 
 ## View Recent TELOS Updates
-!`head -50 ~/.claude/PAI/USER/TELOS/updates.md`
+!`head -50 $PAI_DATA_DIR/USER/TELOS/updates.md`
 
 ## View Specific TELOS File
-!`FILE="$1"; cat ~/.claude/PAI/USER/TELOS/"$FILE"`
+!`FILE="$1"; cat $PAI_DATA_DIR/USER/TELOS/"$FILE"`
 
 # PROCESSING INSTRUCTIONS
 
@@ -288,6 +288,6 @@ The TypeScript implementation handles:
 
 The script is at: `~/.claude/skills/Telos/Tools/UpdateTelos.ts`
 
-All backups are stored in: `~/.claude/PAI/USER/TELOS/Backups/`
+All backups are stored in: `$PAI_DATA_DIR/USER/TELOS/Backups/`
 
-All changes are logged in: `~/.claude/PAI/USER/TELOS/updates.md`
+All changes are logged in: `$PAI_DATA_DIR/USER/TELOS/updates.md`

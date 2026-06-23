@@ -1,13 +1,13 @@
 ---
 name: USMetrics
-description: "Analyze and update 68 US economic and social indicators from five government APIs: FRED, EIA, Treasury FiscalData, BLS, Census. Ten categories: Economic Output & Growth (GDP, industrial production, retail sales), Inflation & Prices (CPI, PCE, gas, oil), Employment & Labor (unemployment, payrolls, jobless claims, quit rate), Housing (home prices, mortgage rates, starts), Consumer & Personal Finance (sentiment, saving rate, credit), Financial Markets (interest rates, Treasury yields, volatility), Trade & International (trade balance, USD index), Government & Fiscal (federal debt, deficit, spending), Demographics & Social (population, inequality, poverty), Health & Crisis (deaths of despair, air quality, life expectancy). Two workflows: UpdateData (fetch live data via FRED_API_KEY and EIA_API_KEY, update US-Common-Metrics.md, us-metrics-current.csv, us-metrics-historical.csv in Substrate dataset), GetCurrentState (10y/5y/2y/1y multi-timeframe trend analysis, cross-category correlation, pattern/anomaly detection, research recommendations as structured markdown report). USE WHEN GDP, inflation, unemployment, economic metrics, gas prices, how is the economy, update data, refresh data, get current state, economic overview, FRED, fetch FRED series, generate analysis, update substrate metrics, US metrics, economic trends. NOT FOR state-level pathogen wastewater surveillance (use a dedicated surveillance data skill)."
+description: "Retrieve, analyze, and explain US economic, demographic, political, and public metrics. USE WHEN asking for US statistics, macro indicators, public data, dashboards, time series, or evidence-backed metric comparisons."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/USMetrics/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/USMetrics/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -181,7 +181,7 @@ The GetCurrentState workflow produces a structured markdown document:
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"USMetrics","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"USMetrics","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

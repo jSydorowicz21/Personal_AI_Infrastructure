@@ -7,8 +7,8 @@
  *   - Voice notifications (ElevenLabs TTS)
  *   - Hook validation (skill-guard, agent-guard)
  *   - Observability (data APIs + dashboard)
- *   - Telegram bot (grammY polling + claude-agent-sdk)
- *   - iMessage bot (SQLite polling + claude-agent-sdk)
+ *   - Telegram bot (grammY polling + active framework inference)
+ *   - iMessage bot (SQLite polling + active framework inference)
  *   - GitHub work polling (PAI Worker)
  *
  * One process. One port. One launchd plist. One log file.
@@ -16,15 +16,20 @@
 
 import { join } from "path"
 import { readFileSync, existsSync } from "fs"
-import { parse } from "smol-toml"
+import { getFrameworkDir, getPaiDataDir, getPaiDir, memoryPath } from "../TOOLS/lib/paths"
+import { parseToml } from "./toml"
 
 // ── Load .env before anything else ──
 
 const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
+const PAI_DIR = getPaiDir()
+const FRAMEWORK_DIR = getFrameworkDir()
 const PULSE_DIR = join(PAI_DIR, "PULSE")
+process.env.PAI_DIR ??= PAI_DIR
+process.env.PAI_FRAMEWORK_DIR ??= FRAMEWORK_DIR
+process.env.PAI_DATA_DIR ??= getPaiDataDir()
 
-const envPath = join(HOME, ".claude", ".env")
+const envPath = join(FRAMEWORK_DIR, ".env")
 try {
   const envContent = readFileSync(envPath, "utf-8")
   for (const line of envContent.split("\n")) {
@@ -54,7 +59,7 @@ import {
   dispatch,
   isSentinel,
   spawnScript,
-  spawnClaude,
+  spawnAI,
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
@@ -109,7 +114,7 @@ interface PulseConfig {
   jobs: Array<{
     name: string
     schedule: string
-    type: "script" | "claude"
+    type: "script" | "ai" | "claude"
     command?: string
     prompt?: string
     model?: string
@@ -122,12 +127,12 @@ interface PulseConfig {
 
 async function loadPulseConfig(): Promise<PulseConfig> {
   const raw = await Bun.file(join(PULSE_DIR, "PULSE.toml")).text()
-  const parsed = parse(raw) as Record<string, unknown>
+  const parsed = parseToml(raw) as Record<string, unknown>
 
   const daemonConfig = await loadConfig(PULSE_DIR)
 
   return {
-    port: (parsed.port as number) ?? parseInt(process.env.PULSE_PORT || "8686", 10),
+    port: (parsed.port as number) ?? parseInt(process.env.PULSE_PORT || "31337", 10),
     voice: (parsed.voice as PulseConfig["voice"]) ?? { enabled: true },
     telegram: (parsed.telegram as PulseConfig["telegram"]) ?? { enabled: false },
     imessage: (parsed.imessage as PulseConfig["imessage"]) ?? { enabled: false },
@@ -140,11 +145,20 @@ async function loadPulseConfig(): Promise<PulseConfig> {
 
 // ── Constants ──
 
-const STATE_PATH = join(PULSE_DIR, "state", "state.json")
+const STATE_PATH = memoryPath("STATE", "pulse", "state.json")
 const PID_PATH = join(PULSE_DIR, "state", "pulse.pid")
 const MAX_FAILURES = 3
 const MAX_SLEEP_MS = 60_000
 const MIN_SLEEP_MS = 1_000
+
+async function sleepInterruptibly(ms: number, shuttingDown: () => boolean): Promise<void> {
+  const until = Date.now() + ms
+  while (!shuttingDown()) {
+    const remaining = until - Date.now()
+    if (remaining <= 0) return
+    await Bun.sleep(Math.min(remaining, 250))
+  }
+}
 
 // ── Supervisor: restart crashed subsystems without killing the process ──
 
@@ -155,12 +169,12 @@ async function supervise(name: string, fn: () => Promise<void>, shuttingDown: ()
       // If fn returns normally, the subsystem exited cleanly
       if (!shuttingDown()) {
         log("info", `${name} exited cleanly, restarting in 10s`)
-        await Bun.sleep(10_000)
+        await sleepInterruptibly(10_000, shuttingDown)
       }
     } catch (err) {
       if (shuttingDown()) return
       log("error", `${name} crashed, restarting in 30s`, { error: String(err) })
-      await Bun.sleep(30_000)
+      await sleepInterruptibly(30_000, shuttingDown)
     }
   }
 }
@@ -370,8 +384,8 @@ async function main() {
       try {
         let output: string
 
-        if (job.type === "claude") {
-          output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+        if (job.type === "claude" || job.type === "ai") {
+          output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
         } else {
           output = await spawnScript(job.command!)
         }
@@ -412,7 +426,7 @@ async function main() {
     const sleepMs = Math.max(MIN_SLEEP_MS, Math.min(nextDueMs - elapsed, MAX_SLEEP_MS))
 
     if (!shuttingDown) {
-      await Bun.sleep(sleepMs)
+      await sleepInterruptibly(sleepMs, isShuttingDown)
     }
   }
 

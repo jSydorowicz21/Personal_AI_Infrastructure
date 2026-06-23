@@ -1,13 +1,13 @@
 ---
 name: ExtractWisdom
-description: "Content-adaptive wisdom extraction that reads the content first, detects what wisdom domains are actually present, then builds custom sections around what it finds — instead of forcing static headers every time. A security talk gets 'Threat Model Insights' and 'Defense Strategies'; a business podcast gets 'Contrarian Business Takes' and 'Money Philosophy'. Five depth levels: Instant (1 section), Fast (3 sections), Basic (3+takeaway), Full (5-12 sections, default), Comprehensive (10-15+themes). Voice follows the user's conversational style — bullets read like telling a friend what you just watched, not a press release. Output always includes dynamic sections, One-Sentence Takeaway, 'If You Only Have 2 Minutes', and References. Spicy/contrarian takes are mandatory inclusions, never softened. YouTube content extracted via `fabric -y URL` before extraction; article content fetched via WebFetch. Output: markdown with dynamic section headers, closing sections vary by depth level, References & Rabbit Holes, optional Themes & Connections (Comprehensive). Workflow: Extract. USE WHEN extract wisdom, analyze video, analyze podcast, extract insights, extract from YouTube, key takeaways, what's interesting in this, process this content, summarize interview, analyze article, extract from blog post, what are the main takeaways, distill this content. NOT FOR static Fabric extract_wisdom pattern (use Fabric), general content retrieval (use Research), or knowledge archiving (use Knowledge ingest)."
+description: "Extract durable lessons, principles, heuristics, quotes, and decision rules from text or transcripts. USE WHEN mining wisdom, pulling insights from books/videos/articles, distilling principles, or turning raw material into reusable knowledge."
 effort: medium
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/ExtractWisdom/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/ExtractWisdom/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -259,7 +259,7 @@ User: "extract the key insights from this blog post"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ExtractWisdom","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ExtractWisdom","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

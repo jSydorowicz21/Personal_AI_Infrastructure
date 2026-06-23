@@ -19,7 +19,7 @@
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
 interface AgentToolInput {
@@ -36,7 +36,7 @@ interface ToolHookInput {
   tool_response?: unknown;
 }
 
-const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
+const OBS_DIR = memoryPath('OBSERVABILITY');
 const EVENTS_FILE = join(OBS_DIR, 'subagent-events.jsonl');
 const STARTS_FILE = join(OBS_DIR, 'agent-starts.json');
 

@@ -10,7 +10,7 @@
  */
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getISOTimestamp, getPSTDate, getYearMonth } from './lib/time';
 import { getVoiceId } from './lib/identity';
 
@@ -23,14 +23,14 @@ interface StopFailureInput {
 async function main() {
   let input: StopFailureInput;
   try {
-    input = JSON.parse(readFileSync('/dev/stdin', 'utf-8'));
+    input = JSON.parse(readFileSync(0, 'utf-8'));
   } catch {
     process.exit(0);
   }
 
   const timestamp = getISOTimestamp();
   const [year, month] = getYearMonth().split('-');
-  const logDir = paiPath('MEMORY', 'SECURITY', year, month);
+  const logDir = memoryPath('SECURITY', year, month);
 
   // Log the failure
   if (!existsSync(logDir)) {

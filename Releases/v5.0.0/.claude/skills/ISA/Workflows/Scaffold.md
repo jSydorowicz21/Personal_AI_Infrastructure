@@ -21,8 +21,8 @@ Generate a fresh ISA from a prompt at a specified effort tier. The output is a p
 
 A markdown file at one of:
 - `<project-root>/ISA.md` — when `project` is supplied (existing project ISA is read-extended, not overwritten)
-- `~/.claude/PAI/MEMORY/WORK/{slug}/ISA.md` — when no project (slug = `YYYYMMDD-HHMMSS_kebab-task-description`)
-- `~/.claude/PAI/MEMORY/WORK/{slug}/_ephemeral/<feature>.md` — when `ephemeral_feature` is set
+- `$PAI_DATA_DIR/MEMORY/WORK/{slug}/ISA.md` — when no project (slug = `YYYYMMDD-HHMMSS_kebab-task-description`)
+- `$PAI_DATA_DIR/MEMORY/WORK/{slug}/_ephemeral/<feature>.md` — when `ephemeral_feature` is set
 
 ## Procedure
 

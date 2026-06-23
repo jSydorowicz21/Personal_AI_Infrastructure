@@ -5,9 +5,15 @@
  */
 import { join } from "path"
 import { readFileSync } from "fs"
+import { getFrameworkDir, getPaiDataDir, getPaiDir } from "../TOOLS/lib/paths"
 
 // Load .env
-const envPath = join(process.env.HOME ?? "~", ".claude", ".env")
+const FRAMEWORK_DIR = getFrameworkDir()
+process.env.PAI_DIR ??= getPaiDir()
+process.env.PAI_FRAMEWORK_DIR ??= FRAMEWORK_DIR
+process.env.PAI_DATA_DIR ??= getPaiDataDir()
+
+const envPath = join(FRAMEWORK_DIR, ".env")
 try {
   const envContent = readFileSync(envPath, "utf-8")
   for (const line of envContent.split("\n")) {
@@ -23,7 +29,7 @@ try {
   }
 } catch {}
 
-import { loadConfig, spawnClaude, spawnScript, dispatch, isSentinel, log } from "./lib"
+import { loadConfig, spawnAI, spawnScript, dispatch, isSentinel, log } from "./lib"
 
 const jobName = process.argv[2]
 if (!jobName) {
@@ -31,7 +37,7 @@ if (!jobName) {
   process.exit(1)
 }
 
-const PULSE_DIR = join(process.env.HOME ?? "~", ".claude", "PAI", "PULSE")
+const PULSE_DIR = join(getPaiDir(), "PULSE")
 const config = await loadConfig(PULSE_DIR)
 const job = config.jobs.find((j) => j.name === jobName)
 if (!job) {
@@ -43,8 +49,8 @@ log("info", `Manual run: ${job.name}`, { type: job.type })
 const start = Date.now()
 
 let output: string
-if (job.type === "claude") {
-  output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+if (job.type === "claude" || job.type === "ai") {
+  output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
 } else {
   output = await spawnScript(job.command!)
 }

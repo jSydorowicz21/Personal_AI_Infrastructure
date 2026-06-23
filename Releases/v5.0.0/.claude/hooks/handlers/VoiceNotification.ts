@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync, appendFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { paiPath } from '../lib/paths';
+import { memoryPath } from '../lib/paths';
 import { getIdentity, type VoicePersonality } from '../lib/identity';
 import { getISOTimestamp } from '../lib/time';
 import { isValidVoiceCompletion, getVoiceFallback } from '../lib/output-validators';
@@ -48,8 +48,8 @@ interface VoiceEvent {
   error?: string;
 }
 
-const VOICE_LOG_PATH = paiPath('MEMORY', 'VOICE', 'voice-events.jsonl');
-const CURRENT_WORK_PATH = paiPath('MEMORY', 'STATE', 'current-work.json');
+const VOICE_LOG_PATH = memoryPath('VOICE', 'voice-events.jsonl');
+const CURRENT_WORK_PATH = memoryPath('STATE', 'current-work.json');
 
 function getActiveWorkDir(): string | null {
   try {
@@ -57,7 +57,7 @@ function getActiveWorkDir(): string | null {
     const content = readFileSync(CURRENT_WORK_PATH, 'utf-8');
     const state = JSON.parse(content);
     if (state.work_dir) {
-      const workPath = paiPath('MEMORY', 'WORK', state.work_dir);
+      const workPath = memoryPath('WORK', state.work_dir);
       if (existsSync(workPath)) return workPath;
     }
   } catch {
@@ -70,7 +70,7 @@ function logVoiceEvent(event: VoiceEvent): void {
   const line = JSON.stringify(event) + '\n';
 
   try {
-    const dir = paiPath('MEMORY', 'VOICE');
+    const dir = memoryPath('VOICE');
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }

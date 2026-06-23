@@ -6,7 +6,8 @@
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { paiPath } from '../lib/paths';
+import { dirname } from 'path';
+import { memoryPath } from '../lib/paths';
 import type { SecurityEvent } from './types';
 
 function slugify(text: string, maxWords = 5): string {
@@ -35,8 +36,8 @@ export function logSecurityEvent(event: SecurityEvent): void {
     const ts = timestamp();
     const summary = slugify(event.reason || event.target || 'unknown');
     const filename = `security-${event.eventType}-${summary}-${ts.stamp}.jsonl`;
-    const logPath = paiPath('MEMORY', 'SECURITY', ts.year, ts.month, filename);
-    const dir = logPath.substring(0, logPath.lastIndexOf('/'));
+    const logPath = memoryPath('SECURITY', ts.year, ts.month, filename);
+    const dir = dirname(logPath);
 
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });

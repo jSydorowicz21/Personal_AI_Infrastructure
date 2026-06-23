@@ -28,7 +28,13 @@
 curl -sSL https://ourpai.ai/install.sh | bash
 ```
 
-That's it. The installer wizard handles Bun, Git, Claude Code verification, ElevenLabs key (optional), DA identity setup, voice picker, Pulse launchd registration, and validation. Existing `~/.claude/` is auto-backed-up to `~/.claude.backup-{TIMESTAMP}` before anything is overwritten.
+Windows PowerShell from a cloned release bundle:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\.claude\install.ps1
+```
+
+That's it. The installer wizard handles Bun, Git, framework selection, selected agent CLI verification, ElevenLabs key (optional), DA identity setup, voice picker, Pulse launchd registration, and validation. You can target Claude Code, Codex, or OpenCode. The selected framework home is auto-backed-up before anything is overwritten, and PAI writes the native instruction/config/hook surface for that framework.
 
 **Prefer to inspect first?** [Read the script](https://ourpai.ai/install.sh) before piping it. Or clone manually:
 
@@ -42,6 +48,19 @@ After install:
 ```bash
 open http://localhost:31337    # the Life Dashboard
 ```
+
+Switch active agent frameworks without losing memory:
+
+```bash
+pai framework status
+pai framework switch codex
+pai framework switch claude
+pai framework switch opencode
+```
+
+PAI memory and USER context live globally under `~/.pai/MEMORY` and `~/.pai/USER`, so switching changes the CLI harness and native config, not the personal state.
+
+MCP profile selection follows the active framework too: `pai -m ...` and `pai mcp set ...` write Claude `.mcp.json`, Codex `config.toml`, or OpenCode `opencode.json` as appropriate.
 
 ---
 

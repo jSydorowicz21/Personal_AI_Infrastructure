@@ -7,7 +7,7 @@ interface EmptyStateGuideProps {
   section: string;
   /** Short sentence describing what kind of content lives here. */
   description: string;
-  /** Subdir under PAI/USER/ that holds this section's data, if any. e.g. "TELOS". */
+  /** Subdir under shared USER/ that holds this section's data, if any. e.g. "TELOS". */
   userDir?: string;
   /** Concrete interview command to surface. Defaults to "/interview". */
   interviewCommand?: string;
@@ -21,12 +21,12 @@ export default function EmptyStateGuide({
   section,
   description,
   userDir,
-  interviewCommand = "/interview",
+  interviewCommand = "$Interview",
   daPromptExample,
   hideInterview = false,
 }: EmptyStateGuideProps) {
-  const userPath = userDir ? `~/.claude/PAI/USER/${userDir}/` : "~/.claude/PAI/USER/";
-  const readmePath = userDir ? `~/.claude/PAI/USER/${userDir}/README.md` : "~/.claude/PAI/USER/README.md";
+  const userPath = userDir ? `~/.pai/USER/${userDir}/` : "~/.pai/USER/";
+  const readmePath = userDir ? `~/.pai/USER/${userDir}/README.md` : "~/.pai/USER/README.md";
   const defaultDaPrompt = daPromptExample ?? `help me set up my ${section.toLowerCase()}`;
 
   return (
@@ -48,7 +48,7 @@ export default function EmptyStateGuide({
           <div className="flex items-start gap-2.5 text-sm">
             <MessageSquare className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <span className="text-slate-200">Run </span>
+              <span className="text-slate-200">Type </span>
               <code className="px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 text-xs font-mono">
                 {interviewCommand}
               </code>

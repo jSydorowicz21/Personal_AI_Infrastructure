@@ -28,8 +28,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
-
-const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude');
+import { memoryPath, userPath } from './lib/paths';
 
 interface RelationshipNote {
   type: 'W' | 'B' | 'O';
@@ -147,7 +146,7 @@ function loadRecentNotes(daysBack: number = 7): RelationshipNote[] {
   }
 
   for (const monthStr of months) {
-    const monthDir = join(PAI_DIR, 'MEMORY/RELATIONSHIP', monthStr);
+    const monthDir = memoryPath('RELATIONSHIP', monthStr);
     if (!existsSync(monthDir)) continue;
 
     try {
@@ -173,7 +172,7 @@ function loadRecentNotes(daysBack: number = 7): RelationshipNote[] {
  * Load recent ratings from ratings.jsonl
  */
 function loadRecentRatings(daysBack: number = 7): Array<{ rating: number; date: string }> {
-  const ratingsPath = join(PAI_DIR, 'MEMORY/LEARNING/SIGNALS/ratings.jsonl');
+  const ratingsPath = memoryPath('LEARNING', 'SIGNALS', 'ratings.jsonl');
   if (!existsSync(ratingsPath)) return [];
 
   const ratings: Array<{ rating: number; date: string }> = [];
@@ -265,7 +264,7 @@ function aggregateEvidence(notes: RelationshipNote[], ratings: Array<{ rating: n
  */
 function parseOpinions(): Map<string, { confidence: number; section: string }> {
   const opinions = new Map<string, { confidence: number; section: string }>();
-  const opinionsPath = join(PAI_DIR, 'PAI/USER/OPINIONS.md');
+  const opinionsPath = userPath('OPINIONS.md');
 
   if (!existsSync(opinionsPath)) return opinions;
 
@@ -297,7 +296,7 @@ function updateOpinionConfidence(
   evidence: Map<string, OpinionEvidence>,
   dryRun: boolean
 ): { updated: number; majorShifts: string[] } {
-  const opinionsPath = join(PAI_DIR, 'PAI/USER/OPINIONS.md');
+  const opinionsPath = userPath('OPINIONS.md');
   if (!existsSync(opinionsPath)) return { updated: 0, majorShifts: [] };
 
   let content = readFileSync(opinionsPath, 'utf-8');
@@ -361,7 +360,7 @@ function escapeRegex(str: string): string {
  */
 function checkMilestones(notes: RelationshipNote[]): string[] {
   const achieved: string[] = [];
-  const storyPath = join(PAI_DIR, 'PAI/USER/OUR_STORY.md');
+  const storyPath = userPath('OUR_STORY.md');
 
   if (!existsSync(storyPath)) return achieved;
 
@@ -384,7 +383,7 @@ function checkMilestones(notes: RelationshipNote[]): string[] {
  * Add milestone to OUR_STORY.md
  */
 function addMilestone(description: string, dryRun: boolean): boolean {
-  const storyPath = join(PAI_DIR, 'PAI/USER/OUR_STORY.md');
+  const storyPath = userPath('OUR_STORY.md');
   if (!existsSync(storyPath)) return false;
 
   let content = readFileSync(storyPath, 'utf-8');

@@ -43,6 +43,8 @@ bun ~/.claude/skills/Webdesign/Tools/ProcessHandoffBundle.ts "$OUT/bundle" --bri
 
 The `--brief` flag emits a markdown summary ready to feed into the next agent (the `frontend-design` plugin).
 
+On Codex, route this brief through the `frontend-design` / `HumanInterface` skills plus `build-web-apps@openai-curated`; do not assume Claude Code plugin auto-activation.
+
 ### 3. Hand Off to the `frontend-design` Plugin
 
 The Anthropic `frontend-design` plugin auto-activates in Claude Code whenever a frontend build request arrives. Feed it the bundle + brief:

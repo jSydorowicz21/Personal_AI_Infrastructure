@@ -17,7 +17,7 @@
 
 import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
 interface ToolFailureInput {
@@ -38,7 +38,7 @@ interface ToolFailureEvent {
   tool_input_preview: string;
 }
 
-const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
+const OBS_DIR = memoryPath('OBSERVABILITY');
 const FAILURES_FILE = join(OBS_DIR, 'tool-failures.jsonl');
 
 async function readStdin(): Promise<string> {

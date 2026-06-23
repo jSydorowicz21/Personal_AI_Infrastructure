@@ -12,8 +12,9 @@
  */
 
 import { readHookInput, parseTranscriptFromInput } from './lib/hook-io';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { getMemoryDir } from './lib/paths';
 
 async function main() {
   const input = await readHookInput();
@@ -28,8 +29,8 @@ async function main() {
 
   if (lastResponse) {
     try {
-      const paiDir = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
-      const cachePath = join(paiDir, 'MEMORY', 'STATE', 'last-response.txt');
+      const cachePath = join(getMemoryDir(), 'STATE', 'last-response.txt');
+      mkdirSync(dirname(cachePath), { recursive: true });
       writeFileSync(cachePath, lastResponse.slice(0, 2000), 'utf-8');
     } catch (err) {
       console.error('[LastResponseCache] Failed to write:', err);

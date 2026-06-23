@@ -5,13 +5,13 @@
 This is not a narrow event log or a preferences store. This is PAI's comprehensive knowledge system — the full shared memory between {{PRINCIPAL_NAME}} and {{DA_NAME}}. If we built knowledge together, it belongs here. That includes: work tracking, learnings from failures and successes, research and OSINT investigations, contact dossiers, security events, runtime state, and any other knowledge that would be valuable in future conversations.
 
 **Two storage layers:**
-- **PAI MEMORY** (`~/.claude/PAI/MEMORY/`) — structured, hook-driven, entity-based
+- **PAI MEMORY** (`$PAI_DATA_DIR/MEMORY/`) — structured, hook-driven, entity-based
 - **Auto-Memory** (`~/.claude/projects/<project>/memory/`) — unstructured learnings, research findings, contact profiles, reference material — anything Claude captures during sessions
 
 Both layers are memory. Both are persistent. Both should be used.
 
 **Version:** 7.6 (Retrieval + Navigation + Mining + Temporal, 2026-04-07)
-**Location:** `~/.claude/PAI/MEMORY/` + `~/.claude/projects/<project>/memory/`
+**Location:** `$PAI_DATA_DIR/MEMORY/` + `~/.claude/projects/<project>/memory/`
 
 ---
 
@@ -51,7 +51,7 @@ Retrieval & Navigation (on-demand):
 ## Directory Structure
 
 ```
-~/.claude/PAI/MEMORY/
+$PAI_DATA_DIR/MEMORY/
 ├── KNOWLEDGE/              # Organized, browsable knowledge archive (entity-based, v2.1)
 │   ├── _index.md           # Master MOC dashboard
 │   ├── _schema.md          # Object type definitions (People, Companies, Ideas, Research)
@@ -340,13 +340,13 @@ LearningPatternSynthesis → analyzes SIGNALS/ → writes SYNTHESIS/
 
 ### Check current work
 ```bash
-cat ~/.claude/PAI/MEMORY/STATE/current-work.json
-ls ~/.claude/PAI/MEMORY/WORK/ | tail -5
+cat $PAI_DATA_DIR/MEMORY/STATE/current-work.json
+ls $PAI_DATA_DIR/MEMORY/WORK/ | tail -5
 ```
 
 ### Check ratings
 ```bash
-tail ~/.claude/PAI/MEMORY/LEARNING/SIGNALS/ratings.jsonl
+tail $PAI_DATA_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl
 ```
 
 ### View session transcripts
@@ -361,62 +361,62 @@ tail ~/.claude/projects/-Users-{username}--claude/$(ls -t ~/.claude/projects/-Us
 
 ### Check learnings
 ```bash
-ls ~/.claude/PAI/MEMORY/LEARNING/SYSTEM/
-ls ~/.claude/PAI/MEMORY/LEARNING/ALGORITHM/
-ls ~/.claude/PAI/MEMORY/LEARNING/SYNTHESIS/
+ls $PAI_DATA_DIR/MEMORY/LEARNING/SYSTEM/
+ls $PAI_DATA_DIR/MEMORY/LEARNING/ALGORITHM/
+ls $PAI_DATA_DIR/MEMORY/LEARNING/SYNTHESIS/
 ```
 
 ### Check failures
 ```bash
 # List recent failure captures
-ls -lt ~/.claude/PAI/MEMORY/LEARNING/FAILURES/$(date +%Y-%m)/ 2>/dev/null | head -10
+ls -lt $PAI_DATA_DIR/MEMORY/LEARNING/FAILURES/$(date +%Y-%m)/ 2>/dev/null | head -10
 
 # View a specific failure
-cat ~/.claude/PAI/MEMORY/LEARNING/FAILURES/2026-01/*/CONTEXT.md | head -100
+cat $PAI_DATA_DIR/MEMORY/LEARNING/FAILURES/2026-01/*/CONTEXT.md | head -100
 
 # Migrate historical low ratings to FAILURES
-bun run ~/.claude/PAI/TOOLS/FailureCapture.ts --migrate
+bun run $PAI_DIR/TOOLS/FailureCapture.ts --migrate
 ```
 
 ### Check multi-session progress
 ```bash
-ls ~/.claude/PAI/MEMORY/STATE/progress/
+ls $PAI_DATA_DIR/MEMORY/STATE/progress/
 ```
 
 ### Run harvesting tools
 ```bash
 # Harvest learnings from recent sessions
-bun run ~/.claude/PAI/TOOLS/SessionHarvester.ts --recent 10
+bun run $PAI_DIR/TOOLS/SessionHarvester.ts --recent 10
 
 # Mine conversations for decisions, preferences, milestones, problems
-bun run ~/.claude/PAI/TOOLS/SessionHarvester.ts --mine --recent 10
+bun run $PAI_DIR/TOOLS/SessionHarvester.ts --mine --recent 10
 
 # Generate pattern synthesis
-bun run ~/.claude/PAI/TOOLS/LearningPatternSynthesis.ts --week
+bun run $PAI_DIR/TOOLS/LearningPatternSynthesis.ts --week
 ```
 
 ### Retrieve knowledge (compressed context)
 ```bash
 # Search knowledge archive with BM25 ranking
-bun run ~/.claude/PAI/TOOLS/MemoryRetriever.ts "query terms"
+bun run $PAI_DIR/TOOLS/MemoryRetriever.ts "query terms"
 
 # Raw excerpts without LLM compression
-bun run ~/.claude/PAI/TOOLS/MemoryRetriever.ts "query terms" --raw --top 5
+bun run $PAI_DIR/TOOLS/MemoryRetriever.ts "query terms" --raw --top 5
 ```
 
 ### Navigate knowledge graph
 ```bash
 # Graph stats: nodes, edges, clusters
-bun run ~/.claude/PAI/TOOLS/KnowledgeGraph.ts stats
+bun run $PAI_DIR/TOOLS/KnowledgeGraph.ts stats
 
 # BFS traversal from a note
-bun run ~/.claude/PAI/TOOLS/KnowledgeGraph.ts traverse <slug> --hops 2
+bun run $PAI_DIR/TOOLS/KnowledgeGraph.ts traverse <slug> --hops 2
 
 # Directly connected notes
-bun run ~/.claude/PAI/TOOLS/KnowledgeGraph.ts related <slug>
+bun run $PAI_DIR/TOOLS/KnowledgeGraph.ts related <slug>
 
 # Find notes by tag
-bun run ~/.claude/PAI/TOOLS/KnowledgeGraph.ts find <tag>
+bun run $PAI_DIR/TOOLS/KnowledgeGraph.ts find <tag>
 ```
 
 ---
@@ -522,7 +522,7 @@ bun run ~/.claude/PAI/TOOLS/KnowledgeGraph.ts find <tag>
 
 **2026-01-05:** v1.0 - Unified Memory System migration
 - Previous: `~/.claude/history/`, `~/.claude/context/`, `~/.claude/progress/`
-- Current: `~/.claude/PAI/MEMORY/`
+- Current: `$PAI_DATA_DIR/MEMORY/`
 - Files migrated: 8,415+
 
 ---

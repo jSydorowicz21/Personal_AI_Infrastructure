@@ -167,10 +167,11 @@ export function printDetection(det: DetectionResult): void {
     printError("Git: not found — will install");
   }
 
-  if (det.tools.claude.installed) {
-    printSuccess(`Claude Code: v${det.tools.claude.version}`);
+  printInfo(`Framework: ${det.framework.displayName} (${det.paiDir.replace(det.homeDir, "~")})`);
+  if (det.tools.selectedFramework.installed) {
+    printSuccess(`${det.framework.displayName}: v${det.tools.selectedFramework.version}`);
   } else {
-    printWarning("Claude Code: not found — will install");
+    printWarning(`${det.framework.displayName}: not found — will install`);
   }
 
   if (det.existing.paiInstalled) {
@@ -229,12 +230,22 @@ export function printValidation(checks: ValidationCheck[]): void {
 
 export function printSummary(summary: InstallSummary): void {
   const installTypeLabel = summary.installType === "upgrade" ? "fresh + backup migration" : "fresh";
+  const runCommand =
+    process.platform === "win32"
+      ? ". $PROFILE; k"
+      : (process.env.SHELL || "").includes("fish")
+        ? "source ~/.config/fish/config.fish; k"
+        : (process.env.SHELL || "").includes("bash")
+          ? "source ~/.bashrc && k"
+          : "source ~/.zshrc && k";
+  const runLine = `Run: ${runCommand}`;
 
   print("");
   print(`${c.navy}╔══════════════════════════════════════════════════╗${c.reset}`);
   print(`${c.navy}║${c.reset}  ${c.green}${c.bold}SYSTEM ONLINE${c.reset}                                    ${c.navy}║${c.reset}`);
   print(`${c.navy}╠══════════════════════════════════════════════════╣${c.reset}`);
   print(`${c.navy}║${c.reset}  PAI Version:  ${c.white}v${summary.paiVersion}${c.reset}                             ${c.navy}║${c.reset}`);
+  print(`${c.navy}║${c.reset}  Framework:    ${c.white}${summary.frameworkName}${c.reset}${" ".repeat(Math.max(0, 33 - summary.frameworkName.length))}${c.navy}║${c.reset}`);
   print(`${c.navy}║${c.reset}  Principal:    ${c.white}${summary.principalName}${c.reset}${" ".repeat(Math.max(0, 33 - summary.principalName.length))}${c.navy}║${c.reset}`);
   print(`${c.navy}║${c.reset}  AI Name:      ${c.white}${summary.aiName}${c.reset}${" ".repeat(Math.max(0, 33 - summary.aiName.length))}${c.navy}║${c.reset}`);
   print(`${c.navy}║${c.reset}  Timezone:     ${c.white}${summary.timezone}${c.reset}${" ".repeat(Math.max(0, 33 - summary.timezone.length))}${c.navy}║${c.reset}`);
@@ -242,7 +253,7 @@ export function printSummary(summary: InstallSummary): void {
   print(`${c.navy}║${c.reset}  Install Type: ${c.white}${installTypeLabel}${c.reset}${" ".repeat(Math.max(0, 33 - installTypeLabel.length))}${c.navy}║${c.reset}`);
   print(`${c.navy}╠══════════════════════════════════════════════════╣${c.reset}`);
   print(`${c.navy}║${c.reset}                                                  ${c.navy}║${c.reset}`);
-  print(`${c.navy}║${c.reset}  ${c.lightBlue}Run: ${c.bold}source ~/.zshrc && pai${c.reset}                      ${c.navy}║${c.reset}`);
+  print(`${c.navy}║${c.reset}  ${c.lightBlue}${runLine}${c.reset}${" ".repeat(Math.max(0, 48 - runLine.length))}${c.navy}║${c.reset}`);
   print(`${c.navy}║${c.reset}                                                  ${c.navy}║${c.reset}`);
   print(`${c.navy}╚══════════════════════════════════════════════════╝${c.reset}`);
   print("");

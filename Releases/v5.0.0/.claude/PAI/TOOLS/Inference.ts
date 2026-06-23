@@ -32,7 +32,7 @@
  *   smart:    model=opus,    timeout=90s
  *   advisor:  model=opus,    timeout=120s
  *
- * BILLING: Uses Claude CLI with subscription (not API key)
+ * BILLING: Uses the active framework CLI with subscription/session auth, not API keys.
  * CACHE: Uses --exclude-dynamic-system-prompt-sections for cross-invocation prompt cache hits
  *
  * ADVISOR PATTERN (v3.24 Verification Doctrine — see PAI/ALGORITHM/v3.24.0.md):
@@ -58,6 +58,8 @@
  */
 
 import { spawn } from "child_process";
+import { memoryPath } from "./lib/paths";
+import { getActiveFramework } from "./lib/transcripts";
 
 export type InferenceLevel = 'fast' | 'standard' | 'smart';
 
@@ -89,6 +91,12 @@ const LEVEL_CONFIG: Record<InferenceLevel, { model: string; defaultTimeout: numb
   smart: { model: 'opus', defaultTimeout: 90000 },
 };
 
+const CODEX_MODEL_ENV: Record<InferenceLevel, string> = {
+  fast: "PAI_CODEX_MODEL_FAST",
+  standard: "PAI_CODEX_MODEL_STANDARD",
+  smart: "PAI_CODEX_MODEL_SMART",
+};
+
 // Advisor-specific defaults (v3.23 VERIFY doctrine).
 const ADVISOR_TIMEOUT_MS = 120000;
 
@@ -100,6 +108,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
   const config = LEVEL_CONFIG[level];
   const startTime = Date.now();
   const timeout = options.timeout || config.defaultTimeout;
+  const framework = getActiveFramework();
+  const useCodex = framework === "codex" || (!Bun.which("claude") && !!Bun.which("codex"));
 
   return new Promise((resolve) => {
     // Unset CLAUDECODE so nested `claude` invocations don't trigger the
@@ -117,6 +127,114 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
     delete env.ANTHROPIC_AUTH_TOKEN;
 
     const hasImages = options.imagePaths && options.imagePaths.length > 0;
+    const userPromptWithImages = hasImages
+      ? `${options.imagePaths!.map((p) => `@${p}`).join('\n')}\n\n${options.userPrompt}`
+      : options.userPrompt;
+
+    if (useCodex) {
+      const codexPath = Bun.which("codex");
+      if (!codexPath) {
+        resolve({
+          success: false,
+          output: "",
+          error: "codex executable not found in $PATH",
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+        return;
+      }
+
+      const codexModel = process.env[CODEX_MODEL_ENV[level]] || process.env.PAI_CODEX_MODEL;
+      const combinedPrompt = [
+        "System instructions:",
+        options.systemPrompt || "(none)",
+        "",
+        "User request:",
+        userPromptWithImages,
+      ].join("\n");
+      const args = [
+        "exec",
+        "--sandbox", "read-only",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--cd", process.cwd(),
+        ...(codexModel ? ["--model", codexModel] : []),
+        ...(hasImages ? options.imagePaths!.flatMap((p) => ["--image", p]) : []),
+        "-",
+      ];
+
+      let stdout = "";
+      let stderr = "";
+      const proc = spawn(codexPath, args, {
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      proc.stdin.write(combinedPrompt);
+      proc.stdin.end();
+
+      proc.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      const timeoutId = setTimeout(() => {
+        proc.kill("SIGTERM");
+        resolve({
+          success: false,
+          output: "",
+          error: `Timeout after ${timeout}ms`,
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+      }, timeout);
+
+      proc.on("close", (code) => {
+        clearTimeout(timeoutId);
+        const latencyMs = Date.now() - startTime;
+        if (code !== 0) {
+          resolve({
+            success: false,
+            output: stdout,
+            error: stderr || `Process exited with code ${code}`,
+            latencyMs,
+            level,
+          });
+          return;
+        }
+        const output = stdout.trim();
+        if (options.expectJson) {
+          const objectMatch = output.match(/\{[\s\S]*\}/);
+          const arrayMatch = output.match(/\[[\s\S]*\]/);
+          for (const candidate of [objectMatch?.[0], arrayMatch?.[0]]) {
+            if (!candidate) continue;
+            try {
+              const parsed = JSON.parse(candidate);
+              resolve({ success: true, output, parsed, latencyMs, level });
+              return;
+            } catch {}
+          }
+          resolve({ success: false, output, error: "Failed to parse JSON response", latencyMs, level });
+          return;
+        }
+        resolve({ success: true, output, latencyMs, level });
+      });
+
+      proc.on("error", (err) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: false,
+          output: "",
+          error: err.message,
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+      });
+      return;
+    }
+
     const args = [
       '--print',
       '--model', config.model,
@@ -126,10 +244,6 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       '--setting-sources', '',
       '--system-prompt', options.systemPrompt,
     ];
-
-    const userPromptWithImages = hasImages
-      ? `${options.imagePaths!.map((p) => `@${p}`).join('\n')}\n\n${options.userPrompt}`
-      : options.userPrompt;
 
     let stdout = '';
     let stderr = '';
@@ -253,9 +367,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
 export async function synthesizeAdvisorState(): Promise<string> {
   const fs = await import("fs/promises");
   const path = await import("path");
-  const home = process.env.HOME || process.env.USERPROFILE || "";
-  const workDir = path.join(home, ".claude", "PAI", "MEMORY", "WORK");
-  const stateFile = path.join(home, ".claude", "PAI", "MEMORY", "STATE", "work.json");
+  const workDir = memoryPath("WORK");
+  const stateFile = memoryPath("STATE", "work.json");
 
   // Try to read active session from work.json
   let activeSlug: string | undefined;

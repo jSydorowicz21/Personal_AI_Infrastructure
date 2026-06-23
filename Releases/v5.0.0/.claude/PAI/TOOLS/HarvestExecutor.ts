@@ -12,10 +12,10 @@ import { parseArgs } from "node:util";
 import * as fs from "fs";
 import * as path from "path";
 import { inference } from "./Inference";
+import { memoryPath, paiPath } from "./lib/paths";
 
 const HOME = process.env.HOME!;
-const PAI_DIR = path.join(HOME, ".claude", "PAI");
-const MEMORY_DIR = path.join(PAI_DIR, "MEMORY");
+const MEMORY_DIR = memoryPath();
 const KNOWLEDGE_DIR = path.join(MEMORY_DIR, "KNOWLEDGE");
 const LEARNING_DIR = path.join(MEMORY_DIR, "LEARNING");
 const STATE_DIR = path.join(MEMORY_DIR, "STATE");
@@ -98,7 +98,7 @@ function parseCli(): Cli {
     console.log(`HarvestExecutor
 
 Usage:
-  bun ${path.join(PAI_DIR, "TOOLS", "HarvestExecutor.ts")} [options]
+  bun ${paiPath("TOOLS", "HarvestExecutor.ts")} [options]
 
 Options:
   --dry-run        Evaluate actions without writing files or sidecar state

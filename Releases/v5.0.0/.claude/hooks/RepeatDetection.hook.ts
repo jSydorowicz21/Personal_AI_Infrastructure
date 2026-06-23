@@ -3,19 +3,17 @@
  * RepeatDetection.hook.ts — UserPromptSubmit hook
  *
  * Detects when the user is repeating a previous request (indicating the AI
- * missed their intent). When triggered, injects a high-priority WARNING into
- * the model's context forcing re-reading of the user's message.
+ * missed their intent). When triggered, injects a high-priority reminder into
+ * the model's context. It must never block the user's prompt.
  *
  * Algorithm v3.19.0 Layer 2: Safety net for intent drift.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { dirname, join } from "path";
+import { getMemoryDir } from "./lib/paths";
 
-const STATE_FILE = join(
-  process.env.HOME || "",
-  ".claude/PAI/MEMORY/STATE/last-prompt.json",
-);
+const STATE_FILE = join(getMemoryDir(), "STATE", "last-prompt.json");
 
 interface HookInput {
   session_id: string;
@@ -56,7 +54,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 function main(): void {
   let input: HookInput;
   try {
-    input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+    input = JSON.parse(readFileSync(0, "utf-8"));
   } catch {
     // No stdin or invalid JSON — skip silently
     process.exit(0);
@@ -106,15 +104,16 @@ function main(): void {
 
   // Threshold: 0.6 (60%) similarity triggers warning
   if (similarity >= 0.6) {
-    // Output warning to stderr — this gets injected into model context
-    process.stderr.write(
-      `⚠️ REPEAT DETECTION: This message is ${Math.round(similarity * 100)}% similar to the previous message. ` +
-      `The user is likely REPEATING a request you missed. ` +
-      `STOP. Re-read their message carefully. Do NOT proceed with what you were doing before. ` +
-      `Address their ACTUAL request this time.`,
-    );
-    // Exit 2 = blocking error, stderr fed to Claude
-    process.exit(2);
+    const additionalContext =
+      `REPEAT DETECTION: This message is ${Math.round(similarity * 100)}% similar to the previous message. ` +
+      `The user is likely repeating a request that was missed. Re-read the newest user message carefully. ` +
+      `Continue by addressing the newest request directly; do not resume stale work unless it is still requested.`;
+    console.log(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit",
+        additionalContext,
+      },
+    }));
   }
 
   process.exit(0);
@@ -122,6 +121,7 @@ function main(): void {
 
 function saveCurrentPrompt(prompt: string, sessionId: string): void {
   try {
+    mkdirSync(dirname(STATE_FILE), { recursive: true });
     writeFileSync(
       STATE_FILE,
       JSON.stringify({

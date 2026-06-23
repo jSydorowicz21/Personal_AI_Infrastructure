@@ -100,7 +100,11 @@ function handleServerMessage(msg) {
       break;
 
     case 'install_complete':
-      renderSummary(msg.summary);
+      renderSummary(msg.summary, msg.success);
+      if (!msg.success) {
+        addMessage('error', 'Critical validation checks failed. Review the validation results above, fix the issue, then rerun the installer.');
+        break;
+      }
       // Hand off to the launching shell. The wizard server stays up just long
       // enough for the user to see the summary, then we close the window —
       // electron/main.js's window-all-closed handler triggers app.quit(),
@@ -210,7 +214,7 @@ function renderDetection(data) {
     { icon: 'check', label: 'Shell', value: data.shell?.name },
     { icon: data.tools?.bun?.installed ? 'check' : 'cross', label: 'Bun', value: data.tools?.bun?.installed ? 'v' + data.tools.bun.version : 'Not found' },
     { icon: data.tools?.git?.installed ? 'check' : 'cross', label: 'Git', value: data.tools?.git?.installed ? 'v' + data.tools.git.version : 'Not found' },
-    { icon: data.tools?.claude?.installed ? 'check' : 'info', label: 'Claude Code', value: data.tools?.claude?.installed ? 'v' + data.tools.claude.version : 'Will install' },
+    { icon: data.tools?.selectedFramework?.installed ? 'check' : 'info', label: data.framework?.displayName || 'Agent CLI', value: data.tools?.selectedFramework?.installed ? 'v' + data.tools.selectedFramework.version : 'Will install' },
     { icon: 'info', label: 'Timezone', value: data.timezone },
     { icon: data.existing?.paiInstalled ? 'info' : 'check', label: 'Existing PAI', value: data.existing?.paiInstalled ? 'v' + (data.existing.paiVersion || '?') : 'Fresh install' },
     { icon: data.existing?.hasApiKeys ? 'check' : 'info', label: 'ElevenLabs Key', value: data.existing?.elevenLabsKeyFound ? 'Found' : 'Not found' },
@@ -448,18 +452,21 @@ function renderValidation(checks) {
   scrollToBottom();
 }
 
-function renderSummary(summary) {
+function renderSummary(summary, success = true) {
   const chat = document.getElementById('chat-messages');
   if (!chat) return;
 
   const installTypeLabel = summary.installType === 'upgrade'
     ? 'Fresh install + backup migration'
     : 'Fresh install';
+  const launchCommand = navigator.platform.toLowerCase().includes('win')
+    ? '. $PROFILE; k'
+    : 'source ~/.zshrc && k';
 
   const card = document.createElement('div');
   card.className = 'summary-card';
   card.innerHTML = `
-    <h3>Installation Complete</h3>
+    <h3>${success ? 'Installation Complete' : 'Validation Failed'}</h3>
     <div class="summary-row"><span class="s-label">PAI Version</span><span class="s-value">v${summary.paiVersion}</span></div>
     <div class="summary-row"><span class="s-label">Principal</span><span class="s-value">${summary.principalName}</span></div>
     <div class="summary-row"><span class="s-label">AI Name</span><span class="s-value">${summary.aiName}</span></div>
@@ -467,9 +474,9 @@ function renderSummary(summary) {
     <div class="summary-row"><span class="s-label">Voice</span><span class="s-value">${summary.voiceEnabled ? summary.voiceMode : 'Disabled'}</span></div>
     <div class="summary-row"><span class="s-label">Install Type</span><span class="s-value">${installTypeLabel}</span></div>
     <div class="summary-action">
-      <p>To activate PAI, open a terminal and run:</p>
-      <code>source ~/.zshrc && pai</code>
-      <p class="summary-hint">This reloads your shell config and launches PAI for the first time.</p>
+      ${success
+        ? `<p>To activate PAI, open a terminal and run:</p><code>${launchCommand}</code><p class="summary-hint">This reloads your shell config and launches PAI for the first time.</p>`
+        : '<p>Fix the critical validation item above, then rerun the installer.</p>'}
     </div>
   `;
   chat.appendChild(card);

@@ -1,13 +1,13 @@
 ---
 name: Science
-description: "The scientific method as a universal problem-solving algorithm — goal-first, hypothesis-plural, falsifiable experiments, honest measurement. Seven core workflows: DefineGoal, GenerateHypotheses (minimum 3 required — single-hypothesis testing is confirmation bias), DesignExperiment, MeasureResults, AnalyzeResults, Iterate, and FullCycle. Two diagnostic shortcuts: QuickDiagnosis (15-minute rule for fast debugging) and StructuredInvestigation (complex multi-factor issues). Scales across micro (TDD, minutes), meso (feature validation, hours-days), and macro (MVP launch, weeks-months). Reference files: METHODOLOGY.md (deep dive on each phase), Protocol.md (how other skills invoke Science), Templates.md (goal/hypothesis/experiment/results templates), Examples.md (worked examples across scales). Integrates with Council (hypothesis validation), Evals (measurement), Development (parallel experiment worktrees), and RedTeam (stress-test hypotheses). RootCauseAnalysis applies Science to failure investigation — pair them when investigating incidents. NOT FOR multi-angle lens passes on requirements (use IterativeDepth for pre-build exploration). USE WHEN think about, figure out, experiment, iterate, improve, optimize, hypothesis, science, full cycle, quick diagnosis, structured investigation, what might work, how do we test, what happened, analyze results."
+description: "Run evidence-based investigation loops with hypotheses, experiments, observations, and conclusions. USE WHEN designing experiments, testing claims, applying scientific method, evaluating evidence, or structuring systematic inquiry."
 effort: high
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Science/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Science/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -201,7 +201,7 @@ User: "experiment with different prompt structures for better output"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Science","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Science","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

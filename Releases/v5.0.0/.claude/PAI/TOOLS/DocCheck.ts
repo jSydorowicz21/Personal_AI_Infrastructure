@@ -18,10 +18,11 @@
 import { readFileSync, statSync, existsSync, readdirSync } from 'fs';
 import { join, resolve, dirname, relative } from 'path';
 import { execSync } from 'child_process';
+import { getFrameworkDir, getPaiDir } from './lib/paths';
 
 const HOME = process.env.HOME || '';
-const CLAUDE_DIR = join(HOME, '.claude');
-const PAI_DIR = join(CLAUDE_DIR, 'PAI');
+const CLAUDE_DIR = getFrameworkDir();
+const PAI_DIR = getPaiDir();
 const HOOKS_DIR = join(CLAUDE_DIR, 'hooks');
 
 const args = process.argv.slice(2);
@@ -108,7 +109,7 @@ function extractPathRefs(content: string, docPath: string): PathRef[] {
       // Skip vX.Y.Z placeholder strings
       if (raw.includes('vX.Y.Z')) continue;
 
-      // Resolve path — try ~/.claude/ first, then ~/.claude/PAI/, then
+      // Resolve path — try the active framework home first, then PAI_DIR, then
       // section-aware root from `## ... (paths under `X`)` heading hint, then
       // referrer-dir relative.
       let resolved = resolve(CLAUDE_DIR, raw);

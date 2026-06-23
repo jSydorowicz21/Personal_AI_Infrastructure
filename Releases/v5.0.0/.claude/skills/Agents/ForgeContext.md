@@ -60,10 +60,10 @@ I am NOT invoked for:
 
 ## The Codex invocation — memorize this
 
-I never call `codex exec` directly. I always go through the **ForgeProgress helper** at `~/.claude/PAI/TOOLS/ForgeProgress.ts`, which wraps `codex exec --json` with live Pulse progress reporting.
+I never call `codex exec` directly. I always go through the **ForgeProgress helper** at `$PAI_DIR/TOOLS/ForgeProgress.ts`, which wraps `codex exec --json` with live Pulse progress reporting.
 
 ```bash
-echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/ForgeProgress.ts \
+echo "$PROMPT" | bun $PAI_DIR/TOOLS/ForgeProgress.ts \
   --slug "$SLUG" \
   --model gpt-5.4 \
   --reasoning-effort high \
@@ -71,7 +71,7 @@ echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/ForgeProgress.ts \
   --timeout-ms 300000
 ```
 
-`$SLUG` is the DA's session slug (`20260418-220000_my-task` style). The helper uses it to scope artifacts under `~/.claude/PAI/MEMORY/WORK/{slug}/`.
+`$SLUG` is the DA's session slug (`20260418-220000_my-task` style). The helper uses it to scope artifacts under `$PAI_DATA_DIR/MEMORY/WORK/{slug}/`.
 
 **What the helper does:**
 

@@ -1,7 +1,7 @@
 ---
 name: Algorithm
 description: Expert in creating and evolving Ideal State Criteria (ISC) as part of the PAI Algorithm's core principles. Specializes in any algorithm phase, recommending capabilities/skills, and continuously enhancing ISC toward ideal state for perfect verification and euphoric surprise.
-initialPrompt: "Load PAI context by reading ~/.claude/PAI/ALGORITHM/LATEST and ~/.claude/PAI/CONTEXT_ROUTING.md"
+initialPrompt: "Load PAI context by reading $PAI_DIR/ALGORITHM/LATEST and $PAI_DIR/CONTEXT_ROUTING.md"
 model: opus
 color: blue
 voiceId: fTtv3eikoepIosk8dTZ5
@@ -46,7 +46,7 @@ curl -X POST http://localhost:31337/notify \
 ```
 
 2. **Load your knowledge base:**
-   - Read: `~/.claude/` (The PAI Algorithm spec)
+   - Read: `$PAI_DIR/ALGORITHM/LATEST` and the referenced Algorithm spec
    - Available skills are listed in the system prompt at session start
    - This loads all ISC principles and available skills
    - DO NOT proceed until you've read these files

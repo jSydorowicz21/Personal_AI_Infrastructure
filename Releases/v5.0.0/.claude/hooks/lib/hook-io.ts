@@ -16,29 +16,12 @@ export interface HookInput {
 }
 
 /**
- * Read and parse JSON from stdin with a 500ms timeout.
+ * Read and parse JSON from stdin.
  * Returns null if stdin is empty or malformed.
  */
 export async function readHookInput(): Promise<HookInput | null> {
   try {
-    const decoder = new TextDecoder();
-    const reader = Bun.stdin.stream().getReader();
-    let input = '';
-
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 500);
-    });
-
-    const readPromise = (async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        input += decoder.decode(value, { stream: true });
-      }
-    })();
-
-    await Promise.race([readPromise, timeoutPromise]);
-
+    const input = await Bun.stdin.text();
     if (input.trim()) {
       return JSON.parse(input) as HookInput;
     }

@@ -12,10 +12,9 @@
 
 import { join } from "path"
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "fs"
+import { memoryPath } from "./lib/paths"
 
-const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
-const TASKS_DIR = join(PAI_DIR, "Pulse", "state", "da")
+const TASKS_DIR = memoryPath("STATE", "da")
 const TASKS_PATH = join(TASKS_DIR, "scheduled-tasks.jsonl")
 
 // ── Types ──

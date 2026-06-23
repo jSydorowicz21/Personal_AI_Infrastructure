@@ -18,7 +18,7 @@
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { paiPath, getSettingsPath } from './lib/paths';
+import { memoryPath, getSettingsPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
 interface ConfigChangeInput {
@@ -40,7 +40,7 @@ interface ConfigChangeEvent {
   change_summary: string;
 }
 
-const OBS_DIR = paiPath('MEMORY', 'OBSERVABILITY');
+const OBS_DIR = memoryPath('OBSERVABILITY');
 const AUDIT_FILE = join(OBS_DIR, 'config-changes.jsonl');
 const SNAPSHOT_PATH = '/tmp/pai-settings-snapshot.json';
 

@@ -3,10 +3,9 @@
  *
  * Absorbed from standalone iMessageBot into Pulse module system.
  * Polls ~/Library/Messages/chat.db for incoming iMessages, processes them
- * through claude-agent-sdk (full Claude Code session with tools, hooks, CLAUDE.md),
- * and sends replies back via AppleScript.
+ * through the active PAI inference backend and sends replies back via AppleScript.
  *
- * Architecture: SQLite poll -> auth -> SDK session -> AppleScript reply
+ * Architecture: SQLite poll -> auth -> active framework inference -> AppleScript reply
  *
  * Exports:
  *   startIMessage(config)  — starts SQLite polling loop (runs forever, supervised by parent)
@@ -16,7 +15,6 @@
  * Does NOT create its own HTTP server — health is exposed via Pulse's hook server.
  */
 
-import { query } from "@anthropic-ai/claude-agent-sdk"
 import { ConversationStore } from "../lib/conversation"
 import { sanitize, analyzeForInjection } from "../lib/sanitize"
 import {
@@ -25,12 +23,15 @@ import {
   verifyAccess,
 } from "../lib/messages-db"
 import { sendMessage } from "../lib/imessage-send"
-import { join } from "path"
 import { appendFile, mkdir, rename } from "fs/promises"
+import { join } from "path"
+import { memoryPath } from "../../TOOLS/lib/paths"
+import { inference } from "../../TOOLS/Inference"
 
-// BILLING: Strip ANTHROPIC_API_KEY before any SDK query() call. Same rationale
-// as modules/telegram.ts — prevents API billing when the module is re-enabled.
+// BILLING: Strip Anthropic API credentials so framework inference cannot
+// accidentally fall back to API-key billing in Claude compatibility mode.
 delete process.env.ANTHROPIC_API_KEY
+delete process.env.ANTHROPIC_AUTH_TOKEN
 
 // ── Config Interface ──
 
@@ -58,23 +59,27 @@ export interface IMessageHealth {
 
 // ── Module State ──
 
-const HOME = process.env.HOME ?? ""
-const CWD = join(HOME, ".claude")
-const STATE_DIR = join(HOME, ".claude", "PAI", "PULSE", "state", "imessage")
-const LOGS_DIR = join(HOME, ".claude", "PAI", "PULSE", "logs", "imessage")
+const STATE_DIR = memoryPath("STATE", "pulse", "imessage")
+const LOGS_DIR = memoryPath("OBSERVABILITY", "pulse", "imessage")
+const IMESSAGE_SYSTEM_PROMPT = `You are {{DA_NAME}}, responding via iMessage. {{PRINCIPAL_NAME}} is messaging you from his phone.
+
+CRITICAL RULES FOR IMESSAGE MODE:
+- Keep responses concise, under 200 words, and plain text.
+- No markdown headers, Algorithm format, Native format, Minimal format, or voice notification curls.
+- Speak naturally.
+- When doing tasks, do them and confirm briefly what you did.
+- You have access to PAI capabilities through the active framework.`
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let running = false
 let startedAt = 0
 let messagesReceived = 0
 let messagesResponded = 0
-let lastSessionId: string | undefined
 let lastRowId = 0
 let processing = false
 let lastError: string | undefined
 let allowedHandles = new Set<string>()
 let pollIntervalMs = 3000
-let maxTurns = 25
 let sdkTimeoutMs = 120_000
 let conversationStore: ConversationStore | null = null
 let cursorPath = ""
@@ -152,81 +157,23 @@ async function processMessage(
     prompt = `Previous conversation:\n${historyText}\n\nPrincipal's new message: ${sanitized}`
   }
 
-  const sdkOptions: Record<string, unknown> = {
-    cwd: CWD,
-    tools: { type: "preset", preset: "claude_code" },
-    settingSources: ["user", "project", "local"],
-    maxTurns,
-    permissionMode: "bypassPermissions",
-    allowDangerouslySkipPermissions: true,
-    systemPrompt: {
-      type: "preset",
-      preset: "claude_code",
-      append: `\n\nYou are responding via iMessage. Keep responses concise — under 200 words, plain text.
-No markdown headers. No algorithm format. Just natural conversation.
-You have ALL PAI capabilities — skills, email, calendar, everything.
-When asked to check email, use the _INBOX skill. When asked about calendar, use the _CALENDAR skill.`,
-    },
+  const result = await inference({
+    systemPrompt: IMESSAGE_SYSTEM_PROMPT,
+    userPrompt: prompt,
+    level: "standard",
+    timeout: sdkTimeoutMs,
+  })
+
+  if (result.success) {
+    log("info", "Framework inference complete", {
+      latencyMs: result.latencyMs,
+      level: result.level,
+    })
+    return result.output || "Sorry, I wasn't able to generate a response. Try again?"
   }
 
-  if (lastSessionId) {
-    sdkOptions.resume = lastSessionId
-  }
-
-  const conversation = query({ prompt, options: sdkOptions as any })
-
-  let fullText = ""
-  const timeoutController = new AbortController()
-  const timeout = setTimeout(() => timeoutController.abort(), sdkTimeoutMs)
-
-  try {
-    for await (const message of conversation) {
-      if (timeoutController.signal.aborted) break
-
-      const msg = message as any
-
-      if (
-        msg.type === "system" &&
-        msg.subtype === "init" &&
-        msg.session_id
-      ) {
-        lastSessionId = msg.session_id
-      }
-
-      if (
-        msg.type === "stream_event" &&
-        msg.event?.type === "content_block_delta" &&
-        msg.event?.delta?.type === "text_delta" &&
-        msg.event.delta.text
-      ) {
-        fullText += msg.event.delta.text
-      }
-
-      if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text) {
-            if (!fullText) fullText = block.text
-          }
-        }
-      }
-
-      if (msg.type === "result") {
-        if (msg.subtype === "success" && msg.result) {
-          fullText = msg.result
-        }
-        if (msg.session_id) lastSessionId = msg.session_id
-        log("info", "SDK session complete", {
-          numTurns: msg.num_turns,
-          cost: msg.total_cost_usd,
-          sessionId: lastSessionId,
-        })
-      }
-    }
-  } finally {
-    clearTimeout(timeout)
-  }
-
-  return fullText || "Sorry, I wasn't able to generate a response. Try again?"
+  log("error", "Framework inference failed", { error: result.error })
+  return "Sorry, I wasn't able to generate a response. Try again?"
 }
 
 // ── Poll Loop ──
@@ -324,7 +271,6 @@ export async function startIMessage(config: IMessageConfig): Promise<void> {
   // Apply config
   allowedHandles = new Set(config.allowed_handles ?? [])
   pollIntervalMs = config.poll_interval_ms ?? 3000
-  maxTurns = config.max_turns ?? 25
   sdkTimeoutMs = config.sdk_timeout_ms ?? 120_000
 
   if (allowedHandles.size === 0) {
@@ -379,7 +325,6 @@ export async function startIMessage(config: IMessageConfig): Promise<void> {
   startedAt = Date.now()
   messagesReceived = 0
   messagesResponded = 0
-  lastSessionId = undefined
   lastError = undefined
   processing = false
   running = true
@@ -387,7 +332,6 @@ export async function startIMessage(config: IMessageConfig): Promise<void> {
   log("info", "iMessage module started", {
     allowedHandles: [...allowedHandles],
     pollIntervalMs,
-    maxTurns,
     sdkTimeoutMs,
     startingRowId: lastRowId,
   })

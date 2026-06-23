@@ -1,6 +1,6 @@
 ---
 name: Interceptor
-description: "Real Chrome browser automation via Interceptor extension — controls the actual browser from inside (zero CDP fingerprint, passes all major bot detection checks including BrowserScan, Pixelscan, CreepJS, Fingerprint.com). Stays logged in, uses your real sessions. Compound commands (open, read, act, inspect) collapse multi-step flows into single calls. Unique capabilities: monitor/replay system (record user actions → export replayable plan scripts for regression), network log (auto-captures all fetch/XHR), scene graph for rich editors (Google Docs, Canva, Slides). Workflows: VerifyDeploy, Reproduce (open affected page BEFORE code analysis — mandatory per rules), RecordFlow, ReplayFlow, TestForm, Update. MANDATORY for all visual verification — never use agent-browser for deploy confirmation. USE WHEN verify deploy, confirm UI, check page, screenshot verification, interceptor, debug web, troubleshoot, visual check, authenticated page, bot detection bypass, agent-browser failing, reproduce bug, record flow, replay flow, test form, QA test, regression check. NOT FOR batch headless automation (use Browser). NOT FOR multi-page crawling or scraping at scale with residential proxy needs (use BrightData)."
+description: "Drive and inspect authenticated browser sessions through the interceptor workflow. USE WHEN automating Claude Design or other web UIs through an existing authenticated session, capturing requests, or programmatically controlling browser-backed workflows."
 version: 2.0.0
 effort: medium
 ---
@@ -8,7 +8,7 @@ effort: medium
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Interceptor/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Interceptor/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -35,8 +35,8 @@ If this directory exists, load and apply any PREFERENCES.md, configurations, or 
 # Interceptor — Stealth Browser Automation
 
 **Tool:** `interceptor` CLI — Chrome extension that controls the real browser from the inside.
-**Repo:** https://github.com/Hacker-Valley-Media/slop-browser
-**Install:** `~/Projects/interceptor` (built from source — see `Workflows/Update.md`)
+**Repo:** https://github.com/Hacker-Valley-Media/Interceptor
+**Install:** `~/Projects/Interceptor` from source, or the signed release installer/binary. See `Workflows/Update.md` and `Workflows/SetupWindowsWSL.md`.
 
 ### Why Interceptor?
 
@@ -45,9 +45,10 @@ agent-browser (the Browser skill) uses CDP — sites can detect it. Interceptor 
 ### Prerequisites
 
 - Chrome or Brave running with the Interceptor extension loaded
-- `interceptor` CLI in PATH (`/opt/homebrew/bin/interceptor`)
-- `interceptor-daemon` in PATH (`/opt/homebrew/bin/interceptor-daemon`)
-- Native messaging manifest registered (`bash ~/Projects/interceptor/scripts/install.sh --chrome --skip-extension`)
+- `interceptor` CLI in PATH
+- Native messaging manifest registered for the browser profile
+- macOS/Linux source installs: `bash ~/Projects/Interceptor/scripts/install.sh --browser-only --chrome`
+- Windows installs: release binary or source build plus Chrome native-host registry key. On WSL, expose Windows Interceptor through a shim; see `Workflows/SetupWindowsWSL.md`.
 - (Optional, macOS) `interceptor-bridge` helper app — see "Bridge" section below
 
 ### Bridge — macOS Native Helper App
@@ -83,7 +84,7 @@ The skill's procedure is the canonical one.
 - Single-user Mac threat model: acceptable, since anything running as you can
   already do this with effort. Multi-user Macs need socket hardening (see
   Update.md section 6c).
-- Binary built locally from `~/Projects/interceptor/interceptor-bridge/Sources/`,
+- Binary built locally from `~/Projects/Interceptor/interceptor-bridge/Sources/`,
   not a downloaded prebuilt. Provenance is Swift source we just compiled.
 
 ---
@@ -310,6 +311,7 @@ Passes all major bot detection:
 | "replay flow", "replay", "regression check", "run flow" | `Workflows/ReplayFlow.md` | Execute a recorded plan script step-by-step, verify each step, report regressions |
 | "test form", "fill form", "form test", "check form" | `Workflows/TestForm.md` | Discover form fields, fill with test data, submit, verify result |
 | "update", "check version", "rebuild" | `Workflows/Update.md` | Rebuild interceptor from source and verify |
+| "windows", "wsl", "native host not found", "smart app control", "extension load", "shim" | `Workflows/SetupWindowsWSL.md` | Install and troubleshoot Windows Chrome + WSL Interceptor access |
 
 ---
 
@@ -318,5 +320,5 @@ Passes all major bot detection:
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Interceptor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"Interceptor","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

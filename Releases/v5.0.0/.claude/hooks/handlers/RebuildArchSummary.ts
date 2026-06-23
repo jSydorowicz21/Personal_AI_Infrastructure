@@ -19,11 +19,12 @@
 import { statSync, readdirSync, existsSync } from "fs";
 import { join } from "path";
 import { spawn } from "child_process";
-import { getPaiDir, getClaudeDir } from "../lib/paths";
+import { getPaiDir, getClaudeDir, getUserDir } from "../lib/paths";
 
 export async function handleRebuildArchSummary(): Promise<void> {
   const paiDir = getPaiDir();
   const claudeDir = getClaudeDir();
+  const userDir = getUserDir();
   const output = join(paiDir, "DOCUMENTATION", "PAI_ARCHITECTURE_SUMMARY.md");
   const generator = join(paiDir, "Tools/ArchitectureSummaryGenerator.ts");
 
@@ -43,8 +44,8 @@ export async function handleRebuildArchSummary(): Promise<void> {
       join(claudeDir, "hooks"),
       join(paiDir, "ALGORITHM"),
       join(paiDir, "TOOLS"),
-      join(paiDir, "USER", "Config"),
-      join(paiDir, "USER", "SECURITY"),
+      join(userDir, "Config"),
+      join(userDir, "SECURITY"),
     ];
 
     const trackedExtensions = new Set([".ts", ".md", ".yaml", ".yml", ".sh", ".json"]);

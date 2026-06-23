@@ -52,7 +52,7 @@ If a skill does not follow this structure, it is not properly configured and wil
 ### Public skills (`TitleCase`) — ship in the PAI public release
 - ONLY templated, safe, public, ready content
 - Generic instructions any PAI user could follow; placeholder values, public API references
-- Can reference `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/` at runtime for per-user tweaks
+- Can reference `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/<SkillName>/` at runtime for per-user tweaks
 - Exported to the public PAI repository as-is
 
 **Forbidden in public skills:**
@@ -93,7 +93,7 @@ ls -1 ~/.claude/skills/ | grep '^_'      # Private (_ALLCAPS)
 ```
 
 **Pattern for per-user layering in public skills:**
-A public skill can be templated to load runtime customizations from `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/<SkillName>/PREFERENCES.md`. The skill body stays generic; the customization file overlays per-instance context. **Do not use SKILLCUSTOMIZATIONS to smuggle private content into a public skill** — if the skill *requires* private context to function, it must be renamed `_ALLCAPS`.
+A public skill can be templated to load runtime customizations from `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/<SkillName>/PREFERENCES.md`. The skill body stays generic; the customization file overlays per-instance context. **Do not use SKILLCUSTOMIZATIONS to smuggle private content into a public skill** — if the skill *requires* private context to function, it must be renamed `_ALLCAPS`.
 
 **NEVER hardcode personal data in public skills.**
 
@@ -113,7 +113,7 @@ All skills include this standard instruction block after the YAML frontmatter:
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/{SkillName}/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/{SkillName}/`
 
 If this directory exists, load and apply:
 - `PREFERENCES.md` - User preferences and configuration
@@ -125,7 +125,7 @@ These define user-specific preferences. If the directory does not exist, proceed
 ### Directory Structure
 
 ```
-~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/
+$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/
 ├── README.md                    # Documentation for this system
 ├── Art/                         # Art skill customizations
 │   ├── EXTEND.yaml              # Extension manifest
@@ -178,7 +178,7 @@ description: "What this customization adds"
 
 ### Creating a Customization
 
-1. **Create directory**: `mkdir -p ~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/SkillName`
+1. **Create directory**: `mkdir -p $PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/SkillName`
 2. **Create EXTEND.yaml**: Define what files to load and merge strategy
 3. **Create PREFERENCES.md**: User preferences for this skill
 4. **Add additional files**: Any skill-specific configurations
@@ -536,7 +536,7 @@ Or manually:
 2. Update YAML frontmatter to single-line description
 3. Add `## Workflow Routing` table
 4. Add `## Examples` section
-5. Move backups to `~/.claude/PAI/MEMORY/Backups/`
+5. Move backups to `$PAI_DATA_DIR/MEMORY/Backups/`
 6. Verify against checklist
 
 ### How to Test Effectiveness
@@ -1084,4 +1084,4 @@ This system ensures:
 ## Related Systems
 
 - **Master Architecture:** `~/.claude/PAI/DOCUMENTATION/PAISystemArchitecture.md` — authoritative system-of-systems reference
-- **Knowledge Archive:** `~/.claude/PAI/MEMORY/KNOWLEDGE/` — entity-based archive with 4 types (People, Companies, Ideas, Research), managed by Algorithm LEARN phase (direct writes), `PAI/TOOLS/KnowledgeHarvester.ts` (validation/maintenance), and the `/knowledge` skill. Topic is a tag, not a domain. Skills that perform research or analysis can query the archive for accumulated knowledge.
+- **Knowledge Archive:** `$PAI_DATA_DIR/MEMORY/KNOWLEDGE/` — entity-based archive with 4 types (People, Companies, Ideas, Research), managed by Algorithm LEARN phase (direct writes), `PAI/TOOLS/KnowledgeHarvester.ts` (validation/maintenance), and the `/knowledge` skill. Topic is a tag, not a domain. Skills that perform research or analysis can query the archive for accumulated knowledge.

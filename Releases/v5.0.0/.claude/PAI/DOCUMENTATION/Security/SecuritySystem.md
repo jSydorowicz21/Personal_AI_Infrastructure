@@ -143,7 +143,7 @@ Caches classification decisions per session.
 | `InjectionInspector.ts` | 80 | Tool output injection detection |
 | `RulesInspector.ts` | 50 | User-written security rules via LLM (DISABLED — empty rules) |
 
-### Policy Files (`~/.claude/PAI/USER/SECURITY/`)
+### Policy Files (`$PAI_DATA_DIR/USER/SECURITY/`)
 | File | Purpose |
 |------|---------|
 | `PATTERNS.yaml` | Block/alert patterns and path protection tiers |

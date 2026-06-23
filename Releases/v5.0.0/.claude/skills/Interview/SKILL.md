@@ -1,6 +1,6 @@
 ---
 name: Interview
-description: "Runs a phased conversational interview across all PAI context files using InterviewScan.ts, which orders targets by PHASE and assigns conversation mode per file. Phase 1 (foundational TELOS) always runs first regardless of completeness: MISSION, GOALS, PROBLEMS, STRATEGIES, CHALLENGES, NARRATIVES, SPARKS, BELIEFS, WISDOM, MODELS, FRAMES in leverage order. Phase 2: IDEAL_STATE (HEALTH, MONEY, FREEDOM, RELATIONSHIPS, CREATIVE) in Fill mode. Phase 3: preferences (BOOKS, AUTHORS, BANDS, MOVIES, RESTAURANTS, FOOD_PREFERENCES, LEARNING, MEETUPS, CIVIC) in mixed mode. Phase 4: light touch on CURRENT_STATE/SNAPSHOT and PRINCIPAL_IDENTITY. Phase 9 (RHYTHMS) deferred. Review mode (≥80%) reads file then asks targeted questions one at a time — still accurate, outdated, missing, sharpen? Fill mode (<80%) walks scanner prompts one at a time. The principal answers in natural language; the DA formats into file structure. Voice confirms on actual changes only. Stop signals respected immediately. Target vs. north-star type confirmed per entry. Timestamped backup to TELOS/Backups/ before multi-edit at ≥50% of a file. TelosRenderer.ts regenerates PRINCIPAL_TELOS.md after foundational changes. USE WHEN /interview, resume interview, continue interview, start the interview, review TELOS, fill in context, what's missing in setup, conversational review, phased review, TELOS walkthrough, quarterly context refresh. NOT FOR single-file edits (use Telos Update workflow), intaking external content (use Migrate), identity edits (use _PROFILE)."
+description: "Conduct structured interviews to elicit goals, identity, preferences, requirements, and missing context. USE WHEN interviewing the user, gathering requirements, personalizing PAI, filling TELOS/current state, or asking adaptive discovery questions."
 ---
 
 # Interview — phased conversational context review + fill
@@ -44,7 +44,7 @@ The scanner marks each target's mode based on completeness. The DA respects that
 Run the scanner to see phase breakdown and current state:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/InterviewScan.ts
+bun $PAI_DIR/TOOLS/InterviewScan.ts
 ```
 
 The scanner orders items phase-first (Phase 1 always before Phase 2). Present the per-phase summary to the principal:
@@ -61,7 +61,7 @@ For each file:
 
 1. Get the per-file detail:
    ```bash
-   bun ~/.claude/PAI/TOOLS/InterviewScan.ts --file <NAME>
+   bun $PAI_DIR/TOOLS/InterviewScan.ts --file <NAME>
    ```
 2. Check the mode:
    - `REVIEW mode` (≥80% complete) → read the file contents to the principal first, then ask review questions
@@ -111,7 +111,7 @@ Same pattern Phase 2 → Phase 3 → Phase 4.
 After foundational changes, regenerate the startup summary so future sessions pick up the updates:
 
 ```bash
-bun ~/.claude/PAI/TOOLS/TelosRenderer.ts 2>/dev/null || true
+bun $PAI_DIR/TOOLS/TelosRenderer.ts 2>/dev/null || true
 ```
 
 ## Rules

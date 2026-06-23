@@ -1,10 +1,9 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 import { homedir } from 'os';
-import { parse as parseYaml } from 'yaml';
 import type { Inspector, InspectionContext, InspectionResult } from '../types';
 import { ALLOW, deny, requireApproval, alert } from '../types';
-import { paiPath } from '../../lib/paths';
+import { paiPath, userPath } from '../../lib/paths';
 
 // ── Types ──
 
@@ -37,10 +36,99 @@ type FileAction = 'read' | 'write' | 'delete';
 
 // ── Pattern Loading ──
 
-const USER_PATTERNS_PATH = paiPath('USER', 'SECURITY', 'PATTERNS.yaml');
+const USER_PATTERNS_PATH = userPath('SECURITY', 'PATTERNS.yaml');
 const SYSTEM_PATTERNS_PATH = paiPath('DOCUMENTATION', 'Security', 'Patterns.example.yaml');
 
 let patternsCache: PatternsConfig | null = null;
+
+function emptyPatternsConfig(): PatternsConfig {
+  return {
+    version: 'unknown',
+    philosophy: { mode: 'targeted', principle: '' },
+    bash: { trusted: [], blocked: [], confirm: [], alert: [] },
+    paths: { zeroAccess: [], alertAccess: [], confirmAccess: [], readOnly: [], confirmWrite: [], noDelete: [] },
+    projects: {},
+  };
+}
+
+function parseScalar(value: string): string {
+  const trimmed = value.trim();
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parsePatternsConfig(content: string): PatternsConfig {
+  const config = emptyPatternsConfig();
+  let section: 'bash' | 'paths' | 'philosophy' | null = null;
+  let subsection = '';
+  let currentPattern: PatternEntry | null = null;
+
+  for (const rawLine of content.replace(/\r\n/g, '\n').split('\n')) {
+    const line = rawLine.replace(/\s+$/, '');
+    const trimmed = line.trim();
+    if (!trimmed || trimmed === '---' || trimmed.startsWith('#')) continue;
+
+    const versionMatch = line.match(/^version:\s*(.+)$/);
+    if (versionMatch) {
+      config.version = parseScalar(versionMatch[1]);
+      continue;
+    }
+
+    const topMatch = line.match(/^([A-Za-z0-9_-]+):\s*$/);
+    if (topMatch) {
+      section = topMatch[1] === 'bash' || topMatch[1] === 'paths' || topMatch[1] === 'philosophy'
+        ? topMatch[1] as typeof section
+        : null;
+      subsection = '';
+      currentPattern = null;
+      continue;
+    }
+
+    if (section === 'philosophy') {
+      const match = line.match(/^\s{2}([A-Za-z0-9_-]+):\s*(.*)$/);
+      if (match && (match[1] === 'mode' || match[1] === 'principle')) {
+        config.philosophy[match[1]] = parseScalar(match[2]);
+      }
+      continue;
+    }
+
+    if (section === 'bash') {
+      const subMatch = line.match(/^\s{2}(trusted|blocked|confirm|alert):\s*$/);
+      if (subMatch) {
+        subsection = subMatch[1];
+        currentPattern = null;
+        continue;
+      }
+      const patternMatch = line.match(/^\s{4}-\s*pattern:\s*(.*)$/);
+      if (patternMatch && subsection in config.bash) {
+        currentPattern = { pattern: parseScalar(patternMatch[1]), reason: '' };
+        config.bash[subsection as keyof PatternsConfig['bash']].push(currentPattern);
+        continue;
+      }
+      const reasonMatch = line.match(/^\s{6}reason:\s*(.*)$/);
+      if (reasonMatch && currentPattern) {
+        currentPattern.reason = parseScalar(reasonMatch[1]);
+      }
+      continue;
+    }
+
+    if (section === 'paths') {
+      const subMatch = line.match(/^\s{2}(zeroAccess|alertAccess|confirmAccess|readOnly|confirmWrite|noDelete):\s*$/);
+      if (subMatch) {
+        subsection = subMatch[1];
+        continue;
+      }
+      const itemMatch = line.match(/^\s{4}-\s*(.*)$/);
+      if (itemMatch && subsection in config.paths) {
+        config.paths[subsection as keyof PatternsConfig['paths']].push(parseScalar(itemMatch[1]));
+      }
+    }
+  }
+
+  return config;
+}
 
 function loadPatterns(): PatternsConfig | null {
   if (patternsCache) return patternsCache;
@@ -56,7 +144,7 @@ function loadPatterns(): PatternsConfig | null {
 
   try {
     const content = readFileSync(patternsPath, 'utf-8');
-    patternsCache = parseYaml(content) as PatternsConfig;
+    patternsCache = parsePatternsConfig(content);
     return patternsCache;
   } catch {
     return null;

@@ -33,7 +33,7 @@ export default function TemplateOnboarding() {
   };
 
   const daName = state.daName || "your DA";
-  const cmd = state.interviewCommand || "/interview";
+  const cmd = state.interviewCommand || "$Interview";
 
   return (
     <div className="border-b border-blue-500/30 bg-gradient-to-r from-blue-950/60 via-slate-950/70 to-blue-950/60">
@@ -64,7 +64,7 @@ export default function TemplateOnboarding() {
                 <FolderOpen className="w-3.5 h-3.5 text-blue-300 shrink-0" />
                 Or edit
                 <code className="px-1.5 py-0.5 rounded bg-slate-800/80 text-blue-200 text-xs font-mono">
-                  ~/.claude/PAI/USER/
+                  ~/.pai/USER/
                 </code>
                 directly.
               </span>

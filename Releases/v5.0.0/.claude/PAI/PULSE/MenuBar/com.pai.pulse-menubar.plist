@@ -15,11 +15,15 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PAI_PULSE_DIR</key>
-        <string>__HOME__/.claude/PAI/PULSE</string>
+        <string>__PAI_DIR__/PULSE</string>
+        <key>PAI_DIR</key>
+        <string>__PAI_DIR__</string>
+        <key>PAI_DATA_DIR</key>
+        <string>__PAI_DATA_DIR__</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>__HOME__/.claude/PAI/PULSE/logs/menubar-stdout.log</string>
+    <string>__PAI_DIR__/PULSE/logs/menubar-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>__HOME__/.claude/PAI/PULSE/logs/menubar-stderr.log</string>
+    <string>__PAI_DIR__/PULSE/logs/menubar-stderr.log</string>
 </dict>
 </plist>

@@ -11,16 +11,29 @@ set -o pipefail
 # CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
 
-PAI_DIR="${PAI_DIR:-$HOME/.claude/PAI}"
-CLAUDE_HOME="$HOME/.claude"
-SETTINGS_FILE="$CLAUDE_HOME/settings.json"
-RATINGS_FILE="$PAI_DIR/MEMORY/LEARNING/SIGNALS/ratings.jsonl"
-MODEL_CACHE="$PAI_DIR/MEMORY/STATE/model-cache.txt"
-QUOTE_CACHE="$PAI_DIR/.quote-cache"
-LOCATION_CACHE="$PAI_DIR/MEMORY/STATE/location-cache.json"
-WEATHER_CACHE="$PAI_DIR/MEMORY/STATE/weather-cache.json"
+PAI_DATA_DIR="${PAI_DATA_DIR:-$HOME/.pai}"
+PAI_CONFIG_DIR="${PAI_CONFIG_DIR:-$HOME/.config/PAI}"
+_PAI_FRAMEWORK_STATE="$PAI_DATA_DIR/framework.json"
+_PAI_STATE_ROOT=""
+_PAI_STATE_FRAMEWORK=""
+if [ -f "$_PAI_FRAMEWORK_STATE" ] && command -v jq >/dev/null 2>&1; then
+    _PAI_STATE_ROOT="$(jq -r '.root // empty' "$_PAI_FRAMEWORK_STATE" 2>/dev/null)"
+    _PAI_STATE_FRAMEWORK="$(jq -r '.active // .framework // empty' "$_PAI_FRAMEWORK_STATE" 2>/dev/null)"
+fi
+PAI_FRAMEWORK="${PAI_FRAMEWORK:-${_PAI_STATE_FRAMEWORK:-claude}}"
+FRAMEWORK_DIR="${PAI_FRAMEWORK_DIR:-${_PAI_STATE_ROOT:-$HOME/.claude}}"
+PAI_DIR="${PAI_DIR:-$FRAMEWORK_DIR/PAI}"
+PAI_MEMORY_DIR="${PAI_MEMORY_DIR:-$PAI_DATA_DIR/MEMORY}"
+PAI_USER_DIR="${PAI_USER_DIR:-$PAI_DATA_DIR/USER}"
+CLAUDE_HOME="$FRAMEWORK_DIR"
+SETTINGS_FILE="${PAI_SETTINGS_PATH:-$FRAMEWORK_DIR/settings.json}"
+RATINGS_FILE="$PAI_MEMORY_DIR/LEARNING/SIGNALS/ratings.jsonl"
+MODEL_CACHE="$PAI_MEMORY_DIR/STATE/model-cache.txt"
+QUOTE_CACHE="$PAI_MEMORY_DIR/STATE/quote-cache"
+LOCATION_CACHE="$PAI_MEMORY_DIR/STATE/location-cache.json"
+WEATHER_CACHE="$PAI_MEMORY_DIR/STATE/weather-cache.json"
 USAGE_CACHE="/tmp/pai-usage-${USER:-anon}.json"
-LEARNING_CACHE="$PAI_DIR/MEMORY/STATE/learning-cache.sh"
+LEARNING_CACHE="$PAI_MEMORY_DIR/STATE/learning-cache.sh"
 
 # Settings values read once up front. Re-reading settings.json is measurable on
 # a 1-second refresh loop, so we mtime-cache the jq extraction to /tmp.
@@ -60,9 +73,7 @@ PAI_VERSION="${PAI_VERSION:-—}"
 ALGO_VERSION=""
 for _algo_path in \
     "$PAI_DIR/ALGORITHM/LATEST" \
-    "$HOME/.claude/PAI/ALGORITHM/LATEST" \
-    "/Users/$(id -un 2>/dev/null)/.claude/PAI/ALGORITHM/LATEST" \
-    "$(eval echo ~"$(id -un 2>/dev/null)")/.claude/PAI/ALGORITHM/LATEST"; do
+    "$FRAMEWORK_DIR/PAI/ALGORITHM/LATEST"; do
     if [ -n "$_algo_path" ] && [ -f "$_algo_path" ]; then
         ALGO_VERSION="$(cat "$_algo_path" 2>/dev/null | tr -d '[:space:]')"
         [ -n "$ALGO_VERSION" ] && break
@@ -74,8 +85,7 @@ done
         "$(date '+%H:%M:%S')" "$ALGO_VERSION" "${HOME:-UNSET}" "${PAI_DIR:-UNSET}" "${USER:-UNSET}"
     for _algo_path in \
         "$PAI_DIR/ALGORITHM/LATEST" \
-        "$HOME/.claude/PAI/ALGORITHM/LATEST" \
-        "/Users/$(id -un 2>/dev/null)/.claude/PAI/ALGORITHM/LATEST"; do
+        "$FRAMEWORK_DIR/PAI/ALGORITHM/LATEST"; do
         printf ' %s=%s' "$_algo_path" "$([ -f "$_algo_path" ] && echo OK || echo MISS)"
     done
     printf '\n'
@@ -102,7 +112,8 @@ WEATHER_CACHE_TTL=900
 USAGE_CACHE_TTL=900      # 15 min: /api/oauth/usage has aggressive per-token rate limits (~5 req before 429)
 
 # Source .env for API keys
-[ -f "${PAI_CONFIG_DIR:-$HOME/.claude/PAI}/.env" ] && source "${PAI_CONFIG_DIR:-$HOME/.claude/PAI}/.env"
+[ -f "$PAI_CONFIG_DIR/.env" ] && source "$PAI_CONFIG_DIR/.env"
+[ -f "$FRAMEWORK_DIR/.env" ] && source "$FRAMEWORK_DIR/.env"
 
 # Cross-platform file mtime (seconds since epoch). Detect stat flavor once;
 # probing both variants on every mtime check is expensive on macOS.
@@ -272,8 +283,8 @@ if [ "$context_pct" = "0" ] && [ "$total_input" -eq 0 ] 2>/dev/null; then
             [ -n "$_f" ] && [ -f "$PAI_DIR/$_f" ] && _est=$((_est + $(wc -c < "$PAI_DIR/$_f") * 10 / 35))
         done < <(jq -r '.loadAtStartup.files[]? // empty' "$SETTINGS_FILE" 2>/dev/null)
 
-        # Project memory files (CC native memory at ~/.claude/projects/*/memory/)
-        for _f in "$HOME"/.claude/projects/*/memory/MEMORY.md; do
+        # Shared PAI feedback memory (cross-framework, unlike harness-native project memory)
+        for _f in "$PAI_MEMORY_DIR"/FEEDBACK/*.md "$PAI_MEMORY_DIR"/FEEDBACK/MEMORY.md; do
             [ -f "$_f" ] && _est=$((_est + $(wc -c < "$_f") * 10 / 35))
         done
 
@@ -317,7 +328,7 @@ fi
 
 # Get Claude Code version — prefer JSON input, then mtime-cached value,
 # fall back to forking `claude --version` (40-80ms, so cached for 24h).
-_CC_VERSION_CACHE="$PAI_DIR/MEMORY/STATE/cc-version-cache.txt"
+_CC_VERSION_CACHE="$PAI_MEMORY_DIR/STATE/cc-version-cache.txt"
 if [ -n "$cc_version_json" ] && [ "$cc_version_json" != "unknown" ]; then
     cc_version="$cc_version_json"
 elif [ -f "$_CC_VERSION_CACHE" ] && [ -z "$(find "$_CC_VERSION_CACHE" -mtime +1 2>/dev/null)" ]; then
@@ -339,8 +350,8 @@ dir_name=$(basename "$current_dir" 2>/dev/null || echo ".")
 # Priority: customTitle (set by /rename) > session-names.json (auto-generated) > none
 # NOTE: Claude Code uses lowercase "projects/" dir, PAI uses uppercase "Projects/".
 SESSION_LABEL=""
-SESSION_NAMES_FILE="$PAI_DIR/MEMORY/STATE/session-names.json"
-SESSION_CACHE="$PAI_DIR/MEMORY/STATE/session-name-cache.sh"
+SESSION_NAMES_FILE="$PAI_MEMORY_DIR/STATE/session-names.json"
+SESSION_CACHE="$PAI_MEMORY_DIR/STATE/session-name-cache.sh"
 if [ -n "$session_id" ]; then
     # Derive sessions-index path from current_dir (Claude Code uses lowercase "projects")
     project_slug="${current_dir//[\/.]/-}"
@@ -685,11 +696,11 @@ usage_extra_used=${native_usage_extra_used:-0}
 usage_ws_cost_cents=0
 USAGEEOF
     else
-        # Fallback: fetch from OAuth API (pre-v2.1.80 or non-Claude.ai auth)
+        # Fallback: fetch from Claude OAuth API (pre-v2.1.80 or non-Claude.ai auth)
         cache_age=999999
         [ -f "$USAGE_CACHE" ] && cache_age=$((_usage_now - $(get_mtime "$USAGE_CACHE")))
 
-        if [ "$cache_age" -gt "$USAGE_CACHE_TTL" ]; then
+        if [ "$PAI_FRAMEWORK" = "claude" ] && [ "$cache_age" -gt "$USAGE_CACHE_TTL" ]; then
             # Extract OAuth token — macOS Keychain or Linux credentials file
             if [ "$(uname -s)" = "Darwin" ]; then
                 cred_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
@@ -711,26 +722,30 @@ USAGEEOF
             fi
         fi
 
-        # Read cache if it exists and is <30min old. Otherwise no data.
-        _usage_age=999999
-        [ -f "$USAGE_CACHE" ] && _usage_age=$((_usage_now - $(get_mtime "$USAGE_CACHE")))
-
-        if [ -f "$USAGE_CACHE" ] && [ "$_usage_age" -lt 1800 ]; then
-            jq -r '
-                "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
-                "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh) + "\n" +
-                "usage_7d=" + (.seven_day.utilization // 0 | tostring) + "\n" +
-                "usage_7d_reset=" + (.seven_day.resets_at // "" | @sh) + "\n" +
-                "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
-                "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
-                "usage_extra_enabled=" + (.extra_usage.is_enabled // false | tostring) + "\n" +
-                "usage_extra_limit=" + (.extra_usage.monthly_limit // 0 | tostring) + "\n" +
-                "usage_extra_used=" + (.extra_usage.used_credits // 0 | tostring) + "\n" +
-                "usage_ws_cost_cents=0"
-            ' "$USAGE_CACHE" > "$_parallel_tmp/usage.sh" 2>/dev/null
-        else
-            rm -f "$USAGE_CACHE" 2>/dev/null
+        if [ "$PAI_FRAMEWORK" != "claude" ]; then
             echo -e "usage_5h=0\nusage_7d=0\nusage_extra_enabled=false\nusage_ws_cost_cents=0\nusage_no_data=true" > "$_parallel_tmp/usage.sh"
+        else
+            # Read cache if it exists and is <30min old. Otherwise no data.
+            _usage_age=999999
+            [ -f "$USAGE_CACHE" ] && _usage_age=$((_usage_now - $(get_mtime "$USAGE_CACHE")))
+
+            if [ -f "$USAGE_CACHE" ] && [ "$_usage_age" -lt 1800 ]; then
+                jq -r '
+                    "usage_5h=" + (.five_hour.utilization // 0 | tostring) + "\n" +
+                    "usage_5h_reset=" + (.five_hour.resets_at // "" | @sh) + "\n" +
+                    "usage_7d=" + (.seven_day.utilization // 0 | tostring) + "\n" +
+                    "usage_7d_reset=" + (.seven_day.resets_at // "" | @sh) + "\n" +
+                    "usage_opus=" + (if .seven_day_opus then (.seven_day_opus.utilization // 0 | tostring) else "null" end) + "\n" +
+                    "usage_sonnet=" + (if .seven_day_sonnet then (.seven_day_sonnet.utilization // 0 | tostring) else "null" end) + "\n" +
+                    "usage_extra_enabled=" + (.extra_usage.is_enabled // false | tostring) + "\n" +
+                    "usage_extra_limit=" + (.extra_usage.monthly_limit // 0 | tostring) + "\n" +
+                    "usage_extra_used=" + (.extra_usage.used_credits // 0 | tostring) + "\n" +
+                    "usage_ws_cost_cents=0"
+                ' "$USAGE_CACHE" > "$_parallel_tmp/usage.sh" 2>/dev/null
+            else
+                rm -f "$USAGE_CACHE" 2>/dev/null
+                echo -e "usage_5h=0\nusage_7d=0\nusage_extra_enabled=false\nusage_ws_cost_cents=0\nusage_no_data=true" > "$_parallel_tmp/usage.sh"
+            fi
         fi
     fi
 } &
@@ -1146,7 +1161,7 @@ printf "${SLATE_600}%s${RESET}\n" "$SEP_DASHED"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LINE: STATE METER — dimension meters toward Ideal State
-# Reads PAI/USER/TELOS/PAI_STATE.json (written by ComputeGap.ts on a schedule).
+# Reads shared PAI USER/TELOS/PAI_STATE.json (written by ComputeGap.ts on a schedule).
 # Falls back to placeholder values if the state file is missing.
 # Format: STATE: HEALTH 68%│CREATIVE 31%│FREEDOM 78%│RELATIONSHIPS 84%│FINANCIAL 42%
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1176,7 +1191,7 @@ _tier_color() {
     fi
 }
 
-_PAI_STATE_JSON="$PAI_DIR/USER/TELOS/PAI_STATE.json"
+_PAI_STATE_JSON="$PAI_USER_DIR/TELOS/PAI_STATE.json"
 _dims=(health creative freedom relationships money)
 _labels=(HEALTH CREATIVE FREEDOM RELATIONS FIN)
 # Fresh installs have no TELOS data yet — show N/A so the line reads "no signal"

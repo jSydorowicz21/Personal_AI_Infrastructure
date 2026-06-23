@@ -7,8 +7,8 @@
  *   - Voice notifications (ElevenLabs TTS)
  *   - Hook validation (skill-guard, agent-guard)
  *   - Observability (data APIs + dashboard)
- *   - Telegram bot (grammY polling + claude-agent-sdk)
- *   - iMessage bot (SQLite polling + claude-agent-sdk)
+ *   - Telegram bot (grammY polling + active framework inference)
+ *   - iMessage bot (SQLite polling + active framework inference)
  *   - GitHub work polling (PAI Worker)
  *
  * One process. One port. One launchd plist. One log file.
@@ -16,15 +16,20 @@
 
 import { join } from "path"
 import { readFileSync, existsSync } from "fs"
-import { parse } from "smol-toml"
+import { getFrameworkDir, getPaiDataDir, getPaiDir, memoryPath } from "../TOOLS/lib/paths"
+import { parseToml } from "./toml"
 
 // ── Load .env before anything else ──
 
 const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
+const PAI_DIR = getPaiDir()
+const FRAMEWORK_DIR = getFrameworkDir()
 const PULSE_DIR = join(PAI_DIR, "PULSE")
+process.env.PAI_DIR ??= PAI_DIR
+process.env.PAI_FRAMEWORK_DIR ??= FRAMEWORK_DIR
+process.env.PAI_DATA_DIR ??= getPaiDataDir()
 
-const envPath = join(HOME, ".claude", ".env")
+const envPath = join(FRAMEWORK_DIR, ".env")
 try {
   const envContent = readFileSync(envPath, "utf-8")
   for (const line of envContent.split("\n")) {
@@ -43,10 +48,10 @@ try {
 
 // ── BILLING GUARD (defense-in-depth) ──
 // Strip ANTHROPIC_API_KEY from the daemon environment AFTER .env load. Every
-// downstream module (telegram, imessage, spawnClaude) inherits this. Prevents
-// the Claude Agent SDK and `claude` CLI from billing the API key instead of
-// CLAUDE_CODE_OAUTH_TOKEN. Root cause of April 2026 invoice ($498 / $354 Sonnet
-// + $72 WebSearch). Each module also strips independently for belt-and-suspenders.
+// downstream module inherits this. Prevents Claude fallback paths from billing
+// the API key instead of subscription/session auth. Root cause of April 2026
+// invoice ($498 / $354 Sonnet + $72 WebSearch). Each module also strips
+// independently for belt-and-suspenders.
 delete process.env.ANTHROPIC_API_KEY
 
 // ── Imports ──
@@ -62,7 +67,7 @@ import {
   dispatch,
   isSentinel,
   spawnScript,
-  spawnClaude,
+  spawnAI,
 } from "./lib"
 
 import { startHooks, handleHooksRequestAsync, hooksHealth } from "./modules/hooks"
@@ -152,7 +157,7 @@ interface PulseConfig {
   jobs: Array<{
     name: string
     schedule: string
-    type: "script" | "claude"
+    type: "script" | "ai" | "claude"
     command?: string
     prompt?: string
     model?: string
@@ -165,7 +170,7 @@ interface PulseConfig {
 
 async function loadPulseConfig(): Promise<PulseConfig> {
   const raw = await Bun.file(join(PULSE_DIR, "PULSE.toml")).text()
-  const parsed = parse(raw) as Record<string, unknown>
+  const parsed = parseToml(raw) as Record<string, unknown>
 
   const daemonConfig = await loadConfig(PULSE_DIR)
 
@@ -187,11 +192,21 @@ async function loadPulseConfig(): Promise<PulseConfig> {
 
 // ── Constants ──
 
-const STATE_PATH = join(PULSE_DIR, "state", "state.json")
+const STATE_PATH = memoryPath("STATE", "pulse", "state.json")
 const PID_PATH = join(PULSE_DIR, "state", "pulse.pid")
 const MAX_FAILURES = 3
 const MAX_SLEEP_MS = 60_000
 const MIN_SLEEP_MS = 1_000
+const VOICE_ROUTES = new Set(["/notify", "/notify/personality", "/voice", "/voice/health"])
+
+async function sleepInterruptibly(ms: number, shuttingDown: () => boolean): Promise<void> {
+  const until = Date.now() + ms
+  while (!shuttingDown()) {
+    const remaining = until - Date.now()
+    if (remaining <= 0) return
+    await Bun.sleep(Math.min(remaining, 250))
+  }
+}
 
 // ── Supervisor: restart crashed subsystems without killing the process ──
 
@@ -202,14 +217,26 @@ async function supervise(name: string, fn: () => Promise<void>, shuttingDown: ()
       // If fn returns normally, the subsystem exited cleanly
       if (!shuttingDown()) {
         log("info", `${name} exited cleanly, restarting in 10s`)
-        await Bun.sleep(10_000)
+        await sleepInterruptibly(10_000, shuttingDown)
       }
     } catch (err) {
       if (shuttingDown()) return
       log("error", `${name} crashed, restarting in 30s`, { error: String(err) })
-      await Bun.sleep(30_000)
+      await sleepInterruptibly(30_000, shuttingDown)
     }
   }
+}
+
+function telegramCredentialsConfigured(config: PulseConfig["telegram"]): boolean {
+  if (!config?.enabled) return false
+  const token = config.bot_token ?? process.env.TELEGRAM_BOT_TOKEN
+  const users = config.allowed_users?.length
+    ? config.allowed_users
+    : (process.env.TELEGRAM_ALLOWED_USERS ?? process.env.TELEGRAM_PRINCIPAL_CHAT_ID ?? "")
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean)
+  return Boolean(token && users.length > 0)
 }
 
 // ── Compute next due time ──
@@ -388,12 +415,12 @@ async function main() {
       const pathname = url.pathname
 
       // Health (unified) — moved to /api/pulse/health to avoid conflict with Life Dashboard /health page
-      if (req.method === "GET" && (pathname === "/api/pulse/health" || pathname === "/healthz")) {
+      if (req.method === "GET" && (pathname === "/api/pulse/health" || pathname === "/healthz" || pathname === "/health")) {
         return buildHealthResponse(state, config)
       }
 
-      // Voice routes: /notify, /notify/personality, /voice
-      if (voiceModule && (pathname === "/notify" || pathname === "/notify/personality" || pathname === "/voice")) {
+      // Voice routes: /notify, /notify/personality, /voice, /voice/health
+      if (voiceModule && VOICE_ROUTES.has(pathname)) {
         const resp = await voiceModule.handleVoiceRequest(req, pathname)
         if (resp) return resp
       }
@@ -452,9 +479,11 @@ async function main() {
 
   // ── Start Long-Running Subsystems (supervised) ──
 
-  if (telegramModule && config.telegram?.enabled) {
+  if (telegramModule && config.telegram?.enabled && telegramCredentialsConfigured(config.telegram)) {
     supervise("telegram", () => telegramModule.startTelegram(config.telegram), isShuttingDown)
     log("info", "Telegram module started (supervised)")
+  } else if (telegramModule && config.telegram?.enabled) {
+    log("warn", "Telegram module enabled but not started: missing token or allowed user configuration")
   }
 
   if (imessageModule && config.imessage?.enabled) {
@@ -489,8 +518,8 @@ async function main() {
       try {
         let output: string
 
-        if (job.type === "claude") {
-          output = await spawnClaude(job.prompt!, { model: job.model ?? "sonnet" })
+        if (job.type === "claude" || job.type === "ai") {
+          output = await spawnAI(job.prompt!, { model: job.model ?? "standard" })
         } else {
           output = await spawnScript(job.command!)
         }
@@ -531,7 +560,7 @@ async function main() {
     const sleepMs = Math.max(MIN_SLEEP_MS, Math.min(nextDueMs - elapsed, MAX_SLEEP_MS))
 
     if (!shuttingDown) {
-      await Bun.sleep(sleepMs)
+      await sleepInterruptibly(sleepMs, isShuttingDown)
     }
   }
 

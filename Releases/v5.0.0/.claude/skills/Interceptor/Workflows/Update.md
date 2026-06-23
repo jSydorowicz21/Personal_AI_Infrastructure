@@ -17,29 +17,30 @@ Rebuild interceptor from latest source and verify the full pipeline.
 
 ## When to Use
 
-- After pulling new commits from slop-browser repo
+- After pulling new commits from the Interceptor repo
 - If interceptor commands fail unexpectedly
 - Periodic capability check
+- For Windows/WSL installation, native-host registry failures, or Smart App Control blocks, use `SetupWindowsWSL.md` first.
 
 ## Steps
 
 ### 1. Pull Latest
 
 ```bash
-cd ~/Projects/interceptor && git fetch origin && git status -uno
+cd ~/Projects/Interceptor && git fetch origin && git status -uno
 ```
 
 If upstream force-pushed (common with this repo), `git pull` will refuse. Check
 for local modifications first (`git status`), preserve any patches by hand, then:
 
 ```bash
-cd ~/Projects/interceptor && git reset --hard origin/main
+cd ~/Projects/Interceptor && git reset --hard origin/main
 ```
 
 ### 2. Install New Dependencies
 
 ```bash
-cd ~/Projects/interceptor && bun install
+cd ~/Projects/Interceptor && bun install
 ```
 
 Always run before build — upstream may add deps (e.g. `ocrad.js` for canvas OCR
@@ -48,7 +49,7 @@ arrived in v0.8.0). Build will fail with "Could not resolve" otherwise.
 ### 3. Build
 
 ```bash
-cd ~/Projects/interceptor && bash scripts/build.sh
+cd ~/Projects/Interceptor && bash scripts/build.sh
 ```
 
 Produces:
@@ -60,19 +61,19 @@ Produces:
 ### 4. Install Binaries
 
 ```bash
-cp ~/Projects/interceptor/dist/interceptor /opt/homebrew/bin/
-cp ~/Projects/interceptor/daemon/interceptor-daemon /opt/homebrew/bin/
+cp ~/Projects/Interceptor/dist/interceptor /opt/homebrew/bin/
+cp ~/Projects/Interceptor/daemon/interceptor-daemon /opt/homebrew/bin/
 ```
 
 ### 5. Re-register Native Messaging
 
 ```bash
-cd ~/Projects/interceptor && bash scripts/install.sh --chrome --skip-extension
+cd ~/Projects/Interceptor && bash scripts/install.sh --browser-only --chrome
 ```
 
-`--skip-extension` is the right path for Chrome — branded Chrome ignores
-`--load-extension` anyway, and the extension reload is a manual step (see
-"Extension Reload" below). The script regenerates
+Branded Chrome ignores `--load-extension`, so the extension reload is still a
+manual step even after the script runs (see "Extension Reload" below). The
+script regenerates
 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/com.interceptor.host.json`
 with the current allowed extension IDs.
 
@@ -100,7 +101,7 @@ target uid 0 instead of the user. Three commands handle it correctly:
 
 ```bash
 # 1. Binary into /usr/local/bin (needs sudo — root:wheel 755)
-sudo cp ~/Projects/interceptor/dist/interceptor-bridge /usr/local/bin/interceptor-bridge
+sudo cp ~/Projects/Interceptor/dist/interceptor-bridge /usr/local/bin/interceptor-bridge
 sudo chmod +x /usr/local/bin/interceptor-bridge
 
 # 2. Write LaunchAgent plist into $HOME (no sudo)
@@ -163,9 +164,9 @@ Honest disclosure, not reassurance:
   connect. If this matters, harden by either (a) running the bridge with a
   restrictive umask, or (b) adding a `chmod 700` of the socket as a post-start
   hook in the plist. the principal's Mac is single-user; not addressed here.
-- **Binary provenance:** built locally from the slop-browser source we just
+- **Binary provenance:** built locally from the Interceptor source we just
   pulled. Not a downloaded prebuilt — provenance is the Swift source under
-  `~/Projects/interceptor/interceptor-bridge/Sources/`.
+  `~/Projects/Interceptor/interceptor-bridge/Sources/`.
 
 #### 6d. Troubleshoot
 
@@ -197,7 +198,7 @@ If `extension/dist/manifest.json` changed (especially `version` or `key`):
 1. Open `chrome://extensions`, enable Developer Mode
 2. **Delete** the existing Interceptor card (don't just hit reload — if the
    manifest `key` changed, the extension ID changed and the old card is dead)
-3. **Load unpacked** → `~/Projects/interceptor/extension/dist`
+3. **Load unpacked** → `~/Projects/Interceptor/extension/dist`
 4. Quit Chrome fully (⌘Q, not just close window) and relaunch — service worker
    needs a clean restart, especially with `userScripts` permission added
 5. Accept any new permission prompts (e.g. `userScripts`)
@@ -221,8 +222,7 @@ if you skipped step 6 — that's fine). `open` should return tree + extracted te
   the current build allows three extension IDs including the keyed
   `hkjbaciefhhgekldhncknbjkofbpenng` (the deterministic ID baked in by
   `extension/manifest.json`'s `key` field).
-- Force-push from upstream is normal — `slop-browser` rewrites main on releases
-  (v0.5.0 → v0.8.0 was a single force-push touching 155 files).
+- The current upstream repo is `https://github.com/Hacker-Valley-Media/Interceptor`.
 - Watch `extension/src/content/data/extract.ts` — the body/HTML extract limits
   default to 10K/10K/50K. We patch them to 10M to support large-page reads;
   re-apply after each upstream pull.

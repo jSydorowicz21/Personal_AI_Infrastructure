@@ -176,9 +176,66 @@ We very much believe in AI-based installation and modification of PAI. Once you 
 curl -sSL https://ourpai.ai/install.sh | bash
 ```
 
-That's it. The installer wizard handles Bun, Git, and Claude Code verification, ElevenLabs key (optional), DA identity setup, voice picker, Pulse launchd registration, and validation. An existing `~/.claude/` is auto-backed-up to `~/.claude.backup-{TIMESTAMP}` before anything is overwritten.
+Windows PowerShell from a cloned release bundle:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\.claude\install.ps1
+```
+
+That's it. The installer wizard handles Bun, Git, framework selection, agent CLI verification, ElevenLabs key (optional), DA identity setup, voice picker, Pulse launchd registration, and validation. You can target Claude Code, Codex, or OpenCode. The selected framework home is auto-backed-up before anything is overwritten.
 
 **Prefer to inspect first?** [Read the script](https://ourpai.ai/install.sh) before piping it.
+
+After install, or any time startup reports a PAI self-check warning, run `k doctor` for full local diagnostics across config, hooks, Pulse, MCP profiles, and Codex runtime smoke tests.
+
+### Update an existing install
+
+For small fixes after PAI is already installed, use the hotfix updater instead of re-running the full installer. It fetches the release bundle, reads `hotfix-manifest.json`, backs up touched files under `~/.pai/BACKUPS/`, and overlays only managed PAI files. It does not overwrite `USER`, `MEMORY`, auth, env files, framework config, or hook trust state.
+
+From a cloned checkout:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Releases\v5.0.0\.claude\update-installed.ps1 -Framework codex -SourceDir .
+```
+
+macOS/Linux/WSL:
+
+```bash
+bash ./Releases/v5.0.0/.claude/update-installed.sh --framework codex --source-dir .
+```
+
+From a machine that already has PAI installed but needs the latest updater from this branch:
+
+```powershell
+$u = "https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.ps1"
+$p = Join-Path $env:TEMP "pai-update-installed.ps1"
+Invoke-WebRequest $u -OutFile $p
+powershell -NoProfile -ExecutionPolicy Bypass -File $p -Framework codex
+```
+
+macOS/Linux/WSL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haydencj/Personal_AI_Infrastructure/pai-codex-flawless-runtime/Releases/v5.0.0/.claude/update-installed.sh | bash -s -- --framework codex
+```
+
+Use `-Framework claude` or `-Framework opencode` for those targets, or omit `-Framework` to let the updater read `~/.pai/framework.json`.
+
+Use `--framework claude` or `--framework opencode` with the shell updater. When the source directory points at a git checkout, the updater runs `git fetch --prune` and `git pull --ff-only` before copying files. Pass `-NoPull` in PowerShell or `--no-pull` in Bash when testing uncommitted local changes.
+
+Rollback restores the files touched by the hotfix from the newest backup:
+
+```bash
+BACKUP="$(ls -dt ~/.pai/BACKUPS/hotfix-* | head -1)"
+cp -a "$BACKUP"/. "$CODEX_HOME"/
+```
+
+PowerShell:
+
+```powershell
+$backup = Get-ChildItem "$HOME\.pai\BACKUPS" -Directory -Filter "hotfix-*" | Sort-Object Name -Descending | Select-Object -First 1
+Get-ChildItem -LiteralPath $backup.FullName -Force | Copy-Item -Destination $env:CODEX_HOME -Recurse -Force
+```
 
 ### Manual install (clone + run)
 
@@ -189,8 +246,13 @@ cp -R .claude ~/
 cd ~/.claude && ./install.sh
 ```
 
+On Windows, run `.\.claude\install.ps1` from `Releases\v5.0.0` instead of `install.sh`.
+
 **The installer will:**
-- Verify Bun, Git, and Claude Code are installed
+- Ask which agent framework to target: Claude Code, Codex, or OpenCode
+- Verify Bun, Git, and the selected agent CLI are installed
+- Generate native framework files: `CLAUDE.md`/`settings.json`, Codex `AGENTS.md`/`config.toml`/`hooks.json`, or OpenCode `AGENTS.md`/`opencode.json` plus the PAI plugin
+- Link memory and USER context through `~/.pai/` so state survives framework switches
 - Prompt for your ElevenLabs API key (skippable — voice falls back to desktop notifications)
 - Launch the DA identity wizard (name + voice + personality)
 - Set up Pulse as a launchd service (`com.pai.pulse`)
@@ -202,7 +264,7 @@ cd ~/.claude && ./install.sh
 open http://localhost:31337    # the Life Dashboard
 ```
 
-Then run `/interview` in Claude Code. Your DA will guide you through:
+Then run `/interview` in your selected agent framework. Your DA will guide you through:
 
 1. **Phase 1 — TELOS:** Mission, Goals, Beliefs, Wisdom, Challenges, Books, Mental models, Narratives
 2. **Phase 2 — IDEAL_STATE:** What does success look like for you?
@@ -210,6 +272,21 @@ Then run `/interview` in Claude Code. Your DA will guide you through:
 4. **Phase 4 — Identity:** Final DA personality tuning
 
 This is the most important step. **Without TELOS, your DA has nothing to optimize against.**
+
+### Switching agent frameworks
+
+PAI can switch the active CLI after setup while keeping the same memory store:
+
+```bash
+pai framework status
+pai framework switch codex
+pai framework switch claude
+pai framework switch opencode
+```
+
+Framework switching changes which CLI `pai` launches and regenerates that framework's native config. PAI memory and USER context remain under `~/.pai/MEMORY` and `~/.pai/USER`.
+
+MCP profile selection also follows the active framework: `pai -m ...` and `pai mcp set ...` keep Claude on `.mcp.json`, project MCP servers into Codex `config.toml`, and project them into OpenCode `opencode.json`.
 
 ### Upgrading from v4.x
 

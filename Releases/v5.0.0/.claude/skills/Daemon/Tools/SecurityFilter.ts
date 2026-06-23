@@ -16,7 +16,7 @@ import { readFileSync, existsSync } from "fs";
 
 // ─── Blocked Patterns (baseline — intentionally empty) ───
 // Private blocked names are loaded at runtime from
-// ~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Daemon/SecurityOverrides.md
+// $PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Daemon/SecurityOverrides.md
 // so no principal-specific identities ship in the public skill.
 const BLOCKED_NAMES_BASELINE: string[] = [];
 

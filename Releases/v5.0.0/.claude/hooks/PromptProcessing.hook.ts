@@ -31,7 +31,7 @@ import { inference } from '../PAI/TOOLS/Inference';
 import { getIdentity, getPrincipal } from './lib/identity';
 import { isValidWorkingTitle, getWorkingFallback, trimToValidTitle } from './lib/output-validators';
 import { setTabState, getSessionOneWord } from './lib/tab-setter';
-import { paiPath } from './lib/paths';
+import { getFrameworkDir, memoryPath } from './lib/paths';
 import { updateSessionNameInWorkJson, upsertSession } from './lib/isa-utils';
 import { pushStateToTargets } from './lib/observability-transport';
 
@@ -66,7 +66,7 @@ function emitAdditionalContext(mode: Mode, tier: number | null, reason: string):
 
 function appendPromptProcessingTelemetry(entry: Record<string, unknown>): void {
   try {
-    const logPath = paiPath('MEMORY', 'OBSERVABILITY', 'prompt-processing.jsonl');
+    const logPath = memoryPath('OBSERVABILITY', 'prompt-processing.jsonl');
     const serialized = JSON.stringify(entry);
     if (serialized.includes('\n')) return;
     appendFileSync(logPath, `${serialized}\n`, 'utf-8');
@@ -75,8 +75,7 @@ function appendPromptProcessingTelemetry(entry: Record<string, unknown>): void {
 
 // ── Constants ──
 
-const BASE_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
-const SESSION_NAMES_PATH = paiPath('MEMORY', 'STATE', 'session-names.json');
+const SESSION_NAMES_PATH = memoryPath('STATE', 'session-names.json');
 const LOCK_PATH = SESSION_NAMES_PATH + '.lock';
 const MIN_PROMPT_LENGTH = 3;
 const LOCK_TIMEOUT = 3000;
@@ -614,7 +613,7 @@ function storeName(sessionId: string, label: string, source: string): void {
     if (locked) releaseLock();
   }
   const cacheContent = `cached_session_id='${sessionId}'\ncached_session_label='${finalLabel}'\n`;
-  writeFileSync(paiPath('MEMORY', 'STATE', 'session-name-cache.sh'), cacheContent, 'utf-8');
+  writeFileSync(memoryPath('STATE', 'session-name-cache.sh'), cacheContent, 'utf-8');
   updateSessionNameInWorkJson(sessionId, finalLabel);
   syncNameToJsonl(sessionId, finalLabel);
   console.error(`[PromptProcessing] Named session: "${finalLabel}" (${source})`);
@@ -623,7 +622,8 @@ function storeName(sessionId: string, label: string, source: string): void {
 /** Find Claude Code's session JSONL path for a given session ID. */
 function findSessionJsonl(sessionId: string): string | null {
   try {
-    for (const dir of [paiPath('projects'), paiPath('Projects')]) {
+    const frameworkDir = getFrameworkDir();
+    for (const dir of [join(frameworkDir, 'projects'), join(frameworkDir, 'Projects')]) {
       if (!existsSync(dir)) continue;
       const r = Bun.spawnSync(['find', dir, '-maxdepth', '2', '-name', `${sessionId}.jsonl`],
         { stdout: 'pipe', stderr: 'pipe', timeout: 2000 });

@@ -19,6 +19,7 @@
 import { readHookInput, parseTranscriptFromInput } from './lib/hook-io';
 import { handleVoice } from './handlers/VoiceNotification';
 import { extractVoiceCompletion } from '../PAI/TOOLS/TranscriptParser';
+import { isSubagentSession } from './lib/session';
 
 /**
  * Extract a speakable summary from response text when no 🗣️ line exists.
@@ -61,8 +62,7 @@ function extractFallbackSummary(text: string): string {
  * had no file and were incorrectly blocked.
  */
 function isMainSession(): boolean {
-  // Subagents set this env var; main sessions don't
-  return !process.env.CLAUDE_CODE_AGENT_TASK_ID;
+  return !isSubagentSession();
 }
 
 async function main() {

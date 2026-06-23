@@ -1,6 +1,6 @@
 ---
 name: ContextSearch
-description: "2-phase context search across the PAI session registry, work directories, and ISAs for instant cold-start recovery. Phase 1 (always): parallel scan of work.json session registry, session-names.json, MEMORY/WORK/ directory names, and ISA title grep — returns 5 most recent matches per source, loads top-3 ISA summaries (first 10 lines only). Phase 2 (only if Phase 1 returns fewer than 3 matches): PAI git history + current project git history. Output: compact context block under 40 lines with session slugs, phases, progress, and ISA paths. Reads MEMORY/STATE/work.json (task, phase, progress, effort) and MEMORY/STATE/session-names.json (sessionId, name); uses fd for directory scan with --max-depth 1 and Grep for ISA title matches in files_with_matches mode. Git history searched via `git log --oneline --all --grep` on both PAI and current project repo. Output: session slugs (newest first), ISA summaries (first 10 lines), commit hashes if Phase 2 ran. Standalone mode: present results then ask what to do. Paired mode: execute request informed by found context. USE WHEN context search, prior work, browse sessions, recall, remember, previous sessions, context recovery, what did we do, find session, search history, what was that project, pick up where we left off, continue work, resume, look up old work, find previous session, cold start, what were we building. NOT FOR searching published content (use _CONTENTSEARCH), the Knowledge Archive (use Knowledge), or people/company investigation (use OSINT)."
+description: "Search local project, memory, and PAI context efficiently before acting. USE WHEN finding prior work, locating files, searching docs, retrieving context, answering from the repo, or avoiding stale assumptions."
 argument-hint: [topic]
 effort: low
 ---
@@ -21,18 +21,18 @@ Search prior work for: **$ARGUMENTS**
 Run all four searches simultaneously in a single response:
 
 **1A. Session Registry**
-Read `~/.claude/PAI/MEMORY/STATE/work.json`. Match entries where `task`, slug (object key), or `sessionName` contains "$ARGUMENTS" (case-insensitive). Extract: task, phase, progress, effort. Limit to **5 most recent** matches.
+Read `$PAI_DATA_DIR/MEMORY/STATE/work.json`. Match entries where `task`, slug (object key), or `sessionName` contains "$ARGUMENTS" (case-insensitive). Extract: task, phase, progress, effort. Limit to **5 most recent** matches.
 
 **1B. Session Names**
-Read `~/.claude/PAI/MEMORY/STATE/session-names.json`. Match entries where name contains "$ARGUMENTS" (case-insensitive). Extract: sessionId, name. Limit to **5 most recent**.
+Read `$PAI_DATA_DIR/MEMORY/STATE/session-names.json`. Match entries where name contains "$ARGUMENTS" (case-insensitive). Extract: sessionId, name. Limit to **5 most recent**.
 
 **1C. Work Directory Names**
 ```bash
-fd -t d -i "$ARGUMENTS" ~/.claude/PAI/MEMORY/WORK/ --max-depth 1 | tail -10
+fd -t d -i "$ARGUMENTS" $PAI_DATA_DIR/MEMORY/WORK/ --max-depth 1 | tail -10
 ```
 
 **1D. ISA Title Grep**
-Use Grep to search for "$ARGUMENTS" across `~/.claude/PAI/MEMORY/WORK/` with glob `**/ISA.md`. Use `files_with_matches` mode. Limit to **5 results**.
+Use Grep to search for "$ARGUMENTS" across `$PAI_DATA_DIR/MEMORY/WORK/` with glob `**/ISA.md`. Use `files_with_matches` mode. Limit to **5 results**.
 
 ---
 
@@ -72,7 +72,7 @@ Compact single list. Omit sections with no results. **Keep total output under 40
 
 📂 ISA SUMMARIES (max 3):
   - [dir name]: [first heading from ISA]
-    Path: ~/.claude/PAI/MEMORY/WORK/[dir]/ISA.md
+    Path: $PAI_DATA_DIR/MEMORY/WORK/[dir]/ISA.md
 
 🔗 COMMITS (if Phase 2 ran):
   - [hash] [message] ([repo])
@@ -117,7 +117,7 @@ User: "pick up where we left off on the feed system"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ContextSearch","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"ContextSearch","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

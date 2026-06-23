@@ -5,9 +5,9 @@
  */
 
 import { readFileSync } from "fs";
-import { paiPath } from './lib/paths';
+import { memoryPath } from './lib/paths';
 
-const input = JSON.parse(readFileSync("/dev/stdin", "utf-8"));
+const input = JSON.parse(readFileSync(0, "utf-8"));
 const filePath: string = input?.toolInput?.file_path ?? input?.filePath ?? "";
 
 // Key files that should trigger alerts when modified
@@ -29,7 +29,7 @@ if (isWatched) {
     file: filePath,
   });
 
-  const logPath = paiPath('MEMORY', 'SKILLS', 'execution.jsonl');
+  const logPath = memoryPath('SKILLS', 'execution.jsonl');
   const fs = await import("fs");
   fs.appendFileSync(logPath, logEntry + "\n");
 }

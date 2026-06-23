@@ -73,7 +73,7 @@ Before any work:
 
 ### 1. Verify prerequisites
 
-Check that `MOONSHOT_API_KEY` is resolvable (either in env or in `~/.claude/PAI/.env`). If it is not, return immediately with a structured error:
+Check that `MOONSHOT_API_KEY` is resolvable (either in env or in `$PAI_FRAMEWORK_DIR/.env`). If it is not, return immediately with a structured error:
 
 ```json
 {"verdict":"unavailable","reason":"MOONSHOT_API_KEY not set"}
@@ -113,7 +113,7 @@ I do NOT run a second internal Algorithm. The phases that matter already happene
 Every time I produce code, I call Kimi through the **AnvilProgress helper**, which wraps Moonshot's streaming API with live progress reporting to Pulse:
 
 ```bash
-echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/AnvilProgress.ts \
+echo "$PROMPT" | bun $PAI_DIR/TOOLS/AnvilProgress.ts \
   --slug "$SLUG" \
   --model kimi-k2.6 \
   --temperature 1 (reasoning-model default) \
@@ -121,7 +121,7 @@ echo "$PROMPT" | bun ~/.claude/PAI/TOOLS/AnvilProgress.ts \
   --timeout-ms 300000
 ```
 
-`$SLUG` is {{DA_NAME}}'s ISA slug. The helper uses it to scope event/output files under `~/.claude/PAI/MEMORY/WORK/{slug}/`.
+`$SLUG` is {{DA_NAME}}'s ISA slug. The helper uses it to scope event/output files under `$PAI_DATA_DIR/MEMORY/WORK/{slug}/`.
 
 **What the helper does for me:**
 

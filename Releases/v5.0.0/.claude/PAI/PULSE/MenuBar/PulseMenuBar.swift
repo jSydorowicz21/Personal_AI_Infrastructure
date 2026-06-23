@@ -254,9 +254,33 @@ class PulseMenuBarApp: NSObject, NSApplicationDelegate {
     private let pulseDir: String
     private let pollInterval: TimeInterval = 5.0
 
+    private static func fallbackPulseDir() -> String {
+        let dataDir = ProcessInfo.processInfo.environment["PAI_DATA_DIR"]
+            ?? NSString(string: "~/.pai").expandingTildeInPath
+        let frameworkStatePath = "\(dataDir)/framework.json"
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: frameworkStatePath)),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let root = object["root"] as? String {
+            return "\(root)/PAI/PULSE"
+        }
+
+        let candidates = [
+            "~/.config/PAI/current/PAI/PULSE"
+        ].map { NSString(string: $0).expandingTildeInPath }
+
+        for candidate in candidates {
+            if FileManager.default.fileExists(atPath: candidate) {
+                return candidate
+            }
+        }
+        return candidates[0]
+    }
+
     override init() {
         self.pulseDir = ProcessInfo.processInfo.environment["PAI_PULSE_DIR"]
-            ?? NSString(string: "~/.claude/PAI/PULSE").expandingTildeInPath
+            ?? ProcessInfo.processInfo.environment["PAI_DIR"].map { "\($0)/PULSE" }
+            ?? ProcessInfo.processInfo.environment["PAI_FRAMEWORK_DIR"].map { "\($0)/PAI/PULSE" }
+            ?? PulseMenuBarApp.fallbackPulseDir()
         super.init()
     }
 

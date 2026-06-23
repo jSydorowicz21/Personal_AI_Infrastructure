@@ -220,11 +220,11 @@ curl -X POST https://arbol-a-your-action.YOUR-SUBDOMAIN.workers.dev/ \
 
 ### Creating a New Action
 
-1. Create directory: `mkdir ~/.claude/PAI/USER/ACTIONS/A_YOUR_ACTION`
+1. Create directory: `mkdir $PAI_DATA_DIR/USER/ACTIONS/A_YOUR_ACTION`
 2. Define manifest (`action.json`) with name, description, input/output schema, requires
 3. Implement logic (`action.ts`) using `execute(input, ctx)` pattern
 4. Test locally: `bun lib/runner.v2.ts run A_YOUR_ACTION --input '{"content": "test"}'`
-5. Deploy to cloud (optional): add Worker under `~/.claude/PAI/USER/ARBOL/Workers/a-your-action/`, then `bash deploy.sh a-your-action`
+5. Deploy to cloud (optional): add Worker under `$PAI_DATA_DIR/USER/ARBOL/Workers/a-your-action/`, then `bash deploy.sh a-your-action`
 
 ### Action Best Practices
 
@@ -607,7 +607,7 @@ Each layer depends on the one below:
 ### Deploy Script
 
 ```bash
-cd ~/.claude/PAI/USER/ARBOL
+cd $PAI_DATA_DIR/USER/ARBOL
 bash deploy.sh a-your-action          # Deploy single worker
 echo "token" | bunx wrangler secret put AUTH_TOKEN --name arbol-a-your-action
 ```
@@ -703,15 +703,15 @@ Check `flow-state.json` for errors. Common: malformed pipeline output, AUTH_TOKE
 
 | Document | Path | Description |
 |----------|------|-------------|
-| Source Code | `~/.claude/PAI/USER/ARBOL/` | Cloudflare Workers source repository |
+| Source Code | `$PAI_DATA_DIR/USER/ARBOL/` | Cloudflare Workers source repository |
 | Cloudflare Skill | `Cloudflare` skill (PAI Skill registry) | MCP + wrangler dual-mode operations |
 | Architecture | `PAISYSTEMARCHITECTURE.md` | PAI system architecture |
 | System Actions | `~/.claude/PAI/ARBOL/Actions/` | Framework actions (examples) |
 | System Pipelines | `~/.claude/PAI/ARBOL/Pipelines/` | Framework pipelines (examples) |
 | System Flows | `~/.claude/PAI/ARBOL/Flows/` | Framework flows (examples) |
-| Personal Actions | `~/.claude/PAI/USER/ACTIONS/` | User-defined actions (override system) |
-| Personal Pipelines | `~/.claude/PAI/USER/PIPELINES/` | User-defined pipelines (override system) |
-| Personal Flows | `~/.claude/PAI/USER/FLOWS/` | User-defined flows (override system) |
+| Personal Actions | `$PAI_DATA_DIR/USER/ACTIONS/` | User-defined actions (override system) |
+| Personal Pipelines | `$PAI_DATA_DIR/USER/PIPELINES/` | User-defined pipelines (override system) |
+| Personal Flows | `$PAI_DATA_DIR/USER/FLOWS/` | User-defined flows (override system) |
 
 ---
 

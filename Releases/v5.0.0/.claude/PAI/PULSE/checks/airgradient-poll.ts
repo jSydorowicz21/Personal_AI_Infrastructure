@@ -12,18 +12,18 @@
 
 import { join } from "node:path"
 import { mkdirSync, writeFileSync, appendFileSync, readFileSync, existsSync } from "node:fs"
+import { getFrameworkDir, memoryPath } from "../../TOOLS/lib/paths"
 
-const HOME = process.env.HOME ?? ""
-const CACHE_DIR = join(HOME, ".claude", "PAI", "MEMORY", "_AIRGRADIENT")
+const CACHE_DIR = memoryPath("_AIRGRADIENT")
 const LATEST = join(CACHE_DIR, "latest.json")
 const HISTORY = join(CACHE_DIR, "history.jsonl")
 
 const API_BASE = "https://api.airgradient.com/public/api/v1"
 
-// Bun auto-loads .env from CWD only; Pulse cron runs from PAI/PULSE/, so the
-// symlink at ~/.claude/.env isn't picked up. Read it directly if env is empty.
+// Bun auto-loads .env from CWD only; Pulse cron runs from PAI/PULSE/.
+// Read the active framework .env directly if env is empty.
 function loadTokenFromDotenv(): string | null {
-  const envPath = join(HOME, ".claude", ".env")
+  const envPath = join(getFrameworkDir(), ".env")
   if (!existsSync(envPath)) return null
   try {
     const raw = readFileSync(envPath, "utf8")

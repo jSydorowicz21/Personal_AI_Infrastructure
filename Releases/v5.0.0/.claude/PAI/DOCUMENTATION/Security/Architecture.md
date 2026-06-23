@@ -89,7 +89,7 @@ Claude Code → PreToolUse event → spawns SecurityPipeline.hook.ts
 ### PAI Infrastructure Bypass
 
 Writes to these paths skip ALL PatternInspector validation (fast-path):
-- `~/.claude/PAI/MEMORY/`
+- `$PAI_DATA_DIR/MEMORY/`
 - `~/.claude/PAI/`
 - `~/.claude/PAI/hooks/`
 - `~/.claude/PAI/skills/`

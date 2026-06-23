@@ -31,6 +31,7 @@ import { getLearningCategory } from './lib/learning-utils';
 import { getISOTimestamp, getPSTComponents } from './lib/time';
 import { captureFailure } from '../PAI/TOOLS/FailureCapture';
 import { addRatingPulse } from './lib/isa-utils';
+import { memoryPath } from './lib/paths';
 
 // ── Types ──
 
@@ -63,10 +64,9 @@ interface SentimentResult {
 
 // ── Constants ──
 
-const BASE_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude', 'PAI');
-const SIGNALS_DIR = join(BASE_DIR, 'MEMORY', 'LEARNING', 'SIGNALS');
+const SIGNALS_DIR = memoryPath('LEARNING', 'SIGNALS');
 const RATINGS_FILE = join(SIGNALS_DIR, 'ratings.jsonl');
-const LAST_RESPONSE_CACHE = join(BASE_DIR, 'MEMORY', 'STATE', 'last-response.txt');
+const LAST_RESPONSE_CACHE = memoryPath('STATE', 'last-response.txt');
 const MIN_PROMPT_LENGTH = 3;
 
 // ── Stdin Reader ──
@@ -177,7 +177,7 @@ function captureLowRatingLearning(
   const { year, month, day, hours, minutes, seconds } = getPSTComponents();
   const yearMonth = `${year}-${month}`;
   const category = getLearningCategory(detailedContext, summaryOrComment);
-  const learningsDir = join(BASE_DIR, 'MEMORY', 'LEARNING', category, yearMonth);
+  const learningsDir = memoryPath('LEARNING', category, yearMonth);
 
   if (!existsSync(learningsDir)) mkdirSync(learningsDir, { recursive: true });
 

@@ -23,8 +23,8 @@ Each subsystem runs in its own crash-isolated loop within the single Pulse proce
 | **Voice** | ElevenLabs TTS notifications | `VoiceServer/voice.ts` |
 | **Hooks** | Skill-guard and agent-guard validation | `modules/hooks.ts` |
 | **Observability** | Data APIs + Observatory dashboard + security management APIs (absorbed from observability-server.ts) | `Observability/observability.ts` |
-| **Telegram** | grammY polling bot with claude-agent-sdk sessions (absorbed from TelegramBot) | `modules/telegram.ts` |
-| **iMessage** | SQLite polling bot with claude-agent-sdk sessions (absorbed from iMessageBot, disabled by default) | `modules/imessage.ts` |
+| **Telegram** | grammY polling bot with active-framework inference (absorbed from TelegramBot) | `modules/telegram.ts` |
+| **iMessage** | SQLite polling bot with active-framework inference (absorbed from iMessageBot, disabled by default) | `modules/imessage.ts` |
 | **Worker** | GitHub Issues work polling for PAI Workers (optional) | `checks/github-work.ts` |
 | **Assistant** | Digital Assistant identity, heartbeat, scheduling, growth | `Assistant/module.ts` |
 | **UserIndex** | Life OS USER/ indexer — parses frontmatter + collections into typed JSON; fs.watch live refresh; powers `/life` dashboard + Daemon publish feed | `modules/user-index.ts` |
@@ -548,11 +548,11 @@ bun run checks/github.ts
 │   └── spawn.ts              # Script and Claude process spawning
 ├── modules/
 │   ├── hooks.ts              # Skill-guard + agent-guard validation
-│   ├── telegram.ts           # grammY polling bot + claude-agent-sdk sessions
+│   ├── telegram.ts           # grammY polling bot + active-framework inference
 │   ├── wiki.ts               # Wiki/docs API — indexer, search, backlinks, graph
 │   ├── user-index.ts         # Life OS biography indexer (PAI/USER tree)
 │   ├── syslog.ts             # System log aggregation
-│   └── imessage.ts           # SQLite polling bot + claude-agent-sdk sessions (disabled by default)
+│   └── imessage.ts           # SQLite polling bot + active-framework inference (disabled by default)
 ├── Assistant/
 │   └── module.ts             # Digital Assistant identity, heartbeat, scheduling (private — DA-specific)
 ├── VoiceServer/

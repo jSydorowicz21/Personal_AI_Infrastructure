@@ -17,6 +17,7 @@ import { spawn } from "child_process"
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
 import { log } from "../lib"
+import { getFrameworkDir, userPath } from "../../TOOLS/lib/paths"
 
 // ── Public Config Interface ──
 
@@ -72,6 +73,7 @@ let pronunciationRules: CompiledRule[] = []
 let voiceConfig: LoadedVoiceConfig = { defaultVoiceId: "", voices: {}, voicesByVoiceId: {}, desktopNotifications: true }
 let defaultVoiceId = ""
 let initialized = false
+let desktopNotificationUnsupportedLogged = false
 
 // ── Constants ──
 
@@ -162,8 +164,7 @@ function escapeRegex(str: string): string {
 }
 
 function loadPronunciations(customPath?: string): void {
-  const paiDir = join(process.env.HOME ?? "~", ".claude", "PAI")
-  const userPronPath = customPath ?? join(paiDir, "USER", "pronunciations.json")
+  const userPronPath = customPath ?? userPath("pronunciations.json")
 
   try {
     if (existsSync(userPronPath)) {
@@ -195,7 +196,7 @@ function applyPronunciations(text: string): string {
 // ── Voice Config from settings.json ──
 
 function loadVoiceConfigFromSettings(): LoadedVoiceConfig {
-  const settingsPath = join(process.env.HOME ?? "~", ".claude", "settings.json")
+  const settingsPath = join(getFrameworkDir(), "settings.json")
 
   try {
     if (!existsSync(settingsPath)) {
@@ -370,21 +371,43 @@ async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOL
   })
 }
 
-// ── macOS Desktop Notification ──
+function spawnAndWait(command: string, args: string[]): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn(command, args)
+    proc.on("error", reject)
+    proc.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`))))
+  })
+}
+
+// ── Desktop Notification ──
 
 async function showDesktopNotification(title: string, message: string): Promise<void> {
   if (!voiceConfig.desktopNotifications) return
 
   try {
-    const escapedTitle = escapeForAppleScript(title)
-    const escapedMessage = escapeForAppleScript(message)
-    const script = `display notification "${escapedMessage}" with title "${escapedTitle}" sound name ""`
+    if (process.platform === "darwin") {
+      const escapedTitle = escapeForAppleScript(title)
+      const escapedMessage = escapeForAppleScript(message)
+      const script = `display notification "${escapedMessage}" with title "${escapedTitle}" sound name ""`
+      await spawnAndWait("/usr/bin/osascript", ["-e", script])
+      return
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      const proc = spawn("/usr/bin/osascript", ["-e", script])
-      proc.on("error", reject)
-      proc.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`osascript exited ${code}`))))
-    })
+    if (process.platform === "linux") {
+      const notifySend = "/usr/bin/notify-send"
+      if (existsSync(notifySend)) {
+        await spawnAndWait(notifySend, [title, message])
+      } else if (!desktopNotificationUnsupportedLogged) {
+        log("warn", "Voice: desktop notifications unavailable on this Linux host (notify-send not found)")
+        desktopNotificationUnsupportedLogged = true
+      }
+      return
+    }
+
+    if (!desktopNotificationUnsupportedLogged) {
+      log("warn", `Voice: desktop notifications unsupported on ${process.platform}`)
+      desktopNotificationUnsupportedLogged = true
+    }
   } catch (error) {
     log("error", "Voice: notification display error", { error: String(error) })
   }
@@ -652,7 +675,7 @@ export async function handleVoiceRequest(req: Request): Promise<Response | null>
       // /notify/personality honest with whatever the user last selected.
       let voiceId: string | null = null
       try {
-        const settingsFile = join(process.env.HOME ?? "~", ".claude", "settings.json")
+        const settingsFile = join(getFrameworkDir(), "settings.json")
         const settings = JSON.parse(readFileSync(settingsFile, "utf-8"))
         const main = settings?.daidentity?.voices?.main
         const vid = (main?.voiceId || main?.VOICE_ID || main?.voice_id) as string | undefined

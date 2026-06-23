@@ -11,9 +11,10 @@
 import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
+import { getFrameworkDir, memoryPath, paiPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME!;
-const CLAUDE_DIR = join(HOME, ".claude");
+const FRAMEWORK_DIR = getFrameworkDir();
+const FRAMEWORK = process.env.PAI_FRAMEWORK || "claude";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Terminal Width Detection
@@ -111,6 +112,21 @@ interface SystemStats {
   algorithmVersion: string;
 }
 
+function countFilesRecursive(dir: string, extension?: string): number {
+  let count = 0;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        count += countFilesRecursive(fullPath, extension);
+      } else if (entry.isFile() && (!extension || entry.name.endsWith(extension))) {
+        count++;
+      }
+    }
+  } catch {}
+  return count;
+}
+
 function getStats(): SystemStats {
   let name = "PAI";
   let paiVersion = "3.0";
@@ -118,12 +134,12 @@ function getStats(): SystemStats {
   let catchphrase = "{name} here, ready to go";
   let repoUrl = "github.com/danielmiessler/PAI";
   try {
-    const settings = JSON.parse(readFileSync(join(CLAUDE_DIR, "settings.json"), "utf-8"));
+    const settings = JSON.parse(readFileSync(join(FRAMEWORK_DIR, "settings.json"), "utf-8"));
     name = settings.daidentity?.displayName || settings.daidentity?.name || "PAI";
     paiVersion = settings.pai?.version || "2.0";
     // v6.2.0+: LATEST is the single source of truth. settings.pai.algorithmVersion was removed.
     try {
-      const latestPath = join(CLAUDE_DIR, "PAI", "ALGORITHM", "LATEST");
+      const latestPath = paiPath("ALGORITHM", "LATEST");
       if (existsSync(latestPath)) {
         algorithmVersion = readFileSync(latestPath, "utf-8").trim().replace(/^v/i, "") || algorithmVersion;
       }
@@ -140,7 +156,7 @@ function getStats(): SystemStats {
 
   // Skills count — always live from filesystem so it matches the status line
   try {
-    const skillsDir = join(CLAUDE_DIR, "skills");
+    const skillsDir = join(FRAMEWORK_DIR, "skills");
     if (existsSync(skillsDir)) {
       skills = readdirSync(skillsDir, { withFileTypes: true })
         .filter(d => d.isDirectory() && existsSync(join(skillsDir, d.name, "SKILL.md")))
@@ -149,7 +165,7 @@ function getStats(): SystemStats {
   } catch {}
 
   try {
-    const settings = JSON.parse(readFileSync(join(CLAUDE_DIR, "settings.json"), "utf-8"));
+    const settings = JSON.parse(readFileSync(join(FRAMEWORK_DIR, "settings.json"), "utf-8"));
     if (settings.counts) {
       workflows = settings.counts.workflows || 0;
       hooks = settings.counts.hooks || 0;
@@ -158,8 +174,19 @@ function getStats(): SystemStats {
     }
   } catch {}
 
+  if (!learnings) {
+    try {
+      learnings = countFilesRecursive(memoryPath("LEARNING"), ".md");
+    } catch {}
+  }
+  if (!userFiles) {
+    try {
+      userFiles = countFilesRecursive(userPath());
+    } catch {}
+  }
+
   try {
-    const historyFile = join(CLAUDE_DIR, "history.jsonl");
+    const historyFile = join(FRAMEWORK_DIR, "history.jsonl");
     if (existsSync(historyFile)) {
       const content = readFileSync(historyFile, "utf-8");
       sessions = content.split("\n").filter(line => line.trim()).length;
@@ -170,10 +197,11 @@ function getStats(): SystemStats {
   const platform = process.platform === "darwin" ? "macOS" : process.platform;
   const arch = process.arch;
 
-  // Try to get Claude Code version
+  // Try to get active framework version
   let ccVersion = "2.0";
   try {
-    const result = spawnSync("claude", ["--version"], { encoding: "utf-8" });
+    const command = FRAMEWORK === "codex" ? "codex" : FRAMEWORK === "opencode" ? "opencode" : "claude";
+    const result = spawnSync(command, ["--version"], { encoding: "utf-8" });
     if (result.stdout) {
       const match = result.stdout.match(/(\d+\.\d+\.\d+)/);
       if (match) ccVersion = match[1];

@@ -13,10 +13,9 @@
  */
 
 import { join } from "path"
+import { userPath } from "./lib/paths"
 
-const HOME = process.env.HOME ?? "~"
-const PAI = join(HOME, ".claude", "PAI")
-const REGISTRY_PATH = join(PAI, "USER", "DA", "_registry.yaml")
+const REGISTRY_PATH = userPath("DA", "_registry.yaml")
 
 // ── Types ──
 
@@ -218,7 +217,7 @@ async function main() {
     primaryDA = parsePrimaryDA(registryContent)
   } catch {}
 
-  const daDir = join(PAI, "USER", "DA", primaryDA)
+  const daDir = userPath("DA", primaryDA)
 
   switch (command) {
     case "diary": {

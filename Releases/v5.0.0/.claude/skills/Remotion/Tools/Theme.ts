@@ -2,7 +2,7 @@
  * PAI Theme for Remotion
  *
  * Derived from Art skill preferences at:
- * ~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md
+ * $PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md
  *
  * Core aesthetic: Charcoal architectural sketch with purple accents
  * Visual feel: Monumental emotional spaces, gestural linework, cool washes

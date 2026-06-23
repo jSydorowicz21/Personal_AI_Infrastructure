@@ -102,7 +102,7 @@ function HooksLanding({ hooks, events }: { hooks: HookEntry[]; events: string[] 
         </h1>
         <p className="mt-1 max-w-3xl" style={{ color: "#9BB0D6", fontSize: 14 }}>
           Lifecycle event handlers that run shell commands or HTTP requests in response to
-          Claude Code events. Configured in settings.json; hooks intercept tool calls,
+          Framework events. Configured in the active framework settings; hooks intercept tool calls,
           session events, and system changes.
         </p>
         <div className="progress-bar">

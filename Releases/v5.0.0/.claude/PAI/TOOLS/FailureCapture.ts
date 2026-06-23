@@ -28,8 +28,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'fs';
 import { join, basename } from 'path';
 import { inference } from './Inference';
-
-const PAI_DIR = process.env.PAI_DIR || join(process.env.HOME!, '.claude');
+import { memoryPath } from './lib/paths';
 
 interface FailureCaptureInput {
   transcriptPath: string;
@@ -289,7 +288,7 @@ export async function captureFailure(input: FailureCaptureInput): Promise<string
   const dirName = `${timestamp}_${description}`;
   const yearMonth = `${year}-${month}`;
 
-  const failuresDir = join(PAI_DIR, 'MEMORY', 'LEARNING', 'FAILURES', yearMonth);
+  const failuresDir = memoryPath('LEARNING', 'FAILURES', yearMonth);
   const failureDir = join(failuresDir, dirName);
 
   if (!existsSync(failuresDir)) {
@@ -394,7 +393,7 @@ export async function migrateExistingFailures(): Promise<{ migrated: number; err
   const results = { migrated: 0, errors: [] as string[] };
 
   // Read ratings.jsonl and find all 1-3 ratings
-  const ratingsFile = join(PAI_DIR, 'MEMORY', 'LEARNING', 'SIGNALS', 'ratings.jsonl');
+  const ratingsFile = memoryPath('LEARNING', 'SIGNALS', 'ratings.jsonl');
 
   if (!existsSync(ratingsFile)) {
     results.errors.push('ratings.jsonl not found');
@@ -440,7 +439,7 @@ export async function migrateExistingFailures(): Promise<{ migrated: number; err
           const dirName = `${timestamp}_${desc}`;
           const yearMonth = `${year}-${month}`;
 
-          const failuresDir = join(PAI_DIR, 'MEMORY', 'LEARNING', 'FAILURES', yearMonth);
+          const failuresDir = memoryPath('LEARNING', 'FAILURES', yearMonth);
           const failureDir = join(failuresDir, dirName);
 
           // Skip if already exists

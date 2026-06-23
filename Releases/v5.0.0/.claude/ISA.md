@@ -58,8 +58,8 @@ PAI ships as an open-source, template-able Personal AI Infrastructure where the 
 
 ### Algorithm core
 
-- [x] ISC-1: `~/.claude/PAI/ALGORITHM/LATEST` reads the current version (today: `6.2.0`).
-- [x] ISC-2: `~/.claude/PAI/ALGORITHM/v6.2.0.md` exists and is the doctrine spec linked from `LATEST`.
+- [x] ISC-1: `$PAI_DIR/ALGORITHM/LATEST` reads the current version (today: `6.2.0`).
+- [x] ISC-2: `$PAI_DIR/ALGORITHM/v6.2.0.md` exists and is the doctrine spec linked from `LATEST`.
 - [x] ISC-3: The seven phases (OBSERVE / THINK / PLAN / BUILD / EXECUTE / VERIFY / LEARN) are present in the active spec with mandatory phase headers.
 - [x] ISC-4: Voice announcements at Algorithm entry and every phase transition (`fTtv3eikoepIosk8dTZ5` voice ID).
 - [x] ISC-5: `EscalationGate.hook.ts` (UserPromptSubmit) writes `MODE_FLOOR` to additionalContext on doctrine-affecting / architectural-locator / multi-project / soft-user-signal / hard-to-vary triggers.
@@ -114,7 +114,7 @@ PAI ships as an open-source, template-able Personal AI Infrastructure where the 
   type: file-probe
   check: contents of LATEST
   threshold: matches active doctrine version
-  tool: cat ~/.claude/PAI/ALGORITHM/LATEST
+  tool: cat $PAI_DIR/ALGORITHM/LATEST
 
 - isc: ISC-5
   type: hook-probe
@@ -224,8 +224,8 @@ PAI ships as an open-source, template-able Personal AI Infrastructure where the 
 
 (Verification entries accumulate per ISC as the framework evolves. Each ISC's evidence comes from the canonical probes in Test Strategy.)
 
-- ISC-1: `cat ~/.claude/PAI/ALGORITHM/LATEST` returned `6.2.0` on 2026-04-28T18:38:00Z.
-- ISC-2: `ls ~/.claude/PAI/ALGORITHM/v6.2.0.md` confirms file exists, 596+ lines.
+- ISC-1: `cat $PAI_DIR/ALGORITHM/LATEST` returned `6.2.0` on 2026-04-28T18:38:00Z.
+- ISC-2: `ls $PAI_DIR/ALGORITHM/v6.2.0.md` confirms file exists, 596+ lines.
 - ISC-12: SessionStart available-skills list includes `ISA: Owns the Ideal State Artifact…` (verified across multiple session reminders 2026-04-28).
 - ISC-19: Pulse runs at `localhost:31337` — voice notification curls succeed throughout this session.
 - ISC-27: `git -C ~/.claude remote -v` shows only `github.com/<your-github-user>/<your-private-pai-repo>` (private). Constitutional rule in system prompt enforces this.

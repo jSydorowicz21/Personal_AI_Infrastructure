@@ -24,11 +24,10 @@
 
 import { readFileSync, writeFileSync, existsSync, appendFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
+import { memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME || "";
-const PAI_DIR = process.env.PAI_DIR || join(HOME, ".claude", "PAI");
-const QUEUE_FILE = join(PAI_DIR, "MEMORY", "MIGRATION", "migration-proposals.jsonl");
-const COMMITTED_LOG = join(PAI_DIR, "MEMORY", "MIGRATION", "committed.jsonl");
+const QUEUE_FILE = memoryPath("MIGRATION", "migration-proposals.jsonl");
+const COMMITTED_LOG = memoryPath("MIGRATION", "committed.jsonl");
 
 type Proposal = {
   id: string;
@@ -66,14 +65,19 @@ function logCommit(entry: Record<string, unknown>): void {
 
 function resolveTargetPath(target: string): string {
   // Map target label to absolute file path.
-  if (target.startsWith("TELOS/") || target.startsWith("USER/") || target.startsWith("MEMORY/")) {
-    return join(PAI_DIR, target.startsWith("USER/") ? target : target);
+  if (target.startsWith("TELOS/")) {
+    return userPath(target);
+  }
+  if (target.startsWith("USER/")) {
+    return userPath(target.slice("USER/".length));
+  }
+  if (target.startsWith("MEMORY/")) {
+    return memoryPath(target.slice("MEMORY/".length));
   }
   if (target === "memory/feedback") {
-    // Feedback memories live outside PAI dir in projects/${HARNESS_USER_DIR}/memory/
-    return join(HOME, ".claude", "projects", "${HARNESS_USER_DIR}", "memory");
+    return memoryPath("FEEDBACK");
   }
-  return join(PAI_DIR, target);
+  return userPath(target);
 }
 
 function commitProposal(p: Proposal): boolean {

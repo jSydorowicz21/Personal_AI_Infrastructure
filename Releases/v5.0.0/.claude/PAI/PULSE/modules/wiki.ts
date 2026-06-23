@@ -32,14 +32,15 @@ import {
   writeFileSync,
 } from "fs"
 import MiniSearch from "minisearch"
+import { getFrameworkDir, getPaiDir, memoryPath, userPath } from "../../TOOLS/lib/paths"
 
 // Path Construction
 
-const HOME = process.env.HOME ?? "~"
-const PAI_DIR = join(HOME, ".claude", "PAI")
+const PAI_DIR = getPaiDir()
+const FRAMEWORK_DIR = getFrameworkDir()
 const DOCUMENTATION_DIR = join(PAI_DIR, "DOCUMENTATION")
-const KNOWLEDGE_DIR = join(PAI_DIR, "MEMORY", "KNOWLEDGE")
-const BOOKMARKS_DIR = join(PAI_DIR, "MEMORY", "BOOKMARKS")
+const KNOWLEDGE_DIR = memoryPath("KNOWLEDGE")
+const BOOKMARKS_DIR = memoryPath("BOOKMARKS")
 const BOOKMARKS_CSV = join(BOOKMARKS_DIR, "bookmarks.csv")
 // Resolve the Algorithm directory case-insensitively. The v6.3.0 doctrine uses
 // `ALGORITHM/` (all-caps) while older defaults used `Algorithm/` — on Linux
@@ -75,10 +76,10 @@ function resolveAlgorithmDir(paiDir: string): string | null {
 }
 
 const ALGORITHM_DIR: string | null = resolveAlgorithmDir(PAI_DIR)
-const SKILLS_DIR = join(HOME, ".claude", "skills")
-const HOOKS_DIR = join(HOME, ".claude", "hooks")
-const SETTINGS_PATH = join(HOME, ".claude", "settings.json")
-const ARBOL_WORKERS_DIR = join(PAI_DIR, "USER", "ARBOL", "Workers")
+const SKILLS_DIR = join(FRAMEWORK_DIR, "skills")
+const HOOKS_DIR = join(FRAMEWORK_DIR, "hooks")
+const SETTINGS_PATH = join(FRAMEWORK_DIR, "settings.json")
+const ARBOL_WORKERS_DIR = userPath("ARBOL", "Workers")
 
 const SYSTEM_PROMPT_PATH = join(PAI_DIR, "PAI_SYSTEM_PROMPT.md")
 const KNOWLEDGE_DOMAINS = ["People", "Companies", "Ideas", "Blogs"] as const
@@ -719,7 +720,7 @@ const pendingPaths: Set<string> = new Set()
 function startWatchers(): void {
   stopWatchers()
 
-  const watchPaths = [PAI_DIR]
+  const watchPaths = [PAI_DIR, KNOWLEDGE_DIR, BOOKMARKS_DIR]
 
   for (const watchPath of watchPaths) {
     if (!existsSync(watchPath)) continue

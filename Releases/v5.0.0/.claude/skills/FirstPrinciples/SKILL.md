@@ -1,13 +1,13 @@
 ---
 name: FirstPrinciples
-description: "Physics-based reasoning framework (Musk/Elon methodology) that deconstructs problems to irreducible fundamental truths rather than reasoning by analogy. Three-step structure: DECONSTRUCT (break to constituent parts and actual values), CHALLENGE (classify every element as hard constraint / soft constraint / unvalidated assumption — only physics is truly immutable), RECONSTRUCT (build optimal solution from fundamentals alone, ignoring inherited form). Outputs: constituent-parts breakdown, constraint classification table, and reconstructed solution with key insight. Three workflows: Deconstruct.md, Challenge.md, Reconstruct.md. Integrates with RedTeam (attack assumptions before deploying adversarial agents), Security (decompose threat model), Architecture (challenge design constraints), and Pentesters (decompose assumed security boundaries). Other skills invoke via: Challenge on all stated constraints → classify as hard/soft/assumption. Cross-domain synthesis: solutions from unrelated fields often apply once the fundamental truths are exposed. NOT FOR incident investigation and causal chains (use RootCauseAnalysis). NOT FOR structural feedback loops (use SystemsThinking). USE WHEN first principles, fundamental truths, challenge assumptions, is this a real constraint, rebuild from scratch, what are we actually paying for, what is this really made of, start over, physics first, question everything, reasoning by analogy, is this really necessary."
+description: "Break problems down to fundamentals and rebuild reasoning from constraints, mechanisms, and causes. USE WHEN asking for first-principles analysis, root assumptions, fundamentals, mechanism design, or non-conventional reasoning from basics."
 effort: high
 ---
 
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/FirstPrinciples/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/FirstPrinciples/`
 
 If this directory exists, load and apply any PREFERENCES.md, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -224,7 +224,7 @@ When using FirstPrinciples, output should include:
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"FirstPrinciples","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"FirstPrinciples","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.

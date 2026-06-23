@@ -12,17 +12,13 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { getPaiDir } from './lib/paths';
+import { memoryPath } from './lib/paths';
 import { setTabState, readTabState, persistKittySession } from './lib/tab-setter';
 import { getDAName } from './lib/identity';
-
-const paiDir = getPaiDir();
+import { isSubagentSession } from './lib/session';
 
 // Skip for subagents
-const claudeProjectDir = process.env.CLAUDE_PROJECT_DIR || '';
-const isSubagent = claudeProjectDir.includes('/.claude/Agents/') ||
-                  process.env.CLAUDE_AGENT_TYPE !== undefined;
-if (isSubagent) process.exit(0);
+if (isSubagentSession()) process.exit(0);
 
 // Read session_id + source from stdin (SessionStart hook input)
 // source ∈ {"startup", "resume", "compact", "clear"}; absent on older CC versions.
@@ -41,7 +37,7 @@ try {
 const kittyListenOn = process.env.KITTY_LISTEN_ON;
 const kittyWindowId = process.env.KITTY_WINDOW_ID;
 if (kittyListenOn && kittyWindowId) {
-  const stateDir = join(paiDir, 'MEMORY', 'STATE');
+  const stateDir = memoryPath('STATE');
   if (!existsSync(stateDir)) mkdirSync(stateDir, { recursive: true });
   writeFileSync(
     join(stateDir, 'kitty-env.json'),

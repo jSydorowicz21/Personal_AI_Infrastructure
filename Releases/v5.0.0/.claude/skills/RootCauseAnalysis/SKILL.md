@@ -1,6 +1,6 @@
 ---
 name: RootCauseAnalysis
-description: "Structured incident investigation grounded in Toyota Production System, Kaoru Ishikawa, James Reason's Swiss Cheese model, Dean Gano's Apollo method, and Google SRE blameless-postmortem culture. Five workflows: FiveWhys (linear/branching causal chain, single-thread incidents), Fishbone/Ishikawa (6 M's or 4 P's category mapping, multiple suspected areas), Postmortem (blameless timeline + contributing factors + action items, wraps other methods), FaultTree (AND/OR gate logic, safety-critical multi-path failures), KepnerTregoe IS/IS-NOT (distinction analysis, subtle hard-to-reproduce defects). Context files: Foundation.md (Toyoda, Ishikawa, Reason, Gano, Google SRE; canonical methods), MethodSelection.md (decision flow for workflow selection). Core axiom: proximate cause is where analysis starts, not ends. Humans are never root causes — if a human could make the mistake, the system allowed it. A cause is \"root enough\" when it's actionable. Also supports FMEA-style pre-launch risk inversion (what could fail before it does). Integrates with Science (hypothesis generation during investigation) and RedTeam (stress-test remediations). NOT FOR structural/systemic loops and feedback archetypes (use SystemsThinking) or axiom decomposition (use FirstPrinciples). USE WHEN root cause, RCA, 5 whys, fishbone, postmortem, incident analysis, why did this happen, fault tree, what really caused this, why does this keep failing, blameless, defect investigation, recurring bug, pre-launch risk."
+description: "Diagnose incidents, failures, regressions, and confusing behavior by tracing causes and evidence. USE WHEN debugging root causes, analyzing incidents, explaining why something failed, or building corrective actions."
 effort: high
 context: fork
 ---
@@ -8,7 +8,7 @@ context: fork
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/RootCauseAnalysis/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/RootCauseAnalysis/`
 
 If this directory exists, load and apply any `PREFERENCES.md`, configurations, or resources found there. These override default behavior. If the directory does not exist, proceed with skill defaults.
 
@@ -177,5 +177,5 @@ User: "this flaky test only fails in CI, not locally"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"RootCauseAnalysis","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"RootCauseAnalysis","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```

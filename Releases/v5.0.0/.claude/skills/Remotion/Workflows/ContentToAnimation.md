@@ -545,6 +545,6 @@ User: animate this content: "The three pillars of AI safety are..."
 ## Integration with Art Skill
 
 This workflow inherits visual theming from Art preferences:
-- Load: `~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md`
+- Load: `$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/Art/PREFERENCES.md`
 - Apply: Charcoal aesthetic, purple accents, organic animations
 - Reference: `~/.claude/`

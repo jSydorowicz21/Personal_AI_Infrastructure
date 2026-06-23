@@ -13,7 +13,7 @@ Both tools use `bun` as their runtime.
 
 ## The Algorithm CLI
 
-**Location:** `~/.claude/PAI/TOOLS/algorithm.ts`
+**Location:** `$PAI_DIR/TOOLS/algorithm.ts`
 
 The Algorithm CLI executes the PAI Algorithm (Observe → Think → Plan → Build → Execute → Verify → Learn) against ISA files. It supports three modes: autonomous loop execution (no human needed), interactive sessions (human-in-the-loop), and optimize (autonomous hill-climbing against a measurable metric).
 
@@ -21,13 +21,13 @@ The Algorithm CLI executes the PAI Algorithm (Observe → Think → Plan → Bui
 
 ```bash
 # Run the Algorithm in autonomous loop mode
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m loop -p <ISA-path> -n 20
+bun $PAI_DIR/TOOLS/algorithm.ts -m loop -p <ISA-path> -n 20
 
 # Run in interactive mode (launches a claude session with ISA context)
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m interactive -p <ISA-path>
+bun $PAI_DIR/TOOLS/algorithm.ts -m interactive -p <ISA-path>
 
 # Run in optimize mode (launches claude with /optimize arguments)
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m optimize -p <ISA-path>
+bun $PAI_DIR/TOOLS/algorithm.ts -m optimize -p <ISA-path>
 
 # Or use /optimize directly inside any claude session:
 /optimize --metric "bundle_size" --lower-is-better \
@@ -35,7 +35,7 @@ bun ~/.claude/PAI/TOOLS/algorithm.ts -m optimize -p <ISA-path>
   --files "src/**/*.ts"
 
 # Check status of all ISAs
-bun ~/.claude/PAI/TOOLS/algorithm.ts status
+bun $PAI_DIR/TOOLS/algorithm.ts status
 ```
 
 ### Usage
@@ -65,20 +65,20 @@ algorithm stop -p <ISA>                       Stop a loop
 Loop mode runs the Algorithm iteratively without human interaction. Each iteration:
 
 1. Reads the ISA and identifies failing Ideal State Criteria
-2. Spawns a `claude -p` session focused on the failing criteria
+2. Spawns an active-framework session focused on the failing criteria
 3. The session makes progress, updates the ISA checkboxes
 4. Re-reads the ISA to check progress
 5. Repeats until all criteria pass or max iterations reached
 
 ```bash
 # Basic loop — single agent, up to 128 iterations
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md
+bun $PAI_DIR/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md
 
 # Fast loop — 20 max iterations
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md -n 20
+bun $PAI_DIR/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md -n 20
 
 # Parallel loop — 4 agents working on different criteria simultaneously
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md -n 20 -a 4
+bun $PAI_DIR/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md -n 20 -a 4
 ```
 
 **Parallel agents (`-a N`):** When N > 1, the CLI partitions failing criteria across N agents. Each agent receives exactly one criterion and operates as a focused worker. The CLI uses domain-aware partitioning — criteria from the same domain (e.g., `ISC-AUTH-1`, `ISC-AUTH-2`) are assigned to the same agent to avoid conflicts. After all agents complete, the parent process reconciles results into the ISA.
@@ -99,7 +99,7 @@ bun ~/.claude/PAI/TOOLS/algorithm.ts -m loop -p ISA-20260213-auth.md -n 20 -a 4
 Interactive mode launches a full `claude` session with the ISA context pre-loaded. You work with Claude directly to make progress on criteria.
 
 ```bash
-bun ~/.claude/PAI/TOOLS/algorithm.ts -m interactive -p ISA-20260213-feature.md
+bun $PAI_DIR/TOOLS/algorithm.ts -m interactive -p ISA-20260213-feature.md
 ```
 
 This opens an interactive Claude session with:
@@ -112,19 +112,19 @@ This opens an interactive Claude session with:
 
 ```bash
 # Show all ISAs and their status
-bun ~/.claude/PAI/TOOLS/algorithm.ts status
+bun $PAI_DIR/TOOLS/algorithm.ts status
 
 # Show status of a specific ISA
-bun ~/.claude/PAI/TOOLS/algorithm.ts status -p ISA-20260213-auth
+bun $PAI_DIR/TOOLS/algorithm.ts status -p ISA-20260213-auth
 
 # Pause a running loop (loop checks between iterations)
-bun ~/.claude/PAI/TOOLS/algorithm.ts pause -p ISA-20260213-auth
+bun $PAI_DIR/TOOLS/algorithm.ts pause -p ISA-20260213-auth
 
 # Resume a paused loop
-bun ~/.claude/PAI/TOOLS/algorithm.ts resume -p ISA-20260213-auth
+bun $PAI_DIR/TOOLS/algorithm.ts resume -p ISA-20260213-auth
 
 # Stop a loop permanently
-bun ~/.claude/PAI/TOOLS/algorithm.ts stop -p ISA-20260213-auth
+bun $PAI_DIR/TOOLS/algorithm.ts stop -p ISA-20260213-auth
 ```
 
 ### ISA Resolution
@@ -358,7 +358,7 @@ For convenience, add aliases to your shell configuration (`.zshrc`, `.bashrc`):
 
 ```bash
 # The Algorithm CLI
-alias algorithm="bun ~/.claude/PAI/TOOLS/algorithm.ts"
+alias algorithm="bun $PAI_DIR/TOOLS/algorithm.ts"
 
 # The Arbol CLI
 alias pai="bun ~/.claude/PAI/ARBOL/Actions/pai.ts"

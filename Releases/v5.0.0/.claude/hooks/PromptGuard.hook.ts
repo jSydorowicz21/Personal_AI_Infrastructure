@@ -30,7 +30,7 @@ async function main(): Promise<void> {
 
   try {
     const { readFileSync } = await import('fs');
-    const raw = readFileSync('/dev/stdin', 'utf-8');
+    const raw = readFileSync(0, 'utf-8');
     if (!raw.trim()) return;
     input = JSON.parse(raw);
   } catch {
@@ -64,6 +64,8 @@ async function main(): Promise<void> {
       });
       console.error(`[PromptGuard] 🚨 BLOCKED: ${result.reason}`);
       console.log(JSON.stringify({ decision: 'block', reason: `[PAI SECURITY] Prompt blocked: ${result.reason}` }));
+      process.exitCode = 2;
+      return;
       break;
 
     case 'alert':

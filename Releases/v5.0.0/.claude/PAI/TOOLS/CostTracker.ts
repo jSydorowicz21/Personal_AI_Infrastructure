@@ -31,13 +31,15 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
+import { getFrameworkDir, getPaiDir, memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME ?? "";
-const PAI_DIR = join(HOME, ".claude", "PAI");
-const OBS_DIR = join(PAI_DIR, "MEMORY", "OBSERVABILITY");
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? "";
+const PAI_DIR = getPaiDir();
+const FRAMEWORK_DIR = getFrameworkDir();
+const OBS_DIR = memoryPath("OBSERVABILITY");
 const LEDGER_PATH = join(OBS_DIR, "anthropic-cost.jsonl");
 const CALL_SITES_PATH = join(OBS_DIR, "anthropic-call-sites.json");
-const USAGE_CACHE_PATH = join(PAI_DIR, "MEMORY", "STATE", "usage-cache.json");
+const USAGE_CACHE_PATH = memoryPath("STATE", "usage-cache.json");
 
 // Alert thresholds — tunable
 const API_SPEND_MONTHLY_ALERT_USD = 5.0;    // even Arbol should stay under $5/mo
@@ -129,11 +131,11 @@ async function fetchApiSpend(): Promise<{ month_used_usd: number | null; source:
 
 // Paths we scan (source-of-truth for PAI-local billing risk)
 const SCAN_ROOTS = [
-  join(HOME, ".claude", "PAI", "PULSE"),
-  join(HOME, ".claude", "PAI", "TOOLS"),
-  join(HOME, ".claude", "PAI", "USER"),
-  join(HOME, ".claude", "skills"),
-  join(HOME, ".claude", "hooks"),
+  join(PAI_DIR, "PULSE"),
+  join(PAI_DIR, "TOOLS"),
+  userPath(),
+  join(FRAMEWORK_DIR, "skills"),
+  join(FRAMEWORK_DIR, "hooks"),
 ];
 
 // Paths to exclude from scan

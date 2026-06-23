@@ -10,15 +10,12 @@
  *   GET /api/performance/summary   — Combined overview (top-level stats)
  */
 
-import { join } from "path"
 import { existsSync, readFileSync } from "fs"
+import { memoryPath } from "../../TOOLS/lib/paths"
 
-const HOME = process.env.HOME ?? ""
-const PAI_DIR = join(HOME, ".claude", "PAI")
-const MEMORY_DIR = join(PAI_DIR, "MEMORY")
-const SESSION_COSTS_PATH = join(MEMORY_DIR, "OBSERVABILITY", "session-costs.jsonl")
-const TOOL_FAILURES_PATH = join(MEMORY_DIR, "OBSERVABILITY", "tool-failures.jsonl")
-const TOOL_ACTIVITY_PATH = join(MEMORY_DIR, "OBSERVABILITY", "tool-activity.jsonl")
+const SESSION_COSTS_PATH = memoryPath("OBSERVABILITY", "session-costs.jsonl")
+const TOOL_FAILURES_PATH = memoryPath("OBSERVABILITY", "tool-failures.jsonl")
+const TOOL_ACTIVITY_PATH = memoryPath("OBSERVABILITY", "tool-activity.jsonl")
 
 export interface PerformanceConfig {
   enabled: boolean
@@ -276,11 +273,8 @@ export async function handlePerformanceRequest(req: Request): Promise<Response |
 
 async function handleAnthropicCostApi(): Promise<Response> {
   const { readFileSync, existsSync } = await import("fs")
-  const { join } = await import("path")
-  const home = process.env.HOME ?? ""
-  const obsDir = join(home, ".claude", "PAI", "MEMORY", "OBSERVABILITY")
-  const ledgerPath = join(obsDir, "anthropic-cost.jsonl")
-  const sitesPath = join(obsDir, "anthropic-call-sites.json")
+  const ledgerPath = memoryPath("OBSERVABILITY", "anthropic-cost.jsonl")
+  const sitesPath = memoryPath("OBSERVABILITY", "anthropic-call-sites.json")
 
   type Snapshot = {
     ts: string

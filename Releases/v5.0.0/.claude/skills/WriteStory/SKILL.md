@@ -1,6 +1,6 @@
 ---
 name: WriteStory
-description: "Constructs fiction across seven simultaneous narrative layers (Meaning, Character Change, Plot, Mystery, World, Relationships, Prose) powered by Will Storr's Science of Storytelling, Pressfield's structure framework (Concept/Hook/Clothesline/Theme-as-question/Villain/Gift), and Mark Forsyth's Elements of Eloquence for rhetorical figures. Character arcs follow Storr's sacred flaw → crisis → transformation model. Anti-cliche system bans generic AI patterns. Story Bible is PRD-based — maps all 7 layers from first scene to final beat. Scales from short story to multi-book series. Aesthetic is configurable per project (Adams, Tolkien, sparse sci-fi, etc.). Five workflows: Interview (extract story ideas), BuildBible (full layered plan), Explore (brainstorm/what-if), WriteChapter (prose with rhetorical devices), Revise (edit/polish/rewrite). USE WHEN: write story, fiction, novel, short story, book, chapter, story bible, character arc, plot outline, creative writing, worldbuilding, dialogue, prose, interview, build bible, brainstorm, explore ideas, what if, write chapter, write scene, write prose, revise, edit, improve, polish, rewrite, Will Storr, rhetorical figures, draft story, create story plan. NOT FOR narrative summaries of real content (use a narrative-explanation skill). NOT FOR AI-ism auditing (use a writing-audit skill)."
+description: "Write, revise, and structure fiction or narrative prose with attention to plot, character, voice, and scene craft. USE WHEN writing stories, developing characters, outlining fiction, improving scenes, or generating narrative prose."
 effort: high
 ---
 
@@ -32,7 +32,7 @@ Layered fiction writing system that constructs stories across seven simultaneous
 ## Customization
 
 **Before executing, check for user customizations at:**
-`~/.claude/PAI/USER/SKILLCUSTOMIZATIONS/WriteStory/`
+`$PAI_DATA_DIR/USER/SKILLCUSTOMIZATIONS/WriteStory/`
 
 If this directory exists, load and apply:
 - `PREFERENCES.md` - User preferences, default genre, aesthetic, voice
@@ -131,7 +131,7 @@ User: "Write chapter 3 based on the story bible"
 After completing any workflow, append a single JSONL entry:
 
 ```bash
-echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"WriteStory","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> ~/.claude/PAI/MEMORY/SKILLS/execution.jsonl
+echo '{"ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","skill":"WriteStory","workflow":"WORKFLOW_USED","input":"8_WORD_SUMMARY","status":"ok|error","duration_s":SECONDS}' >> $PAI_DATA_DIR/MEMORY/SKILLS/execution.jsonl
 ```
 
 Replace `WORKFLOW_USED` with the workflow executed, `8_WORD_SUMMARY` with a brief input description, and `SECONDS` with approximate wall-clock time. Log `status: "error"` if the workflow failed.
