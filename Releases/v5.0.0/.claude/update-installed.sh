@@ -184,7 +184,7 @@ resolve_pai_config_dir() {
     absolute_path "$PAI_CONFIG_DIR"
     return 0
   fi
-  absolute_path "$HOME/.config/PAI"
+  printf '%s\n' "$HOME/.config/PAI"
 }
 
 resolve_target() {
