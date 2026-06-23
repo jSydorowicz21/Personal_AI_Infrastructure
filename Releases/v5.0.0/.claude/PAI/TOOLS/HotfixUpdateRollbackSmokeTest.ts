@@ -37,6 +37,33 @@ function read(path: string): string {
   return existsSync(path) ? readFileSync(path, "utf-8") : "";
 }
 
+function normalizePathText(value: string): string {
+  return value.replace(/\\/g, "/").toLowerCase();
+}
+
+function codexHookDataDirs(hooksJson: string): string[] {
+  const values: string[] = [];
+  function visit(value: unknown): void {
+    if (typeof value === "string") {
+      for (const match of value.matchAll(/(?:^|\s)PAI_DATA_DIR='([^']*)'/g)) {
+        values.push(match[1]);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  }
+  try {
+    visit(JSON.parse(hooksJson));
+  } catch {}
+  return values;
+}
+
 function latestBackupRoot(home: string): string {
   const backups = join(home, ".pai", "BACKUPS");
   if (!existsSync(backups)) return "";
@@ -150,6 +177,9 @@ const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedHooksJson = read(join(installRoot, "hooks.json"));
+const hookDataDirs = codexHookDataDirs(updatedHooksJson).map(normalizePathText);
+const expectedHookDataSuffix = normalizePathText(join("home", ".pai"));
+const staleHookDataSegment = normalizePathText(join("stale-env", ".pai"));
 const powerShellProfile = join(home, "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1");
 const windowsPowerShellProfile = join(home, "Documents", "WindowsPowerShell", "Microsoft.PowerShell_profile.ps1");
 const powerShellProfileText = read(powerShellProfile);
@@ -169,7 +199,7 @@ const beforeRollbackChecks: Check[] = [
   check("PromptProcessing timeout leaves fallback room", updatedHooksJson.includes('"timeout": 35') && updatedHooksJson.includes("--timeout-ms"), join(installRoot, "hooks.json")),
   check("hooks.json regenerated with ISA sync hooks", updatedHooksJson.includes("ISASync.hook.ts") && updatedHooksJson.includes("CheckpointPerISC.hook.ts"), join(installRoot, "hooks.json")),
   check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
-  check("hooks.json ignores stale env PAI_DATA_DIR", updatedHooksJson.includes(dataDir.replace(/\\/g, "\\\\")) && !updatedHooksJson.includes(staleEnvDataDir.replace(/\\/g, "\\\\")), join(installRoot, "hooks.json")),
+  check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
   check("updater refreshes PAI environment variables", process.platform !== "win32" || update.stdout.includes("Updated PAI environment variables at Process scope"), "process-scope user env test"),
   check("hotfix repairs PowerShell profile PAI_DIR", process.platform !== "win32" || (powerShellProfileText.includes("Initialize-PAIEnvironment") && powerShellProfileText.includes("PAI_DIR")), powerShellProfile),
   check("hotfix repairs WindowsPowerShell profile PAI_DIR", process.platform !== "win32" || (windowsPowerShellProfileText.includes("Initialize-PAIEnvironment") && windowsPowerShellProfileText.includes("PAI_DIR")), windowsPowerShellProfile),
