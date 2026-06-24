@@ -186,7 +186,7 @@ That's it. The installer wizard handles Bun, Git, framework selection, agent CLI
 
 **Prefer to inspect first?** [Read the script](https://ourpai.ai/install.sh) before piping it.
 
-After install, or any time startup reports a PAI self-check warning, run `k doctor` for full local diagnostics across config, hooks, Pulse, MCP profiles, and Codex runtime smoke tests.
+After install, or any time startup reports a PAI self-check warning, run `k doctor` for full local diagnostics across the active framework config, hooks/plugins, Pulse, MCP profiles, and provider-appropriate runtime smoke tests.
 
 ### Update an existing install
 

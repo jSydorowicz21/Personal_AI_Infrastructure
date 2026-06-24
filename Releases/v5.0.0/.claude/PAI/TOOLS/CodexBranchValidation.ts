@@ -195,6 +195,7 @@ function main(): void {
       "PAI/TOOLS/Inference.ts",
       "PAI/TOOLS/FailureCapture.ts",
       "PAI/TOOLS/PaiDoctor.ts",
+      "PAI/TOOLS/PaiDoctorSmokeTest.ts",
       "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "PAI/TOOLS/InstallerCodexSmokeTest.ts",
       "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
@@ -258,6 +259,7 @@ function main(): void {
     run("OpenCode framework-agent execution smoke", "bun", ["PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
+    run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);
     run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 });
     run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
     run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);

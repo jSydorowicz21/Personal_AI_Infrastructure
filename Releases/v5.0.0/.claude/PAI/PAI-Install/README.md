@@ -170,7 +170,7 @@ After install or after returning to PAI later, run:
 k doctor
 ```
 
-The doctor verifies Codex config, instructions, MCP profile files, hook adapter behavior, hook-trigger observability, a temp-HOME Codex fresh-install smoke test, and Pulse health routes.
+The doctor verifies the active framework's native config, instructions, MCP profile files, provider-appropriate hook/runtime smoke tests, and Pulse health routes. Codex-only hook/session probes run only when Codex is the active framework.
 
 If the doctor reports optional warnings, add the relevant credentials before using that feature:
 

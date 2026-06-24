@@ -151,13 +151,13 @@ export APIFY_TOKEN="..."     # Apify MCP
 
 ## Runtime doctor
 
-Run this any time you come back to PAI and want to verify the local Codex runtime:
+Run this any time you come back to PAI and want to verify the local active-framework runtime:
 
 ```bash
 k doctor
 ```
 
-The doctor checks Codex config, `AGENTS.md`/`RTK.md`, MCP profile packaging, hook adapter smoke tests, hook-trigger log deltas, a temp-HOME Codex fresh-install smoke test, and Pulse `/health`, `/voice/health`, `/notify`, and `/assistant/health`.
+The doctor checks the active framework's native config (`CLAUDE.md`/`settings.json`, Codex `AGENTS.md`/`config.toml`/`hooks.json`, or OpenCode `AGENTS.md`/`opencode.json`/plugin), shared MCP profile packaging, provider-appropriate smoke tests, and Pulse `/health`, `/voice/health`, `/notify`, and `/assistant/health`. Codex-only hook/session probes run only when Codex is the active framework.
 
 Optional reminders are warnings, not runtime failures:
 

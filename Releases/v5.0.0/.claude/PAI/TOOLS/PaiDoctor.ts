@@ -10,6 +10,8 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { getConfigDir, getFrameworkDir, getPaiDataDir, getPaiDir } from "./lib/paths";
 
+type FrameworkId = "claude" | "codex" | "opencode";
+
 type Check = {
   name: string;
   passed: boolean;
@@ -33,6 +35,24 @@ function readJson(path: string): any {
   } catch {
     return null;
   }
+}
+
+function readText(path: string): string {
+  return existsSync(path) ? readFileSync(path, "utf-8") : "";
+}
+
+function normalizeFramework(value: unknown): FrameworkId | null {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized === "claude" || normalized === "claudecode") return "claude";
+  if (normalized === "codex" || normalized === "openai" || normalized === "openaicodex") return "codex";
+  if (normalized === "opencode" || normalized === "open") return "opencode";
+  return null;
+}
+
+function frameworkName(id: FrameworkId): string {
+  if (id === "claude") return "Claude";
+  if (id === "opencode") return "OpenCode";
+  return "Codex";
 }
 
 function decodeEncodedCommand(command: string): string {
@@ -72,19 +92,21 @@ function timeoutForTool(name: string): number {
   if (name === "CodexRealSessionHookProof.ts") return 300_000;
   if (name === "HotfixUpdateRollbackSmokeTest.ts") return 180_000;
   if (name === "CodexFreshInstallSmokeTest.ts") return 120_000;
+  if (name === "OpenCodeFrameworkAgentExecutionSmokeTest.ts") return 120_000;
   return 60_000;
 }
 
-function runBunTool(name: string): Check {
+function runBunTool(name: string, framework: FrameworkId): Check {
   const path = join(toolsDir, name);
   const res = spawnSync(process.execPath, [path], {
     encoding: "utf-8",
     timeout: timeoutForTool(name),
+    windowsHide: true,
     env: {
       ...process.env,
       PAI_DIR: paiDir,
       PAI_DATA_DIR: dataDir,
-      PAI_FRAMEWORK: "codex",
+      PAI_FRAMEWORK: framework,
       PAI_FRAMEWORK_DIR: frameworkRoot,
       PAI_SETTINGS_PATH: join(frameworkRoot, "settings.json"),
       PAI_CONFIG_DIR: configDir,
@@ -108,8 +130,8 @@ async function pulseCheck(path: string, init?: RequestInit): Promise<Check> {
 
 function systemdPulseChecks(): Check[] {
   if (process.platform === "darwin" || process.platform === "win32") return [];
-  const status = spawnSync("systemctl", ["--user", "is-active", "com.pai.pulse.service"], { encoding: "utf-8", timeout: 5000 });
-  const enabled = spawnSync("systemctl", ["--user", "is-enabled", "com.pai.pulse.service"], { encoding: "utf-8", timeout: 5000 });
+  const status = spawnSync("systemctl", ["--user", "is-active", "com.pai.pulse.service"], { encoding: "utf-8", timeout: 5000, windowsHide: true });
+  const enabled = spawnSync("systemctl", ["--user", "is-enabled", "com.pai.pulse.service"], { encoding: "utf-8", timeout: 5000, windowsHide: true });
   return [
     ok("Pulse systemd service active", status.status === 0, (status.stdout || status.stderr || "").trim() || `status=${status.status}`),
     ok("Pulse systemd service enabled", enabled.status === 0, (enabled.stdout || enabled.stderr || "").trim() || `status=${enabled.status}`),
@@ -127,31 +149,132 @@ function optionalSecretChecks(): Check[] {
   ];
 }
 
+function frameworkSmokeTools(framework: FrameworkId): string[] {
+  const shared = [
+    "HookSharedPathSmokeTest.ts",
+    "PaiSecurityAuditSmokeTest.ts",
+    "StartupSelfCheckSmokeTest.ts",
+    "RepeatDetectionSmokeTest.ts",
+    "TranscriptParserSmokeTest.ts",
+    "ChangeDetectionSmokeTest.ts",
+    "FrameworkCommandResolutionSmokeTest.ts",
+    "FrameworkLaunchCwdSmokeTest.ts",
+    "MemoryDeleteSmokeTest.ts",
+  ];
+
+  if (framework === "codex") {
+    return [
+      "CodexPaiSecuritySmokeTest.ts",
+      ...shared,
+      "CodexFrameworkAgentExecutionSmokeTest.ts",
+      "CodexHookTriggerSmokeTest.ts",
+      "CodexHookContractSmokeTest.ts",
+      "CodexRealSessionHookProof.ts",
+      "HotfixUpdateRollbackSmokeTest.ts",
+      "CodexFreshInstallSmokeTest.ts",
+    ];
+  }
+
+  if (framework === "opencode") {
+    return [
+      ...shared,
+      "OpenCodeFrameworkAgentExecutionSmokeTest.ts",
+    ];
+  }
+
+  return shared;
+}
+
+function activeFrameworkFrom(frameworkState: any): FrameworkId {
+  return normalizeFramework(frameworkState?.active)
+    || normalizeFramework(frameworkState?.framework)
+    || normalizeFramework(process.env.PAI_FRAMEWORK)
+    || "claude";
+}
+
+function instructionFilename(framework: FrameworkId): string {
+  return framework === "claude" ? "CLAUDE.md" : "AGENTS.md";
+}
+
+function interviewCommandPath(framework: FrameworkId): string {
+  return framework === "codex"
+    ? join(frameworkRoot, "prompts", "interview.md")
+    : join(frameworkRoot, "commands", "interview.md");
+}
+
+function frameworkSpecificChecks(framework: FrameworkId): Check[] {
+  const name = frameworkName(framework);
+  const checks: Check[] = [];
+
+  if (framework === "claude") {
+    const settingsPath = join(frameworkRoot, "settings.json");
+    const settings = readJson(settingsPath);
+    const hookText = collectHookCommandTexts(settings).join("\n");
+    checks.push(
+      ok("Claude settings.json exists", existsSync(settingsPath), settingsPath),
+      ok("Claude settings carry PAI_DATA_DIR", settings?.env?.PAI_DATA_DIR === dataDir || Boolean(settings?.env?.PAI_DATA_DIR), settingsPath),
+      ok("Claude hooks configured", Boolean(settings?.hooks && typeof settings.hooks === "object"), settingsPath),
+      ok("Claude hooks invoke FrameworkHookAdapter", hookText.includes("FrameworkHookAdapter.ts"), settingsPath),
+      ok("Claude hooks include StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), settingsPath),
+      ok("Claude hooks directory exists", existsSync(join(frameworkRoot, "hooks")), join(frameworkRoot, "hooks")),
+    );
+  }
+
+  if (framework === "codex") {
+    const configToml = readText(join(frameworkRoot, "config.toml"));
+    const hooksJsonPath = join(frameworkRoot, "hooks.json");
+    const hooksConfig = readJson(hooksJsonPath);
+    const hookText = collectHookCommandTexts(hooksConfig).join("\n");
+    const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
+    checks.push(
+      ok("Codex config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(frameworkRoot, "config.toml")),
+      ok("Codex config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
+      ok("Codex hooks.json has runnable hook commands", collectHookCommandTexts(hooksConfig).length > 0 && hasAdapterInvocation, hooksJsonPath),
+      ok("Codex hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
+    );
+  }
+
+  if (framework === "opencode") {
+    const configPath = join(frameworkRoot, "opencode.json");
+    const config = readJson(configPath);
+    const pluginPath = join(frameworkRoot, "plugins", "pai-opencode.ts");
+    const pluginText = readText(pluginPath);
+    checks.push(
+      ok("OpenCode opencode.json exists", existsSync(configPath), configPath),
+      ok("OpenCode config keeps AGENTS instructions", Array.isArray(config?.instructions) && config.instructions.includes("AGENTS.md"), configPath),
+      ok("OpenCode plugin exists", existsSync(pluginPath), pluginPath),
+      ok("OpenCode plugin includes StartupSelfCheck", pluginText.includes("StartupSelfCheck.hook.ts"), pluginPath),
+      ok("OpenCode plugin includes SessionEndDispatcher", pluginText.includes("SessionEndDispatcher.hook.ts"), pluginPath),
+      ok("OpenCode plugin includes KVSync", pluginText.includes("KVSync.hook.ts"), pluginPath),
+    );
+  }
+
+  const skillPath = join(frameworkRoot, "skills", "Interview", "SKILL.md");
+  const commandPath = interviewCommandPath(framework);
+  const commandText = readText(commandPath);
+  checks.push(
+    ok(`${name} Interview skill installed`, existsSync(skillPath), skillPath),
+    ok(`${name} Interview command installed`, existsSync(commandPath), commandPath, false),
+    ok(`${name} Interview command references skill`, commandText.includes("$Interview") || commandText.includes('Skill("Interview")'), commandPath, false),
+  );
+
+  return checks;
+}
+
 async function main() {
   const frameworkState = readJson(join(dataDir, "framework.json"));
-  const configToml = existsSync(join(frameworkRoot, "config.toml")) ? readFileSync(join(frameworkRoot, "config.toml"), "utf-8") : "";
-  const hooksJsonPath = join(frameworkRoot, "hooks.json");
-  const hooksConfig = readJson(hooksJsonPath);
-  const hookTexts = collectHookCommandTexts(hooksConfig);
-  const hookText = hookTexts.join("\n");
-  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
-  const interviewSkillPath = join(frameworkRoot, "skills", "Interview", "SKILL.md");
-  const interviewPromptPath = join(frameworkRoot, "prompts", "interview.md");
-  const interviewPrompt = existsSync(interviewPromptPath) ? readFileSync(interviewPromptPath, "utf-8") : "";
+  const activeFramework = activeFrameworkFrom(frameworkState);
+  const activeName = frameworkName(activeFramework);
+  const stateFramework = normalizeFramework(frameworkState?.active) || normalizeFramework(frameworkState?.framework);
+  const instructionFile = instructionFilename(activeFramework);
   const mcpDir = join(frameworkRoot, "MCPs");
 
   const checks: Check[] = [
-    ok("Active framework is Codex", frameworkState?.active === "codex", join(dataDir, "framework.json"), false),
-    ok("Codex root exists", existsSync(frameworkRoot), frameworkRoot),
-    ok("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
+    ok(`Active framework is ${activeName}`, stateFramework === activeFramework, join(dataDir, "framework.json"), false),
+    ok(`${activeName} root exists`, existsSync(frameworkRoot), frameworkRoot),
+    ok(`${instructionFile} exists`, existsSync(join(frameworkRoot, instructionFile)), join(frameworkRoot, instructionFile)),
     ok("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
-    ok("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(frameworkRoot, "config.toml")),
-    ok("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
-    ok("FrameworkHookAdapter exists", existsSync(join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")), join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")),
-    ok("hooks.json has runnable hook commands", hookTexts.length > 0 && hasAdapterInvocation, hooksJsonPath),
-    ok("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
-    ok("Codex Interview skill installed", existsSync(interviewSkillPath), interviewSkillPath),
-    ok("Codex Interview prompt uses skill mention", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath, false),
+    ...frameworkSpecificChecks(activeFramework),
     ok("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),
     ok("Shared PAI data exists", existsSync(dataDir), dataDir),
     ...systemdPulseChecks(),
@@ -163,21 +286,7 @@ async function main() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "PAI doctor check", voice_enabled: false }),
     }),
-    runBunTool("CodexPaiSecuritySmokeTest.ts"),
-    runBunTool("HookSharedPathSmokeTest.ts"),
-    runBunTool("CodexHookTriggerSmokeTest.ts"),
-    runBunTool("CodexHookContractSmokeTest.ts"),
-    runBunTool("PaiSecurityAuditSmokeTest.ts"),
-    runBunTool("StartupSelfCheckSmokeTest.ts"),
-    runBunTool("RepeatDetectionSmokeTest.ts"),
-    runBunTool("TranscriptParserSmokeTest.ts"),
-    runBunTool("ChangeDetectionSmokeTest.ts"),
-    runBunTool("CodexRealSessionHookProof.ts"),
-    runBunTool("HotfixUpdateRollbackSmokeTest.ts"),
-    runBunTool("CodexFreshInstallSmokeTest.ts"),
-    runBunTool("FrameworkCommandResolutionSmokeTest.ts"),
-    runBunTool("FrameworkLaunchCwdSmokeTest.ts"),
-    runBunTool("MemoryDeleteSmokeTest.ts"),
+    ...frameworkSmokeTools(activeFramework).map((tool) => runBunTool(tool, activeFramework)),
     ...optionalSecretChecks(),
   ];
 
