@@ -247,6 +247,15 @@ check(
   "PAI/TOOLS/ForgeProgress.ts",
 );
 
+const nonNullHomePattern = "process.env." + "HOME!";
+const homeBangFiles = walkTextFiles(join(paiRoot, "TOOLS"))
+  .filter((path) => read(path).includes(nonNullHomePattern));
+check(
+  "PAI tools avoid non-null HOME assumptions",
+  homeBangFiles.length === 0,
+  homeBangFiles.length ? homeBangFiles.slice(0, 8).join("\n") : "PAI/TOOLS scanned",
+);
+
 check(
   "PAI banner startup avoids Windows-visible POSIX probes",
   paiCli.includes("spawnSync([process.execPath, BANNER_SCRIPT]") &&

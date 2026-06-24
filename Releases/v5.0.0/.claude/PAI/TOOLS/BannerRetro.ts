@@ -20,7 +20,6 @@ import { join } from "path";
 import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME!;
 const CLAUDE_DIR = getFrameworkDir();
 
 // ═══════════════════════════════════════════════════════════════════════════
