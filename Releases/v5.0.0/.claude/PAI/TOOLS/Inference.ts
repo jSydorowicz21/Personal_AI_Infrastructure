@@ -193,7 +193,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       : options.userPrompt;
 
     if (useCodex) {
-      const codexPath = Bun.which("codex");
+      const codexPath = process.env.PAI_CODEX_BIN || Bun.which("codex");
       if (!codexPath) {
         resolve({
           success: false,

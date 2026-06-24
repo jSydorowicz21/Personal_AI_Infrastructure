@@ -4,6 +4,11 @@
  *
  * Source-level regression checks for the product-critical native Codex paths:
  * Algorithm execution, Pulse AI jobs, Pulse chat modules, and Pulse static build.
+ *
+ * These are wiring/source-string guards only — they confirm the launchers are
+ * shaped correctly but do NOT execute anything. The end-to-end runtime proof
+ * (that runFrameworkAgent() and inference() actually spawn `codex exec` with the
+ * contracted sandbox/flags/stdin) lives in CodexFrameworkAgentExecutionSmokeTest.ts.
  */
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -66,7 +71,7 @@ check(
     frameworkAgent.includes('"--sandbox"') &&
     frameworkAgent.includes('"workspace-write"') &&
     frameworkAgent.indexOf('if (framework === "codex")') < frameworkAgent.indexOf('Bun.which("claude")'),
-  "PAI/TOOLS/lib/framework-agent.ts",
+  "PAI/TOOLS/lib/framework-agent.ts (source shape; runtime: CodexFrameworkAgentExecutionSmokeTest)",
 );
 
 check(
@@ -74,7 +79,7 @@ check(
   inferenceTool.includes('const framework = getActiveFramework()') &&
     inferenceTool.includes('const useCodex = framework === "codex"') &&
     inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("spawn('claude'"),
-  "PAI/TOOLS/Inference.ts",
+  "PAI/TOOLS/Inference.ts (source shape; runtime: CodexFrameworkAgentExecutionSmokeTest)",
 );
 
 check(

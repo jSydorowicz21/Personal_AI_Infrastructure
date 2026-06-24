@@ -64,7 +64,7 @@ export function buildFrameworkAgentCommand(
   const env = frameworkAgentEnv();
 
   if (framework === "codex") {
-    const command = Bun.which("codex") ?? "codex";
+    const command = process.env.PAI_CODEX_BIN || Bun.which("codex") || "codex";
     return {
       framework,
       label: "codex exec",

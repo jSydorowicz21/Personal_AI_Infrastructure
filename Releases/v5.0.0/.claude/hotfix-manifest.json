@@ -61,6 +61,10 @@
       "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts",
+      "target": "PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
     },
