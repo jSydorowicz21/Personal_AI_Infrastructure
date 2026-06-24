@@ -28,7 +28,7 @@ function check(name: string, passed: boolean, detail: string): void {
 }
 
 function run(name: string, command: string, args: string[], options: { cwd?: string; env?: Record<string, string>; timeout?: number } = {}): void {
-  const resolvedCommand = Bun.which(command) || command;
+  const resolvedCommand = command === "bun" ? process.execPath : (Bun.which(command) || command);
   const spawnCommand = process.platform === "win32" && resolvedCommand.toLowerCase().endsWith(".cmd")
     ? (process.env.ComSpec || "cmd.exe")
     : resolvedCommand;
@@ -38,6 +38,7 @@ function run(name: string, command: string, args: string[], options: { cwd?: str
     env: { ...process.env, ...options.env },
     encoding: "utf-8",
     timeout: options.timeout || 120_000,
+    windowsHide: true,
     maxBuffer: 20 * 1024 * 1024,
   });
   const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
@@ -257,7 +258,7 @@ function main(): void {
     run("OpenCode framework-agent execution smoke", "bun", ["PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
-    run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"]);
+    run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 });
     run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
     run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
     run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);

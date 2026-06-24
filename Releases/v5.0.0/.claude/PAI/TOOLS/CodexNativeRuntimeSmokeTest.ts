@@ -52,6 +52,8 @@ const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
+const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
+const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
@@ -165,6 +167,23 @@ check(
     !rebuildArchSummary.includes('"PAI_ARCHITECTURE_SUMMARY.md"') &&
     !rebuildArchSummary.includes('"Tools/ArchitectureSummaryGenerator.ts"'),
   "hooks/handlers/RebuildArchSummary.ts",
+);
+
+check(
+  "Integrity maintenance stays hidden on Windows",
+  systemIntegrity.includes("process.execPath") &&
+    systemIntegrity.includes("windowsHide: true") &&
+    !systemIntegrity.includes("spawn('bun'") &&
+    !systemIntegrity.includes('spawn("bun"'),
+  "hooks/handlers/SystemIntegrity.ts",
+);
+
+check(
+  "Branch validation avoids visible Windows cmd shims",
+  branchValidation.includes('command === "bun" ? process.execPath') &&
+    branchValidation.includes("windowsHide: true") &&
+    !branchValidation.includes("const resolvedCommand = Bun.which(command) || command;"),
+  "PAI/TOOLS/CodexBranchValidation.ts",
 );
 
 check(

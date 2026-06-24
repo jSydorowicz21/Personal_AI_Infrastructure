@@ -74,7 +74,7 @@ const SETTINGS_PATH = join(FRAMEWORK_ROOT, "settings.json");
 const ADAPTER = join(ROOT, "hooks", "FrameworkHookAdapter.ts");
 
 const PRE_TOOL_HOOKS = new Set(["bash", "shell", "write", "edit", "read", "apply_patch"]);
-const CONTENT_TOOLS = new Set(["webfetch", "websearch"]);
+const BASH_TOOLS = new Set(["bash", "shell"]);
 const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
 const QUESTION_TOOLS = new Set(["askuserquestion", "request_user_input", "ask_user_question"]);
 const AGENT_TOOLS = new Set(["agent", "task"]);
@@ -82,6 +82,7 @@ const DEFAULT_HOOK_TIMEOUT_MS = 15_000;
 const seenTranscriptRecords = new Set<string>();
 const loadedSessionContext = new Set<string>();
 const injectedSessionContext = new Set<string>();
+const dispatchedSessionEnd = new Set<string>();
 const sessionContext = new Map<string, string>();
 
 function hookEnv(): Record<string, string> {
@@ -300,6 +301,49 @@ function observe(hookFile: string, payload: JsonObject): void {
   }
 }
 
+function rtkRewrittenCommand(stdout: string): string {
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      const command = parsed?.hookSpecificOutput?.updatedInput?.command;
+      if (typeof command === "string" && command.trim()) return command;
+    } catch {
+      // Ignore non-JSON hook output.
+    }
+  }
+  return "";
+}
+
+function applyRtkRewrite(input: JsonObject, output: JsonObject, payload: JsonObject): void {
+  try {
+    const result = runHook("RtkPreToolUse.hook.js", payload);
+    const rewritten = rtkRewrittenCommand(result.stdout);
+    if (!rewritten) return;
+    if (!output.args || typeof output.args !== "object") {
+      output.args = { ...(input.args || {}) };
+    }
+    output.args.command = rewritten;
+  } catch {
+    // RTK rewriting is best-effort: missing/slow rtk must never break OpenCode.
+  }
+}
+
+function dispatchSessionEnd(input: JsonObject): void {
+  const id = sessionId(input);
+  if (dispatchedSessionEnd.has(id)) return;
+  dispatchedSessionEnd.add(id);
+  appendTranscript(input, { type: "event", eventType: "session.deleted" });
+  observe("SessionEndDispatcher.hook.ts", {
+    framework: FRAMEWORK,
+    session_id: id,
+    hook_event_name: "SessionEnd",
+    cwd: input.cwd || input.directory || input.worktree || ROOT,
+    transcript_path: transcriptPath(input),
+  });
+}
+
 function promptContext(stdout: string): string {
   const match = stdout.match(/<system-reminder>[\s\S]*?<\/system-reminder>/);
   return match?.[0]?.trim() || "";
@@ -372,6 +416,7 @@ export const PAIOpenCodePlugin = async () => {
       const tool = String(input.tool || "").toLowerCase();
       const payload = toolPayload("PreToolUse", input, output);
       if (PRE_TOOL_HOOKS.has(tool)) enforce("SecurityPipeline.hook.ts", payload);
+      if (BASH_TOOLS.has(tool)) applyRtkRewrite(input, output, payload);
       if (QUESTION_TOOLS.has(tool)) observe("SetQuestionTab.hook.ts", payload);
       if (AGENT_TOOLS.has(tool)) observe("AgentInvocation.hook.ts", payload);
     },
@@ -381,7 +426,9 @@ export const PAIOpenCodePlugin = async () => {
       const payload = toolPayload("PostToolUse", input, output);
       recordTool(input, output);
 
-      if (CONTENT_TOOLS.has(tool)) observe("ContentScanner.hook.ts", payload);
+      // Mirror Claude/Codex: scan every tool result for prompt injection, not
+      // just WebFetch/WebSearch. Non-blocking via observe (PostToolUse cannot block).
+      observe("ContentScanner.hook.ts", payload);
       if (WRITE_TOOLS.has(tool)) {
         observe("TelosSummarySync.hook.ts", payload);
         observe("ISASync.hook.ts", payload);
@@ -419,6 +466,12 @@ export const PAIOpenCodePlugin = async () => {
         prompt,
       });
       prependPromptContext(output, prompt, hookAdditionalContext(promptProcessing.stdout));
+      observe("SatisfactionCapture.hook.ts", {
+        framework: FRAMEWORK,
+        session_id: sessionId(input),
+        hook_event_name: "UserPromptSubmit",
+        prompt,
+      });
       injectSessionContext(input, output, prompt);
     },
 
@@ -435,6 +488,7 @@ export const PAIOpenCodePlugin = async () => {
         observe("KittyEnvPersist.hook.ts", sessionPayload(event));
         loadSessionContext(event);
         observe("StartupSelfCheck.hook.ts", sessionPayload(event));
+        observe("KVSync.hook.ts", sessionPayload(event));
       }
 
       if (event?.type === "session.created" || event?.type === "session.updated") {
@@ -458,6 +512,21 @@ export const PAIOpenCodePlugin = async () => {
             eventType: event.type,
           });
         }
+      }
+
+      if (event?.type === "session.deleted") {
+        // OpenCode's documented session lifecycle treats session.deleted as the
+        // session being torn down, so this is the SessionEnd parity boundary.
+        dispatchSessionEnd(event);
+        return;
+      }
+
+      if (event?.type === "session.error") {
+        // OpenCode does not document session.error as a definitive close, so only
+        // record it. SessionEnd stays bound to session.deleted to avoid firing the
+        // teardown lifecycle on a recoverable error.
+        appendTranscript(event, { type: "event", eventType: "session.error" });
+        return;
       }
 
       if (event?.type !== "session.idle") return;

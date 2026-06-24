@@ -104,10 +104,12 @@ function spawnIntegrityMaintenance(
       })),
     });
 
-    // Spawn detached process
-    const child = spawn('bun', [INTEGRITY_SCRIPT], {
+    // Spawn the current Bun executable directly. On Windows, spawning "bun"
+    // through PATH can resolve to a cmd shim and flash visible cmd.exe windows.
+    const child = spawn(process.execPath, [INTEGRITY_SCRIPT], {
       detached: true,
       stdio: ['pipe', 'ignore', 'inherit'],  // stdin for input, ignore stdout, inherit stderr for logging
+      windowsHide: true,
       env: { ...process.env },
     });
 

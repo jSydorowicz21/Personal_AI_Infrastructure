@@ -88,6 +88,7 @@ function checkOpenCodeConfigParses(root: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 10_000,
+    windowsHide: true,
   });
   if (version.error) {
     return [{
@@ -102,6 +103,7 @@ function checkOpenCodeConfigParses(root: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 30_000,
+    windowsHide: true,
   });
   const combined = `${outputText(result.stdout)}\n${outputText(result.stderr)}`;
   return [{
@@ -223,6 +225,8 @@ function checkGeneratedAgents(root: string, framework: Framework): Check[] {
 
 function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const pluginPath = join(root, "plugins", "pai-opencode.ts");
+  const pluginSource = existsSync(pluginPath) ? readFileSync(pluginPath, "utf-8") : "";
+  const sessionCreatedBranch = pluginSource.match(/session\.created"\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? "";
   const repeatMarkerPath = join(data, "opencode-repeat-detection.txt");
   const contextMarkerPath = join(data, "opencode-context-injection.txt");
   const shellEnvMarkerPath = join(data, "opencode-shell-env.json");
@@ -268,13 +272,14 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "user", content: [{ type: "text", text: "Actually, shared memory should follow OpenCode too." }] } } });
     await hooks.event({ event: { ...session, type: "message.updated", message: { role: "assistant", content: [{ type: "text", text: "Important: OpenCode wrote a PAI transcript." }] } } });
     await hooks["tool.execute.after"]({ ...session, tool: "edit" }, { args: { filePath: "PAI/TOOLS/Smoke.ts" }, output: "ok" });
+    await hooks.event({ event: { ...session, type: "session.error", error: "transient model error" } });
   `;
 
   const result = spawnSync(process.execPath, ["-e", script], {
     cwd: root,
     env: testEnv,
     encoding: "utf-8",
-    timeout: 20_000,
+    timeout: 60_000,
   });
 
   const staleHome = join(dirname(data), "opencode-stale-home");
@@ -297,7 +302,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     cwd: root,
     env: staleEnv,
     encoding: "utf-8",
-    timeout: 20_000,
+    timeout: 60_000,
   });
 
   const linkedHome = join(dirname(data), "opencode-linked-home");
@@ -411,6 +416,47 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       name: "opencode transcript activity parse",
       passed: activity.status === 0 && outputText(activity.stdout).includes("PAI/TOOLS/Smoke.ts"),
       detail: `status=${activity.status ?? "null"}`,
+    },
+    {
+      name: "opencode session start syncs KV (KVSync parity)",
+      passed: pluginSource.includes("KVSync.hook.ts") && sessionCreatedBranch.includes("KVSync.hook.ts"),
+      detail: sessionCreatedBranch.includes("KVSync.hook.ts") ? "KVSync observed on session.created" : "KVSync missing from session.created branch",
+    },
+    {
+      name: "opencode prompt captures satisfaction (SatisfactionCapture parity)",
+      passed: pluginSource.includes("SatisfactionCapture.hook.ts"),
+      detail: pluginSource.includes("SatisfactionCapture.hook.ts") ? "SatisfactionCapture wired" : "missing SatisfactionCapture",
+    },
+    {
+      name: "opencode scans every tool result (ContentScanner parity)",
+      passed: pluginSource.includes('observe("ContentScanner.hook.ts"') && !pluginSource.includes("CONTENT_TOOLS"),
+      detail: pluginSource.includes("CONTENT_TOOLS") ? "still gated by CONTENT_TOOLS" : "unconditional ContentScanner",
+    },
+    {
+      name: "opencode rewrites bash via RTK (RtkPreToolUse parity)",
+      passed: pluginSource.includes("RtkPreToolUse.hook.js")
+        && pluginSource.includes("hookSpecificOutput?.updatedInput?.command")
+        && pluginSource.includes("output.args.command = rewritten"),
+      detail: pluginSource.includes("RtkPreToolUse.hook.js") ? "RTK rewrite wired for bash/shell" : "missing RtkPreToolUse",
+    },
+    {
+      name: "opencode dispatches SessionEnd on session.deleted (SessionEndDispatcher parity)",
+      passed: pluginSource.includes("SessionEndDispatcher.hook.ts")
+        && pluginSource.includes('event?.type === "session.deleted"')
+        && pluginSource.includes('hook_event_name: "SessionEnd"'),
+      detail: pluginSource.includes("SessionEndDispatcher.hook.ts") ? "session.deleted mapped to SessionEnd" : "missing SessionEndDispatcher",
+    },
+    {
+      name: "opencode session.error records without SessionEnd",
+      passed: pluginSource.includes('event?.type === "session.error"') && transcriptText.includes('"eventType":"session.error"'),
+      detail: transcriptText.includes('"eventType":"session.error"') ? "session.error recorded" : "session.error not recorded",
+    },
+    {
+      name: "opencode SessionEnd dispatch guards duplicates per session",
+      passed: pluginSource.includes("dispatchedSessionEnd")
+        && pluginSource.includes("dispatchedSessionEnd.has(id)")
+        && pluginSource.includes("dispatchedSessionEnd.add(id)"),
+      detail: pluginSource.includes("dispatchedSessionEnd.has(id)") ? "in-memory dedup guard present" : "missing dedup guard",
     },
   ];
 }
