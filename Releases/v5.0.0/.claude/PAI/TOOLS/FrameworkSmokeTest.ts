@@ -31,6 +31,26 @@ function readJson(path: string): any {
   return JSON.parse(readFileSync(path, "utf-8"));
 }
 
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function removeTreeBestEffort(path: string): void {
+  for (let attempt = 1; attempt <= 8; attempt++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      if (attempt === 8) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`WARN smoke cleanup skipped for locked temp tree: ${path} (${message})`);
+        return;
+      }
+      sleepSync(250);
+    }
+  }
+}
+
 function outputText(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "string") return value;
@@ -1092,7 +1112,7 @@ failed += sequenceChecks.filter((check) => !check.passed).length;
 if (keep) {
   console.log(`\nKept smoke test root: ${base}`);
 } else {
-  rmSync(base, { recursive: true, force: true });
+  removeTreeBestEffort(base);
 }
 
 if (failed > 0) {

@@ -115,6 +115,24 @@ const CODEX_REASONING_DEFAULT: Record<InferenceLevel, string> = {
 const CODEX_DEFAULT_MODEL = "gpt-5.5";
 const CODEX_DEFAULT_CLASSIFIER_MODEL = "gpt-5.3-codex-spark";
 
+const OPENCODE_MODEL_ENV: Record<InferenceLevel, string> = {
+  fast: "PAI_OPENCODE_MODEL_FAST",
+  standard: "PAI_OPENCODE_MODEL_STANDARD",
+  smart: "PAI_OPENCODE_MODEL_SMART",
+};
+
+/**
+ * Resolve the OpenCode model (provider/model form) for a level. No model is
+ * hardcoded: level-specific env wins, then the shared PAI_OPENCODE_MODEL, then
+ * undefined — in which case the `--model` flag is omitted and OpenCode uses its
+ * own configured default.
+ */
+function opencodeModelFor(level: InferenceLevel): string | undefined {
+  const levelSpecific = process.env[OPENCODE_MODEL_ENV[level]];
+  if (levelSpecific) return levelSpecific;
+  return process.env.PAI_OPENCODE_MODEL || undefined;
+}
+
 function codexModelFor(level: InferenceLevel): string {
   const levelSpecific = process.env[CODEX_MODEL_ENV[level]];
   if (levelSpecific) return levelSpecific;
@@ -168,7 +186,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
   const startTime = Date.now();
   const timeout = options.timeout || config.defaultTimeout;
   const framework = getActiveFramework();
-  const useCodex = framework === "codex" || (!Bun.which("claude") && !!Bun.which("codex"));
+  const useOpenCode = framework === "opencode";
+  const useCodex = !useOpenCode && (framework === "codex" || (!Bun.which("claude") && !!Bun.which("codex")));
 
   return new Promise((resolve) => {
     // Unset CLAUDECODE so nested `claude` invocations don't trigger the
@@ -235,6 +254,111 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       let stdout = "";
       let stderr = "";
       const proc = spawn(codexPath, args, {
+        env,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      proc.stdin.write(combinedPrompt);
+      proc.stdin.end();
+
+      proc.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      const timeoutId = setTimeout(() => {
+        proc.kill("SIGTERM");
+        resolve({
+          success: false,
+          output: "",
+          error: `Timeout after ${timeout}ms`,
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+      }, timeout);
+
+      proc.on("close", (code) => {
+        clearTimeout(timeoutId);
+        const latencyMs = Date.now() - startTime;
+        if (code !== 0) {
+          resolve({
+            success: false,
+            output: stdout,
+            error: stderr || `Process exited with code ${code}`,
+            latencyMs,
+            level,
+          });
+          return;
+        }
+        const output = stdout.trim();
+        if (options.expectJson) {
+          const objectMatch = output.match(/\{[\s\S]*\}/);
+          const arrayMatch = output.match(/\[[\s\S]*\]/);
+          for (const candidate of [objectMatch?.[0], arrayMatch?.[0]]) {
+            if (!candidate) continue;
+            try {
+              const parsed = JSON.parse(candidate);
+              resolve({ success: true, output, parsed, latencyMs, level });
+              return;
+            } catch {}
+          }
+          resolve({ success: false, output, error: "Failed to parse JSON response", latencyMs, level });
+          return;
+        }
+        resolve({ success: true, output, latencyMs, level });
+      });
+
+      proc.on("error", (err) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: false,
+          output: "",
+          error: err.message,
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+      });
+      return;
+    }
+
+    if (useOpenCode) {
+      const opencodePath = process.env.PAI_OPENCODE_BIN || Bun.which("opencode");
+      if (!opencodePath) {
+        resolve({
+          success: false,
+          output: "",
+          error: "opencode executable not found in $PATH",
+          latencyMs: Date.now() - startTime,
+          level,
+        });
+        return;
+      }
+
+      const opencodeModel = opencodeModelFor(level);
+      const combinedPrompt = [
+        "System instructions:",
+        options.systemPrompt || "(none)",
+        "",
+        "User request:",
+        userPromptWithImages,
+      ].join("\n");
+      // Base contract: `opencode run --pure -` (prompt on stdin, scripting mode).
+      // Model flag is added only when an env selector resolves one; otherwise
+      // OpenCode falls back to its own configured default. Images attach via
+      // `--file` (per `opencode run --help`).
+      const args = [
+        "run",
+        "--pure",
+        ...(opencodeModel ? ["--model", opencodeModel] : []),
+        ...(hasImages ? options.imagePaths!.flatMap((p) => ["--file", p]) : []),
+        "-",
+      ];
+
+      let stdout = "";
+      let stderr = "";
+      const proc = spawn(opencodePath, args, {
         env,
         stdio: ["pipe", "pipe", "pipe"],
       });

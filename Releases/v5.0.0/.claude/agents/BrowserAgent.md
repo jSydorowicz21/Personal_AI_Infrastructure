@@ -2,7 +2,7 @@
 name: BrowserAgent
 description: DEPRECATED — legacy built-in agent. Do not invoke for new work. Use the Interceptor skill for all browser automation, web scraping, form filling, data extraction, page interaction, and screenshots. Retained only for reference; its internals cannot be modified.
 model: sonnet
-color: cyan
+color: "#06B6D4"
 skills:
   - Interceptor
 maxTurns: 5

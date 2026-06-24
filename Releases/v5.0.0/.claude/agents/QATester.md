@@ -2,7 +2,7 @@
 name: QATester
 description: DEPRECATED — legacy built-in agent. Do not invoke for new work. Use the Interceptor skill for Gate 4 browser-based QA validation, screenshots, console checks, and user-flow testing. Retained only for reference; its internals cannot be modified.
 model: opus
-color: yellow
+color: "#CA8A04"
 skills:
   - Interceptor
 maxTurns: 5

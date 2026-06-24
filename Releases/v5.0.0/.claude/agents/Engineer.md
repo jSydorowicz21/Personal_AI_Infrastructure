@@ -4,7 +4,7 @@ description: Elite principal engineer with Fortune 10 and premier Bay Area compa
 initialPrompt: "Load project context by reading CLAUDE.md or AGENTS.md in the current directory and $PAI_DIR/CONTEXT_ROUTING.md"
 model: opus
 isolation: worktree
-color: blue
+color: "#2563EB"
 voiceId: iLVmqjzCGGvqtMCk6vVQ
 voice:
   stability: 0.62

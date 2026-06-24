@@ -50,8 +50,12 @@ export function frameworkAgentEnv(source: NodeJS.ProcessEnv = process.env): Reco
 
 function maybeModelArg(framework: FrameworkId, model?: string): string[] {
   if (!model) return [];
+  // claude, codex, and opencode all accept `--model <model>` on their run/exec
+  // entrypoints. OpenCode expects the provider/model form (e.g.
+  // `anthropic/claude-sonnet-4-6`); the caller is responsible for that shape.
   if (framework === "claude") return ["--model", model];
   if (framework === "codex") return ["--model", model];
+  if (framework === "opencode") return ["--model", model];
   return [];
 }
 
@@ -84,15 +88,21 @@ export function buildFrameworkAgentCommand(
 
   if (framework === "opencode") {
     // Mirror the Codex PAI_CODEX_BIN override so an explicit binary can be pinned.
-    // Model propagation is intentionally omitted: OpenCode's `run` model contract
-    // (provider/model form) is not documented in this repo, so opts.model is not
-    // forwarded — see maybeModelArg(), which returns [] for opencode.
+    // Model propagation: `opencode run` accepts `-m, --model <provider/model>`
+    // (verified against `opencode run --help`). Forward an explicit opts.model,
+    // falling back to PAI_OPENCODE_MODEL (parity with PAI_CODEX_MODEL). When no
+    // model is supplied the base command stays the bare `opencode run -` contract.
+    // Flags precede the `-` stdin sentinel so they parse as options, not message.
     const command = process.env.PAI_OPENCODE_BIN || Bun.which("opencode") || "opencode";
     return {
       framework,
       label: "opencode run",
       command,
-      args: ["run", "-"],
+      args: [
+        "run",
+        ...maybeModelArg(framework, opts.model ?? process.env.PAI_OPENCODE_MODEL),
+        "-",
+      ],
       input: prompt,
       env,
     };

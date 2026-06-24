@@ -2,7 +2,7 @@
 name: UIReviewer
 description: DEPRECATED — legacy built-in agent. Do not invoke for new work. Use the Interceptor skill for user-story validation, step execution, screenshots, and structured PASS/FAIL reports. Retained only for reference; its internals cannot be modified.
 model: sonnet
-color: orange
+color: "#EA580C"
 skills:
   - Interceptor
 maxTurns: 5

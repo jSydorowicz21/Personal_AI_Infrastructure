@@ -17,15 +17,14 @@
  * the real launcher:
  * - runFrameworkAgent() -> `opencode run -`, prompt on stdin, cwd = opts.cwd.
  * - PAI_OPENCODE_BIN overrides Bun.which (parity with PAI_CODEX_BIN).
- * - opts.model is intentionally NOT propagated: OpenCode's `run` model-flag
- *   contract is undocumented in this repo, so no `--model`/`-m` flag is invented.
+ * - opts.model propagates: an explicit model becomes `--model <provider/model>`
+ *   (verified against `opencode run --help`) while the base command stays
+ *   `opencode run -`; PAI_OPENCODE_MODEL supplies the default (parity with
+ *   PAI_CODEX_MODEL).
  *
- * Inference coverage: Inference.ts intentionally routes only Claude/Codex — its
- * provider switch is `useCodex = framework === "codex" || ...` with a Claude
- * fallback, and it carries no OpenCode-native branch. So OpenCode inference is
- * NOT a supported direct provider path; OpenCode native execution proof is the
- * framework-agent path exercised here. The child asserts that contract instead
- * of spawning a real `claude`/provider.
+ * - inference() under OpenCode invokes `opencode run --pure -`, sends the
+ *   combined system/user prompt on stdin, honors PAI_OPENCODE_BIN and
+ *   PAI_OPENCODE_MODEL_<LEVEL>, and scrubs Anthropic credentials.
  *
  * Complements the source/config coverage in FrameworkSmokeTest.ts (config gen +
  * plugin transcript) by executing the real launcher end-to-end against a
@@ -78,6 +77,8 @@ if (recordFile) {
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
       ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
       CLAUDECODE: process.env.CLAUDECODE,
+      PAI_INFERENCE_CHILD: process.env.PAI_INFERENCE_CHILD,
+      PAI_DISABLE_RECURSIVE_HOOKS: process.env.PAI_DISABLE_RECURSIVE_HOOKS,
     },
   }));
 }
@@ -143,6 +144,11 @@ function runParent(): number {
     childEnv.CLAUDECODE = "1";
     delete childEnv.PAI_DIR;
     delete childEnv.PAI_FRAMEWORK_DIR;
+    delete childEnv.PAI_OPENCODE_BIN;
+    delete childEnv.PAI_OPENCODE_MODEL;
+    delete childEnv.PAI_OPENCODE_MODEL_FAST;
+    delete childEnv.PAI_OPENCODE_MODEL_STANDARD;
+    delete childEnv.PAI_OPENCODE_MODEL_SMART;
 
     const child = Bun.spawnSync([process.execPath, import.meta.path], {
       env: childEnv,
@@ -163,6 +169,7 @@ function runParent(): number {
 // ---------------------------------------------------------------------------
 async function runChild(): Promise<void> {
   const { runFrameworkAgent, buildFrameworkAgentCommand } = await import("./lib/framework-agent");
+  const { inference } = await import("./Inference");
   const { getActiveFramework } = await import("./lib/transcripts");
 
   const binDir = process.env.FAKE_OPENCODE_BIN_DIR!;
@@ -233,38 +240,86 @@ async function runChild(): Promise<void> {
     `command=${pinnedSpec.command} expected=${sentinelBin}`,
   );
 
-  // --- 1c. Model propagation: intentional non-support ------------------------
-  // OpenCode's `run` model-flag contract is not documented in this repo, so the
-  // launcher does NOT forward opts.model (no invented flag). Assert that passing
-  // a model leaves the argv as the bare `run -` contract — no `--model`/`-m`.
+  // --- 1c. Model propagation -------------------------------------------------
+  // OpenCode's `run` command accepts `--model <provider/model>`; explicit model
+  // requests are forwarded while the no-model path above remains `run -`.
   const modeledSpec = buildFrameworkAgentCommand("PAI-FAKE-OPENCODE::model probe", {
     cwd: workspace,
     model: "anthropic/claude-sonnet-4-6",
   });
   check(
-    "opts.model is intentionally not propagated to opencode (no --model/-m flag)",
-    modeledSpec.args.length === 2 &&
+    "opts.model propagates to opencode as --model provider/model",
+    modeledSpec.args.length === 4 &&
       modeledSpec.args[0] === "run" &&
-      modeledSpec.args[1] === "-" &&
-      !modeledSpec.args.includes("--model") &&
-      !modeledSpec.args.includes("-m"),
+      modeledSpec.args[1] === "--model" &&
+      modeledSpec.args[2] === "anthropic/claude-sonnet-4-6" &&
+      modeledSpec.args[3] === "-",
     modeledSpec.args.join(" "),
   );
 
-  // --- 2. Inference path: documented non-support ------------------------------
-  // Inference.ts routes only Claude/Codex. Driving inference() under OpenCode
-  // would fall through to the Claude branch and spawn a real `claude`, touching
-  // live auth — which this smoke must not do. Instead we assert the documented
-  // contract from source: there is no OpenCode-native provider branch, and the
-  // provider switch is the codex-vs-claude form. OpenCode native execution proof
-  // is the framework-agent path verified above.
-  const inferenceSrc = readFileSync(join(import.meta.dir, "Inference.ts"), "utf-8");
+  const prevDefaultModel = process.env.PAI_OPENCODE_MODEL;
+  process.env.PAI_OPENCODE_MODEL = "anthropic/claude-haiku-4-5";
+  const defaultModeledSpec = buildFrameworkAgentCommand("PAI-FAKE-OPENCODE::default model probe", {
+    cwd: workspace,
+  });
+  if (prevDefaultModel === undefined) delete process.env.PAI_OPENCODE_MODEL;
+  else process.env.PAI_OPENCODE_MODEL = prevDefaultModel;
   check(
-    "inference intentionally has no OpenCode-native provider branch (covered by framework-agent)",
-    inferenceSrc.includes('const useCodex = framework === "codex"') &&
-      !/===\s*"opencode"/.test(inferenceSrc) &&
-      !/framework\s*===\s*'opencode'/.test(inferenceSrc),
-    "PAI/TOOLS/Inference.ts routes Claude/Codex only; OpenCode uses runFrameworkAgent",
+    "PAI_OPENCODE_MODEL supplies default framework-agent model",
+    defaultModeledSpec.args.join(" ") === "run --model anthropic/claude-haiku-4-5 -",
+    defaultModeledSpec.args.join(" "),
+  );
+
+  // --- 2. Inference path ------------------------------------------------------
+  const inferenceRecord = join(recordDir, "inference.json");
+  const prevRecord = process.env.FAKE_OPENCODE_RECORD_FILE;
+  const prevBinForInference = process.env.PAI_OPENCODE_BIN;
+  const prevFastModel = process.env.PAI_OPENCODE_MODEL_FAST;
+  process.env.FAKE_OPENCODE_RECORD_FILE = inferenceRecord;
+  process.env.PAI_OPENCODE_BIN = resolvedOpenCode!;
+  process.env.PAI_OPENCODE_MODEL_FAST = "anthropic/claude-haiku-4-5";
+  const inferenceResult = await inference({
+    systemPrompt: "PAI fake OpenCode inference system prompt",
+    userPrompt: "PAI fake OpenCode inference user prompt",
+    level: "fast",
+    timeout: 10_000,
+  });
+  if (prevRecord === undefined) delete process.env.FAKE_OPENCODE_RECORD_FILE;
+  else process.env.FAKE_OPENCODE_RECORD_FILE = prevRecord;
+  if (prevBinForInference === undefined) delete process.env.PAI_OPENCODE_BIN;
+  else process.env.PAI_OPENCODE_BIN = prevBinForInference;
+  if (prevFastModel === undefined) delete process.env.PAI_OPENCODE_MODEL_FAST;
+  else process.env.PAI_OPENCODE_MODEL_FAST = prevFastModel;
+
+  check(
+    "inference invokes fake opencode under active OpenCode framework",
+    inferenceResult.success && inferenceResult.output.includes("FAKE_OPENCODE_OK"),
+    `success=${inferenceResult.success} error=${inferenceResult.error ?? "<none>"}`,
+  );
+
+  const inferenceCall = readRecording(inferenceRecord);
+  check(
+    "inference runs `opencode run --pure --model <model> -`",
+    inferenceCall.argv.join(" ") === "run --pure --model anthropic/claude-haiku-4-5 -",
+    inferenceCall.argv.join(" "),
+  );
+  check(
+    "inference sends combined system and user prompt on stdin",
+    inferenceCall.stdin.includes("System instructions:") &&
+      inferenceCall.stdin.includes("PAI fake OpenCode inference system prompt") &&
+      inferenceCall.stdin.includes("User request:") &&
+      inferenceCall.stdin.includes("PAI fake OpenCode inference user prompt"),
+    JSON.stringify(inferenceCall.stdin.slice(0, 180)),
+  );
+  check(
+    "inference env marks child mode and scrubs Anthropic credentials",
+    inferenceCall.env.PAI_FRAMEWORK === "opencode" &&
+      inferenceCall.env.PAI_INFERENCE_CHILD === "1" &&
+      inferenceCall.env.PAI_DISABLE_RECURSIVE_HOOKS === "1" &&
+      inferenceCall.env.ANTHROPIC_API_KEY === undefined &&
+      inferenceCall.env.ANTHROPIC_AUTH_TOKEN === undefined &&
+      inferenceCall.env.CLAUDECODE === undefined,
+    `PAI_FRAMEWORK=${inferenceCall.env.PAI_FRAMEWORK} child=${inferenceCall.env.PAI_INFERENCE_CHILD} ANTHROPIC_API_KEY=${inferenceCall.env.ANTHROPIC_API_KEY ?? "<unset>"}`,
   );
 }
 

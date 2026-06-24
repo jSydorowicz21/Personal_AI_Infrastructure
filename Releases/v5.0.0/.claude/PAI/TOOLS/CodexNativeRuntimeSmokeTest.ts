@@ -77,7 +77,8 @@ check(
 check(
   "Inference chooses Codex before Claude fallback",
   inferenceTool.includes('const framework = getActiveFramework()') &&
-    inferenceTool.includes('const useCodex = framework === "codex"') &&
+    inferenceTool.includes('const useOpenCode = framework === "opencode"') &&
+    inferenceTool.includes('const useCodex = !useOpenCode && (framework === "codex"') &&
     inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("spawn('claude'"),
   "PAI/TOOLS/Inference.ts (source shape; runtime: CodexFrameworkAgentExecutionSmokeTest)",
 );
