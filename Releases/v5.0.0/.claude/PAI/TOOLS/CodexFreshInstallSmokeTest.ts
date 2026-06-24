@@ -125,6 +125,8 @@ try {
   const configToml = existsSync(join(codexHome, "config.toml")) ? readFileSync(join(codexHome, "config.toml"), "utf-8") : "";
   const hooksJson = existsSync(join(codexHome, "hooks.json")) ? readFileSync(join(codexHome, "hooks.json"), "utf-8") : "";
   const agentsMd = existsSync(join(codexHome, "AGENTS.md")) ? readFileSync(join(codexHome, "AGENTS.md"), "utf-8") : "";
+  const codexAgentPath = join(codexHome, "agents", "engineer.toml");
+  const codexAgent = existsSync(codexAgentPath) ? readFileSync(codexAgentPath, "utf-8") : "";
   const interviewPromptPath = join(codexHome, "prompts", "interview.md");
   const interviewPrompt = existsSync(interviewPromptPath) ? readFileSync(interviewPromptPath, "utf-8") : "";
   const profile = existsSync(shellProfile) ? readFileSync(shellProfile, "utf-8") : "";
@@ -148,6 +150,9 @@ try {
     check("hooks ignore stale PAI_CONFIG_DIR", hookConfigDirs.length > 0 && hookConfigDirs.every((value) => value === expectedConfigDir && !value.includes(staleConfigSegment)), JSON.stringify(hookConfigDirs)),
     check("installer state ignores stale PAI_CONFIG_DIR", existsSync(expectedStatePath) && !existsSync(staleStatePath), expectedStatePath),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),
+    check("Codex native agent generated", codexAgent.includes("developer_instructions") && codexAgent.includes("provider-neutral PAI agent contract"), codexAgentPath),
+    check("Codex native agent avoids Claude provenance", codexAgent.length > 0 && !codexAgent.includes("shared Claude-style PAI agent definition") && !codexAgent.includes("~/.claude"), codexAgentPath),
+    check("Codex native agent avoids duplicate instruction fallback", codexAgent.length > 0 && !codexAgent.includes("AGENTS.md or AGENTS.md"), codexAgentPath),
     check("MCP profiles packaged", existsSync(join(codexHome, "MCPs", "dev-work.mcp.json")), join(codexHome, "MCPs", "dev-work.mcp.json")),
     check("MCP profile JSON parses", readJson(join(codexHome, "MCPs", "dev-work.mcp.json"))?.mcpServers?.shadcn?.command === "bunx", "dev-work.mcp.json"),
     check("framework state points to Codex", frameworkState.active === "codex" && frameworkState.root === codexHome, join(dataDir, "framework.json")),

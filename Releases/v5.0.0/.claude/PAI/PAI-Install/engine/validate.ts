@@ -272,6 +272,7 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       const memoryDeletePath = join(paiDir, "PAI", "TOOLS", "MemoryDelete.ts");
       const codexPromptContent = existsSync(codexPromptPath) ? readFileSync(codexPromptPath, "utf-8") : "";
       const codexInterviewPromptContent = existsSync(codexInterviewPromptPath) ? readFileSync(codexInterviewPromptPath, "utf-8") : "";
+      const codexAgentContent = existsSync(codexAgentPath) ? readFileSync(codexAgentPath, "utf-8") : "";
       checks.push({
         name: "Codex config.toml",
         passed: existsSync(codexConfigPath),
@@ -312,8 +313,15 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       });
       checks.push({
         name: "Codex native agents",
-        passed: existsSync(codexAgentPath),
-        detail: existsSync(codexAgentPath) ? "PAI agents generated as TOML" : "agents/engineer.toml missing",
+        passed: existsSync(codexAgentPath)
+          && codexAgentContent.includes("provider-neutral PAI agent contract")
+          && !codexAgentContent.includes("shared Claude-style PAI agent definition")
+          && !codexAgentContent.includes("~/.claude"),
+        detail: existsSync(codexAgentPath)
+          ? codexAgentContent.includes("provider-neutral PAI agent contract") && !codexAgentContent.includes("shared Claude-style PAI agent definition") && !codexAgentContent.includes("~/.claude")
+            ? "PAI agents generated as Codex TOML from provider-neutral contract"
+            : "agents/engineer.toml still has Claude-shaped provenance or paths"
+          : "agents/engineer.toml missing",
         critical: false,
       });
       checks.push({
@@ -355,11 +363,15 @@ export async function runValidation(state: InstallState, emit?: EngineEventHandl
       });
       checks.push({
         name: "OpenCode native agents",
-        passed: existsSync(openCodeAgentPath) && !openCodeAgentContent.includes("initialPrompt:"),
+        passed: existsSync(openCodeAgentPath)
+          && !openCodeAgentContent.includes("initialPrompt:")
+          && openCodeAgentContent.includes("provider-neutral PAI agent contract")
+          && !openCodeAgentContent.includes("shared Claude-style PAI agent definition")
+          && !openCodeAgentContent.includes("~/.claude"),
         detail: existsSync(openCodeAgentPath)
-          ? !openCodeAgentContent.includes("initialPrompt:")
-            ? "PAI agents generated as OpenCode markdown"
-            : "agents/Engineer.md still contains Claude-only frontmatter"
+          ? !openCodeAgentContent.includes("initialPrompt:") && openCodeAgentContent.includes("provider-neutral PAI agent contract") && !openCodeAgentContent.includes("shared Claude-style PAI agent definition") && !openCodeAgentContent.includes("~/.claude")
+            ? "PAI agents generated as OpenCode markdown from provider-neutral contract"
+            : "agents/Engineer.md still contains Claude-only frontmatter, provenance, or paths"
           : "agents/Engineer.md missing",
         critical: false,
       });

@@ -148,6 +148,11 @@ function checkGeneratedAgents(root: string, framework: Framework): Check[] {
       passed: framework === "claude" || (generatedText.includes("PAI path bootstrap") && generatedText.includes("$PAI_DATA_DIR/framework.json")),
       detail: framework === "claude" ? "Claude settings provides PAI_DIR" : "agent fallback paths",
     },
+    {
+      name: `${framework} agents use provider-neutral provenance`,
+      passed: framework === "claude" || (generatedText.includes("provider-neutral PAI agent contract") && !generatedText.includes("shared Claude-style PAI agent definition")),
+      detail: framework === "claude" ? "Claude keeps canonical markdown" : "provider-native render marker",
+    },
   ];
 }
 

@@ -13,6 +13,7 @@ import { PAI_VERSION, ALGORITHM_VERSION, DEFAULT_VOICES } from "./types";
 import { detectSystem, detectExistingUserContent, scanApiKeys, validateElevenLabsKey } from "./detect";
 import { generateCodexConfigToml, generateCodexHooksJson, generateOpenCodeConfigJson, generateSettingsJson, mergeCodexConfigToml, mergeOpenCodeConfigJson } from "./config-gen";
 import { defaultFramework, frameworkChoices, frameworkCliInstallCommands, getFrameworkTarget, getPaiDataDir } from "./frameworks";
+import { renderPaiAgentInstructions, slugifyPaiAgentName } from "../../TOOLS/lib/provider-agent-renderer";
 
 type ChoiceOption = {
   label: string;
@@ -667,38 +668,6 @@ function parseMarkdownFrontmatter(content: string): { frontmatter: Record<string
   return { frontmatter, body: normalized.slice(end + "\n---\n".length) };
 }
 
-function slugifyAgentName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "pai-agent";
-}
-
-function paiPathBootstrap(frameworkRootFallback: string): string {
-  return [
-    "PAI path bootstrap: If `$PAI_DIR` is unset, resolve it before reading PAI files.",
-    "Use `$PAI_DATA_DIR` if set; otherwise use `~/.pai`.",
-    "Read `$PAI_DATA_DIR/framework.json`; if it has `root`, treat `$PAI_DIR` as `<root>/PAI` and `$PAI_FRAMEWORK_DIR` as `<root>`.",
-    `If framework state is missing, treat \`$PAI_DIR\` as \`${frameworkRootFallback}/PAI\`.`,
-    "Treat `$PAI_DATA_DIR/MEMORY` and `$PAI_DATA_DIR/USER` as the shared memory and user-context roots.",
-  ].join("\n");
-}
-
-function codexAgentInstructions(initialPrompt: string | undefined, body: string): string {
-  const parts = [
-    "This PAI agent was generated from the shared Claude-style PAI agent definition for Codex.",
-    paiPathBootstrap("~/.codex"),
-    initialPrompt ? `Startup context: ${initialPrompt}` : "",
-    body,
-  ].filter(Boolean);
-
-  return parts.join("\n\n")
-    .replace(/\bCLAUDE\.md\b/g, "AGENTS.md")
-    .replace(/\bClaude Code\b/g, "Codex")
-    .replace(/~\/\.claude/g, "~/.codex");
-}
-
 function codexPromptContent(description: string, body: string): string {
   const adaptedBody = body
     .replace(/Use the Skill tool to invoke ([A-Za-z0-9_-]+) with the provided arguments:/g, "Invoke the $$$1 skill with the provided arguments:")
@@ -715,20 +684,6 @@ function codexPromptContent(description: string, body: string): string {
     adaptedBody,
     "",
   ].join("\n");
-}
-
-function openCodeInstructions(initialPrompt: string | undefined, body: string): string {
-  const parts = [
-    "This PAI agent was generated from the shared Claude-style PAI agent definition for OpenCode.",
-    paiPathBootstrap("~/.config/opencode"),
-    initialPrompt ? `Startup context: ${initialPrompt}` : "",
-    body,
-  ].filter(Boolean);
-
-  return parts.join("\n\n")
-    .replace(/\bCLAUDE\.md\b/g, "AGENTS.md")
-    .replace(/\bClaude Code\b/g, "OpenCode")
-    .replace(/~\/\.claude/g, "~/.config/opencode");
 }
 
 function frameworkInstructionContent(content: string, target: FrameworkTarget): string {
@@ -919,10 +874,15 @@ function syncCodexAgents(paiDir: string): number {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(join(agentsDir, entry.name), "utf-8"));
     const name = frontmatter.name || basename(entry.name, ".md");
-    const dst = join(agentsDir, `${slugifyAgentName(name)}.toml`);
+    const dst = join(agentsDir, `${slugifyPaiAgentName(name)}.toml`);
     if (existsSync(dst) && !shouldReplaceGeneratedPaiFile(dst)) continue;
     const description = frontmatter.description || `PAI ${name} agent.`;
-    const instructions = codexAgentInstructions(frontmatter.initialPrompt, body);
+    const instructions = renderPaiAgentInstructions("codex", {
+      name,
+      description,
+      initialPrompt: frontmatter.initialPrompt,
+      body,
+    });
     writeFileSync(dst, [
       `name = ${JSON.stringify(name)}`,
       `description = ${JSON.stringify(description)}`,
@@ -939,6 +899,7 @@ function shouldReplaceGeneratedPaiFile(path: string): boolean {
   try {
     const content = readFileSync(path, "utf-8");
     return content.includes("This PAI agent was generated")
+      || content.includes("This PAI agent was rendered")
       || content.includes("This PAI command was generated")
       || content.includes("This PAI prompt was generated")
       || content.includes('Skill("')
@@ -975,7 +936,12 @@ function syncOpenCodeAgents(paiDir: string): number {
       "mode: subagent",
       "---",
       "",
-      openCodeInstructions(frontmatter.initialPrompt, body),
+      renderPaiAgentInstructions("opencode", {
+        name,
+        description: frontmatter.description || `PAI ${name} agent.`,
+        initialPrompt: frontmatter.initialPrompt,
+        body,
+      }),
       "",
     ].join("\n"));
     written++;
