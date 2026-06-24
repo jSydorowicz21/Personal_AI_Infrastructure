@@ -54,6 +54,7 @@ const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
+const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
 const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
 const anvilProgress = read(join(paiRoot, "TOOLS", "AnvilProgress.ts"));
 const bannerSources = [
@@ -157,6 +158,17 @@ check(
     !/Bun\.spawn\(\s*\[\s*["']claude["']/.test(algorithm) &&
     !algorithm.includes("--bare"),
   "loop, parallel, interactive, and ideate modes",
+);
+
+check(
+  "Algorithm and CostTracker use Windows-aware home helper",
+  algorithm.includes('import { homeDir, memoryPath } from "./lib/paths"') &&
+    algorithm.includes("const HOME = homeDir()") &&
+    !algorithm.includes('const HOME = process.env.HOME || "~"') &&
+    costTracker.includes("homeDir, memoryPath") &&
+    costTracker.includes("const HOME = homeDir()") &&
+    !costTracker.includes("process.env.HOME ?? process.env.USERPROFILE"),
+  "PAI/TOOLS/algorithm.ts and CostTracker.ts",
 );
 
 check(

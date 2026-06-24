@@ -31,9 +31,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
-import { getFrameworkDir, getPaiDir, memoryPath, userPath } from "./lib/paths";
+import { getFrameworkDir, getPaiDir, homeDir, memoryPath, userPath } from "./lib/paths";
 
-const HOME = process.env.HOME ?? process.env.USERPROFILE ?? "";
+const HOME = homeDir();
 const PAI_DIR = getPaiDir();
 const FRAMEWORK_DIR = getFrameworkDir();
 const OBS_DIR = memoryPath("OBSERVABILITY");

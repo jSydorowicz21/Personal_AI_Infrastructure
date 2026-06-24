@@ -51,7 +51,7 @@ import { resolve, basename, join, dirname } from "path";
 import { spawnSync, spawn } from "child_process";
 import { randomUUID } from "crypto";
 import { generateISATemplate } from "../../hooks/lib/isa-template";
-import { memoryPath } from "./lib/paths";
+import { homeDir, memoryPath } from "./lib/paths";
 import {
   buildFrameworkAgentCommand,
   DEFAULT_AGENT_TOOLS,
@@ -60,7 +60,7 @@ import {
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 
-const HOME = process.env.HOME || "~";
+const HOME = homeDir();
 const ALGORITHMS_DIR = memoryPath("STATE", "algorithms");
 const SESSION_NAMES_PATH = memoryPath("STATE", "session-names.json");
 const PROJECTS_DIR = process.env.PROJECTS_DIR || join(HOME, "Projects");
