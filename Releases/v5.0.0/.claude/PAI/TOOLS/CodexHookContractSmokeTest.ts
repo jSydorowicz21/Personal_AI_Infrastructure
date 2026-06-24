@@ -9,10 +9,11 @@
  */
 
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "../../hooks/lib/framework-hook-contract";
+import { homeDir } from "./lib/paths";
 
 type HookCase = {
   event: string;
@@ -29,7 +30,7 @@ type Check = {
 const keep = process.argv.includes("--keep");
 const dynamic = process.argv.includes("--dynamic") || process.env.PAI_SMOKE_DYNAMIC === "1";
 const releaseRoot = resolve(import.meta.dir, "..", "..");
-const home = process.env.HOME || homedir();
+const home = homeDir();
 function existingEnvPath(key: string): string {
   const value = process.env[key];
   return value && existsSync(value) ? value : "";

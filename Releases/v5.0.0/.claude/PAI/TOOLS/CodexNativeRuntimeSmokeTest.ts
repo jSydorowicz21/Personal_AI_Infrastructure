@@ -82,6 +82,7 @@ const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
 const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts"));
 const patternInspector = read(join(releaseRoot, "hooks", "security", "inspectors", "PatternInspector.ts"));
+const codexHookContractSmoke = read(join(paiRoot, "TOOLS", "CodexHookContractSmokeTest.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const repeatDetectionSmoke = read(join(paiRoot, "TOOLS", "RepeatDetectionSmokeTest.ts"));
@@ -482,7 +483,10 @@ check(
 
 check(
   "Codex hook proof utilities keep child windows hidden",
-  codexHookTriggerSmoke.includes('import { homeDir } from "./lib/paths"') &&
+  codexHookContractSmoke.includes('import { homeDir } from "./lib/paths"') &&
+    codexHookContractSmoke.includes("const home = homeDir()") &&
+    !codexHookContractSmoke.includes("process.env.HOME || homedir()") &&
+    codexHookTriggerSmoke.includes('import { homeDir } from "./lib/paths"') &&
     codexHookTriggerSmoke.includes("const home = homeDir()") &&
     !codexHookTriggerSmoke.includes("homedir()") &&
     codexHookTriggerSmoke.includes("windowsHide: true") &&
@@ -498,7 +502,7 @@ check(
     startupSelfCheckSmoke.includes("const home = homeDir()") &&
     startupSelfCheckSmoke.includes("windowsHide: true") &&
     !startupSelfCheckSmoke.includes('join(process.env.HOME || "", ".codex")'),
-  "CodexHookTriggerSmokeTest, CodexRealSessionHookProof, RepeatDetectionSmokeTest, StartupSelfCheckSmokeTest",
+  "CodexHookContractSmokeTest, CodexHookTriggerSmokeTest, CodexRealSessionHookProof, RepeatDetectionSmokeTest, StartupSelfCheckSmokeTest",
 );
 
 check(
