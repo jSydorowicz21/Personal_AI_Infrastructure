@@ -4,22 +4,12 @@
  * All detection is read-only and non-destructive.
  */
 
-import { execFileSync, execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { basename, extname, join } from "path";
 import type { DetectionResult, ExistingUserContentDetection, FrameworkId } from "./types";
 import { getFrameworkTarget } from "./frameworks";
-
-function tryExec(cmd: string): string | null {
-  try {
-    return execSync(cmd, { timeout: 5000, stdio: ["pipe", "pipe", "pipe"] })
-      .toString()
-      .trim();
-  } catch {
-    return null;
-  }
-}
 
 function tryExecFile(command: string, args: string[] = []): string | null {
   try {
@@ -27,9 +17,14 @@ function tryExecFile(command: string, args: string[] = []): string | null {
       return execFileSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", [command, ...args].map(quoteCmdArg).join(" ")], {
         timeout: 5000,
         stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
       }).toString().trim();
     }
-    return execFileSync(command, args, { timeout: 5000, stdio: ["ignore", "pipe", "pipe"] })
+    return execFileSync(command, args, {
+      timeout: 5000,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    })
       .toString()
       .trim();
   } catch {
@@ -56,7 +51,7 @@ function detectOS(): DetectionResult["os"] {
     version = swVers || "";
     name = `macOS ${version}`;
   } else if (platform === "win32") {
-    version = tryExecFile("cmd", ["/c", "ver"]) || "";
+    version = tryExecFile(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "ver"]) || "";
     name = version || "Windows";
   } else {
     let release = "";
@@ -75,7 +70,7 @@ function detectShell(): DetectionResult["shell"] {
   const shellPath = process.env.SHELL || (process.platform === "win32" ? process.env.ComSpec || "powershell.exe" : "/bin/sh");
   const shellName = shellPath.split(/[\\/]/).pop() || (process.platform === "win32" ? "powershell.exe" : "sh");
   const version = process.platform === "win32"
-    ? tryExecFile("powershell", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"]) || tryExecFile("cmd", ["/c", "ver"]) || ""
+    ? tryExecFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "$PSVersionTable.PSVersion.ToString()"]) || tryExecFile(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "ver"]) || ""
     : (tryExecFile(shellPath, ["--version"]) || "").split(/\r?\n/)[0] || "";
 
   return { name: shellName, version, path: shellPath };

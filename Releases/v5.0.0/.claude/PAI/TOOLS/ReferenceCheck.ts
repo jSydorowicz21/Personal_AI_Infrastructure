@@ -26,7 +26,7 @@
 
 import { readFileSync, statSync, existsSync, readdirSync, realpathSync } from 'fs';
 import { join, resolve, dirname, relative, extname, sep } from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { getFrameworkDir, getPaiDir } from './lib/paths';
 
 const HOME = process.env.HOME || '';
@@ -463,15 +463,19 @@ function extractRefs(content: string, referringFile: string): RefHit[] {
 // ── Git changed files ──
 
 function getChangedFiles(): Set<string> {
-  try {
-    const diff = execSync(
-      'git diff --name-only HEAD 2>/dev/null; git diff --cached --name-only 2>/dev/null',
-      { cwd: CLAUDE_DIR, encoding: 'utf-8' }
-    );
-    return new Set(diff.split('\n').filter(Boolean).map(f => resolve(CLAUDE_DIR, f)));
-  } catch {
-    return new Set();
+  const changed = new Set<string>();
+  for (const args of [["diff", "--name-only", "HEAD"], ["diff", "--cached", "--name-only"]]) {
+    const diff = spawnSync("git", args, {
+      cwd: CLAUDE_DIR,
+      encoding: "utf-8",
+      windowsHide: true,
+    });
+    if (diff.status !== 0 && !diff.stdout) continue;
+    for (const file of diff.stdout.split('\n').filter(Boolean)) {
+      changed.add(resolve(CLAUDE_DIR, file));
+    }
   }
+  return changed;
 }
 
 // ── Main ──

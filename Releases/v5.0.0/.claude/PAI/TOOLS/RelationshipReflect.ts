@@ -27,7 +27,6 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 import { memoryPath, userPath } from './lib/paths';
 
 interface RelationshipNote {
@@ -410,15 +409,14 @@ function sendNotification(message: string): void {
   console.log(`[Notification] ${message}`);
 
   // Use ntfy if available
-  try {
-    const topic = process.env.NTFY_TOPIC;
-    if (topic) {
-      execSync(`curl -s -d "${message}" ntfy.sh/${topic} 2>/dev/null || true`, {
-        stdio: 'ignore',
-        timeout: 3000
-      });
-    }
-  } catch {}
+  const topic = process.env.NTFY_TOPIC;
+  if (!topic) return;
+  const safeTopic = encodeURIComponent(topic);
+  fetch(`https://ntfy.sh/${safeTopic}`, {
+    method: 'POST',
+    body: message,
+    signal: AbortSignal.timeout(3000),
+  }).catch(() => {});
 }
 
 /**

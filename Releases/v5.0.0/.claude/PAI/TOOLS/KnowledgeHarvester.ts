@@ -46,6 +46,39 @@ const SEEDLING_EXPIRY_DAYS = 90;
 
 const DOMAINS = ["People", "Companies", "Ideas", "Research"];
 
+function walkMarkdownFiles(dir: string, acc: string[] = []): string[] {
+  if (!fs.existsSync(dir)) return acc;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkMarkdownFiles(entryPath, acc);
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      acc.push(entryPath);
+    }
+  }
+  return acc;
+}
+
+function countWikiBacklinks(slug: string): number {
+  const needle = `[[${slug}`;
+  let total = 0;
+  for (const file of walkMarkdownFiles(KNOWLEDGE_DIR)) {
+    try {
+      const content = fs.readFileSync(file, "utf-8");
+      let offset = 0;
+      while (true) {
+        const found = content.indexOf(needle, offset);
+        if (found === -1) break;
+        total++;
+        offset = found + needle.length;
+      }
+    } catch {
+      // Ignore unreadable notes; harvesting should keep moving.
+    }
+  }
+  return total;
+}
+
 // Object type classification keywords
 const TYPE_KEYWORDS: Record<string, string[]> = {
   People: ["osint", "person", "contact", "linkedin", "career", "background", "dossier", "profile", "biography"],
@@ -449,16 +482,7 @@ function regenerateMOC(domain: string): void {
     const fm = parseFrontmatter(content);
     const slug = file.replace(/\.md$/, "");
 
-    // Count backlinks across all KNOWLEDGE/ files
-    let backlinkCount = 0;
-    try {
-      const { execSync } = require("child_process");
-      const result = execSync(`rg -c '\\[\\[${slug}' "${KNOWLEDGE_DIR}" 2>/dev/null || echo "0"`, { encoding: "utf-8" });
-      backlinkCount = result.split("\n").reduce((acc: number, line: string) => {
-        const match = line.match(/:(\d+)$/);
-        return acc + (match ? parseInt(match[1]) : 0);
-      }, 0);
-    } catch { /* rg not available or no matches */ }
+    const backlinkCount = countWikiBacklinks(slug);
 
     notes.push({
       slug,
@@ -700,17 +724,8 @@ function expireStaleSeedlings(): string[] {
       const daysSince = (Date.now() - new Date(fm.created).getTime()) / (1000 * 60 * 60 * 24);
       if (daysSince <= SEEDLING_EXPIRY_DAYS) continue;
 
-      // Check for inbound references
-      try {
-        const slug = file.replace(/\.md$/, "");
-        const { execSync } = require("child_process");
-        const result = execSync(`rg -c '\\[\\[${slug}' "${KNOWLEDGE_DIR}" 2>/dev/null || echo ""`, { encoding: "utf-8" });
-        const totalRefs = result.split("\n").reduce((acc: number, line: string) => {
-          const match = line.match(/:(\d+)$/);
-          return acc + (match ? parseInt(match[1]) : 0);
-        }, 0);
-        if (totalRefs > 0) continue; // Has references, don't expire
-      } catch { /* rg failed, be conservative — don't expire */ continue; }
+      const slug = file.replace(/\.md$/, "");
+      if (countWikiBacklinks(slug) > 0) continue; // Has references, don't expire
 
       // Move to archive
       const archivePath = path.join(ARCHIVE_DIR, file);

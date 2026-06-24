@@ -30,7 +30,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { getFrameworkDir, getPaiDir, memoryPath, userPath } from "./lib/paths";
 
 const HOME = process.env.HOME ?? process.env.USERPROFILE ?? "";
@@ -211,14 +211,19 @@ function classifyCallSite(file: string, reason: string): { classification: "bypa
 
 function scanCallSites(): CallSite[] {
   const hits: CallSite[] = [];
-  const excludeArgs = SCAN_EXCLUDES.map((e) => `-g '!${e}/**'`).join(" ");
+  const excludeArgs = SCAN_EXCLUDES.flatMap((e) => ["-g", `!${e}/**`]);
 
   for (const root of SCAN_ROOTS) {
     if (!existsSync(root)) continue;
     for (const { pattern, reason } of RISK_PATTERNS) {
       try {
-        const cmd = `rg --line-number --no-heading ${excludeArgs} -e '${pattern}' '${root}' 2>/dev/null`;
-        const output = execSync(cmd, { encoding: "utf-8", maxBuffer: 4 * 1024 * 1024 }).trim();
+        const result = spawnSync("rg", ["--line-number", "--no-heading", ...excludeArgs, "-e", pattern, root], {
+          encoding: "utf-8",
+          maxBuffer: 4 * 1024 * 1024,
+          windowsHide: true,
+        });
+        if (result.error) continue;
+        const output = (result.stdout || "").trim();
         if (!output) continue;
         for (const line of output.split("\n")) {
           const match = line.match(/^([^:]+):(\d+):(.*)$/);

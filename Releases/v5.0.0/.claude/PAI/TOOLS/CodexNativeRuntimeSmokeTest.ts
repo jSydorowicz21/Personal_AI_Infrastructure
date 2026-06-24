@@ -48,6 +48,8 @@ const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"))
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
+const installActions = read(join(paiRoot, "PAI-Install", "engine", "actions.ts"));
+const installDetect = read(join(paiRoot, "PAI-Install", "engine", "detect.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
@@ -210,6 +212,18 @@ check(
 );
 
 check(
+  "Installer avoids shell-string exec on Windows-sensitive paths",
+  !installActions.includes("execSync") &&
+    !installDetect.includes("execSync") &&
+    installActions.includes("function trySpawn") &&
+    installActions.includes("windowsHide: true") &&
+    installActions.includes('tryGit(["clone", "https://github.com/danielmiessler/PAI.git", paiDir]') &&
+    installDetect.includes("execFileSync") &&
+    installDetect.includes("windowsHide: true"),
+  "PAI/PAI-Install/engine/actions.ts and detect.ts",
+);
+
+check(
   "Framework hook adapter derives PAI env fallback",
   hookAdapter.includes("const frameworkDir = resolve(join(hooksDir, \"..\"))") &&
     hookAdapter.includes("PAI_DIR: paiDir") &&
@@ -254,6 +268,24 @@ check(
   "PAI tools avoid non-null HOME assumptions",
   homeBangFiles.length === 0,
   homeBangFiles.length ? homeBangFiles.slice(0, 8).join("\n") : "PAI/TOOLS scanned",
+);
+
+const manualToolShellFiles = [
+  "CostTracker.ts",
+  "DocCheck.ts",
+  "GetTranscript.ts",
+  "KnowledgeHarvester.ts",
+  "ReferenceCheck.ts",
+  "RelationshipReflect.ts",
+].map((file) => join(paiRoot, "TOOLS", file))
+  .filter((path) => {
+    const source = read(path);
+    return source.includes("execSync(") || source.includes("require(\"child_process\")");
+  });
+check(
+  "Manual PAI tools avoid shell-string exec",
+  manualToolShellFiles.length === 0,
+  manualToolShellFiles.length ? manualToolShellFiles.slice(0, 8).join("\n") : "manual tools scanned",
 );
 
 check(

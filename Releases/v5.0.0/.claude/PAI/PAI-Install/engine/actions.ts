@@ -4,7 +4,7 @@
  * Each action takes state + event emitter, performs work, returns result.
  */
 
-import { execSync, spawn, spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, unlinkSync, chmodSync, lstatSync, cpSync, rmSync, readlinkSync, realpathSync } from "fs";
 import { homedir } from "os";
 import { join, basename, dirname } from "path";
@@ -375,12 +375,29 @@ function findExistingVoiceConfig(): { voiceId: string; aiName: string; source: s
   return null;
 }
 
+function trySpawn(command: string, args: string[], timeout = 30000, cwd?: string): string | null {
+  const result = spawnSync(command, args, {
+    cwd,
+    timeout,
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) return null;
+  return `${result.stdout || ""}${result.stderr || ""}`.trim();
+}
+
 function tryExec(cmd: string, timeout = 30000): string | null {
-  try {
-    return execSync(cmd, { timeout, stdio: ["pipe", "pipe", "pipe"] }).toString().trim();
-  } catch {
+  if (process.platform === "win32") {
+    const bunInstall = cmd.match(/^bun\s+install\s+-g\s+([@\w./-]+)$/);
+    if (bunInstall) return trySpawn(process.execPath, ["install", "-g", bunInstall[1]], timeout);
     return null;
   }
+  return trySpawn("sh", ["-c", cmd], timeout);
+}
+
+function tryGit(args: string[], timeout = 30000, cwd?: string): string | null {
+  return trySpawn("git", args, timeout, cwd);
 }
 
 // ─── User Context Migration (v2.5/v3.0 → v5.x) ─────────────────
@@ -1755,17 +1772,20 @@ export async function runRepository(
   if (!bundleInstalled) {
     await emit({ event: "progress", step: "repository", percent: 20, detail: "Cloning PAI repository..." });
 
-    const cloneResult = tryExec(
-      `git clone https://github.com/danielmiessler/PAI.git "${paiDir}" 2>&1`,
-      120000
-    );
+    const cloneResult = tryGit(["clone", "https://github.com/danielmiessler/PAI.git", paiDir], 120000);
 
     if (cloneResult !== null) {
       await emit({ event: "message", content: "PAI repository cloned successfully." });
     } else {
       await emit({ event: "progress", step: "repository", percent: 50, detail: "Directory exists, trying alternative approach..." });
 
-      const initResult = tryExec(`cd "${paiDir}" && git init && git remote add origin https://github.com/danielmiessler/PAI.git && git fetch origin && git checkout -b main origin/main 2>&1`, 120000);
+      const initOk = tryGit(["init"], 120000, paiDir) !== null;
+      const remoteOk =
+        tryGit(["remote", "add", "origin", "https://github.com/danielmiessler/PAI.git"], 120000, paiDir) !== null ||
+        tryGit(["remote", "set-url", "origin", "https://github.com/danielmiessler/PAI.git"], 120000, paiDir) !== null;
+      const fetchOk = tryGit(["fetch", "origin"], 120000, paiDir) !== null;
+      const checkoutOk = tryGit(["checkout", "-B", "main", "origin/main"], 120000, paiDir) !== null;
+      const initResult = initOk && remoteOk && fetchOk && checkoutOk ? "ok" : null;
       if (initResult !== null) {
         await emit({ event: "message", content: "PAI repository initialized and synced." });
       } else {
@@ -2228,7 +2248,7 @@ export async function runConfiguration(
   // Fix permissions
   await emit({ event: "progress", step: "configuration", percent: 90, detail: "Setting permissions..." });
   try {
-    tryExec(`chmod -R 755 "${paiDir}"`, 10000);
+    if (process.platform !== "win32") tryExec(`chmod -R 755 "${paiDir}"`, 10000);
   } catch {
     // Non-fatal
   }
