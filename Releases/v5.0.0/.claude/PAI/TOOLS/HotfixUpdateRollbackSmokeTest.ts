@@ -341,7 +341,163 @@ const rollbackChecks: Check[] = [
   check("rollback restores OpenCode plugin", read(join(installRoot, "plugins", "pai-opencode.ts")) === sentinels.opencodePlugin, join(installRoot, "plugins", "pai-opencode.ts")),
 ];
 
-const checks = [...beforeRollbackChecks, ...rollbackChecks];
+// ---------------------------------------------------------------------------
+// OpenCode hotfix update scenario
+//
+// Proves the same updater can patch an existing OpenCode install: it overlays
+// the managed plugin from the release, then regenerates native OpenCode
+// artifacts (schema-clean opencode.json, mode:subagent agents, Skill-free
+// commands) via the installed PAI CLI while preserving protected state.
+// ---------------------------------------------------------------------------
+
+function jsonParseOrNull(text: string): Record<string, any> | null {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+const ocHome = join(root, "oc-home");
+const ocDataDir = join(ocHome, ".pai");
+const ocConfigDir = join(ocHome, ".config", "PAI");
+const ocInstallRoot = join(root, "old-opencode");
+
+const ocSentinels = {
+  plugin: "OLD_OC_PLUGIN_SENTINEL",
+  config: "PROTECTED_OC_CONFIG_SENTINEL",
+  auth: "PROTECTED_OC_AUTH_SENTINEL",
+  user: "PROTECTED_OC_USER_SENTINEL",
+  memory: "PROTECTED_OC_MEMORY_SENTINEL",
+};
+
+// Reuse the already-built release fixture as a complete OpenCode install tree so
+// the installed PAI CLI has everything it needs to regenerate native artifacts.
+mkdirSync(ocHome, { recursive: true });
+mkdirSync(ocDataDir, { recursive: true });
+cpSync(installedSourceRoot, ocInstallRoot, { recursive: true, force: true });
+// A real OpenCode install carries an AGENTS.md plus a CLAUDE.md source that the
+// CLI transforms; make sure both point at the algorithm entrypoint.
+write(join(ocInstallRoot, "CLAUDE.md"), "**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` from the active PAI subsystem directory.");
+write(join(ocInstallRoot, "AGENTS.md"), "**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` from the active PAI subsystem directory.");
+write(join(ocInstallRoot, "PAI", "ALGORITHM", "LATEST"), "6.3.0");
+write(join(ocInstallRoot, "PAI", "ALGORITHM", "v6.3.0.md"), "# algorithm placeholder");
+// Stale plugin proves the manifest overlay refreshes it from the release.
+write(join(ocInstallRoot, "plugins", "pai-opencode.ts"), ocSentinels.plugin);
+// A pre-existing opencode.json carrying unsupported keys proves regeneration
+// strips env/pai and forces instructions back to AGENTS.md.
+write(join(ocInstallRoot, "opencode.json"), JSON.stringify({
+  "$schema": "https://opencode.ai/config.json",
+  instructions: ["CLAUDE.md"],
+  env: { PAI_LEGACY: "1" },
+  pai: { framework: "opencode" },
+  mcp: { legacy: { type: "local", command: ["echo", "ok"], enabled: true } },
+}, null, 2));
+// Protected state that must survive the update untouched.
+write(join(ocInstallRoot, "config.toml"), ocSentinels.config);
+write(join(ocInstallRoot, "auth.json"), ocSentinels.auth);
+write(join(ocInstallRoot, "PAI", "USER", "profile.md"), ocSentinels.user);
+write(join(ocInstallRoot, "MEMORY", "STATE", "state.json"), ocSentinels.memory);
+write(join(ocDataDir, "framework.json"), JSON.stringify({
+  active: "opencode",
+  frameworkName: "OpenCode",
+  root: ocInstallRoot,
+  dataDir: ocDataDir,
+}, null, 2));
+
+const ocUpdateArgs = process.platform === "win32"
+  ? [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      join(releaseRoot, "update-installed.ps1"),
+      "-Framework",
+      "opencode",
+      "-InstallRoot",
+      ocInstallRoot,
+      "-NoPull",
+      "-SourceDir",
+      installedSourceRoot,
+    ]
+  : [
+      join(releaseRoot, "update-installed.sh"),
+      "--framework",
+      "opencode",
+      "--install-root",
+      ocInstallRoot,
+      "--no-pull",
+      "--source-dir",
+      installedSourceRoot,
+    ];
+
+const ocUpdate = spawnSync(updateCommand, ocUpdateArgs, {
+  cwd: repoRoot,
+  encoding: "utf-8",
+  timeout: 180_000,
+  maxBuffer: 20 * 1024 * 1024,
+  env: {
+    ...process.env,
+    HOME: ocHome,
+    USERPROFILE: ocHome,
+    OPENCODE_CONFIG_DIR: ocInstallRoot,
+    PAI_DATA_DIR: ocDataDir,
+    PAI_CONFIG_DIR: ocConfigDir,
+    PAI_FRAMEWORK_DIR: ocInstallRoot,
+    PAI_FRAMEWORK: "opencode",
+    PAI_SKIP_USER_ENV_UPDATE: "1",
+    PAI_USER_ENV_TARGET: "Process",
+  },
+});
+
+const ocOpenCodeConfig = jsonParseOrNull(read(join(ocInstallRoot, "opencode.json")));
+const ocPlugin = read(join(ocInstallRoot, "plugins", "pai-opencode.ts"));
+const ocAgentArchitect = read(join(ocInstallRoot, "agents", "Architect.md"));
+const ocAgentEngineer = read(join(ocInstallRoot, "agents", "Engineer.md"));
+const ocCommand = read(join(ocInstallRoot, "commands", "cs.md"));
+const ocFrameworkState = jsonParseOrNull(read(join(ocDataDir, "framework.json")));
+
+function agentIsNativeOpenCode(text: string): boolean {
+  return text.length > 0
+    && /(^|\n)mode:\s*subagent\b/.test(text)
+    && text.includes("rendered from the provider-neutral")
+    && !text.includes("Claude Code")
+    && !text.includes("CLAUDE.md");
+}
+
+const ocAgentName = agentIsNativeOpenCode(ocAgentArchitect)
+  ? "Architect.md"
+  : agentIsNativeOpenCode(ocAgentEngineer)
+    ? "Engineer.md"
+    : "";
+const ocNativeAgent = ocAgentName === "Engineer.md" ? ocAgentEngineer : ocAgentArchitect;
+
+function commandFrontmatter(text: string): string {
+  const match = text.match(/^---\n([\s\S]*?)\n---/);
+  return match ? match[1] : "";
+}
+const ocCommandFront = commandFrontmatter(ocCommand);
+
+const opencodeChecks: Check[] = [
+  check("opencode hotfix update exits cleanly", ocUpdate.status === 0, `status=${ocUpdate.status ?? "null"} ${ocUpdate.stderr.split(/\r?\n/).slice(-4).join(" | ")}`),
+  check("opencode.json is valid JSON", ocOpenCodeConfig !== null, join(ocInstallRoot, "opencode.json")),
+  check("opencode.json instructions point at AGENTS.md", JSON.stringify(ocOpenCodeConfig?.instructions) === JSON.stringify(["AGENTS.md"]), JSON.stringify(ocOpenCodeConfig?.instructions)),
+  check("opencode.json keeps the OpenCode schema", ocOpenCodeConfig?.["$schema"] === "https://opencode.ai/config.json", String(ocOpenCodeConfig?.["$schema"])),
+  check("opencode.json strips unsupported env/pai keys", Boolean(ocOpenCodeConfig) && !("env" in (ocOpenCodeConfig as object)) && !("pai" in (ocOpenCodeConfig as object)), JSON.stringify(Object.keys(ocOpenCodeConfig || {}))),
+  check("plugins/pai-opencode.ts updated from release", ocPlugin !== ocSentinels.plugin && ocPlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS"), join(ocInstallRoot, "plugins", "pai-opencode.ts")),
+  check("OpenCode native agent generated with mode: subagent", ocAgentName !== "", join(ocInstallRoot, "agents", ocAgentName || "Architect.md")),
+  check("OpenCode native agent is provider-neutral", agentIsNativeOpenCode(ocNativeAgent), join(ocInstallRoot, "agents", ocAgentName || "Architect.md")),
+  check("OpenCode command generated without Skill() calls", ocCommand.length > 0 && !ocCommand.includes('Skill("'), join(ocInstallRoot, "commands", "cs.md")),
+  check("OpenCode command drops Claude-only frontmatter", ocCommandFront.length > 0 && !/(^|\n)argument-hint:/.test(ocCommandFront) && !/(^|\n)name:/.test(ocCommandFront), ocCommandFront),
+  check("framework.json marks opencode active root/dataDir", ocFrameworkState?.active === "opencode" && ocFrameworkState?.root === ocInstallRoot && ocFrameworkState?.dataDir === ocDataDir, JSON.stringify(ocFrameworkState)),
+  check("opencode update preserves config.toml", read(join(ocInstallRoot, "config.toml")) === ocSentinels.config, join(ocInstallRoot, "config.toml")),
+  check("opencode update preserves auth.json", read(join(ocInstallRoot, "auth.json")) === ocSentinels.auth, join(ocInstallRoot, "auth.json")),
+  check("opencode update preserves USER", read(join(ocInstallRoot, "PAI", "USER", "profile.md")) === ocSentinels.user, join(ocInstallRoot, "PAI", "USER", "profile.md")),
+  check("opencode update preserves MEMORY", read(join(ocInstallRoot, "MEMORY", "STATE", "state.json")) === ocSentinels.memory, join(ocInstallRoot, "MEMORY", "STATE", "state.json")),
+];
+
+const checks = [...beforeRollbackChecks, ...rollbackChecks, ...opencodeChecks];
 print(checks);
 
 if (keep) {

@@ -182,11 +182,14 @@ function hotfixManifestAudit(): void {
 
   const requiredManagedSources = [
     "PAI/TOOLS/CodexBranchValidation.ts",
+    "PAI/TOOLS/FailureCapture.ts",
     "PAI/TOOLS/FrameworkSmokeTest.ts",
     "PAI/TOOLS/MemoryDelete.ts",
     "hooks/FrameworkHookAdapter.ts",
     "hooks/ContextReduction.hook.sh",
+    "hooks/KVSync.hook.ts",
     "hooks/RtkPreToolUse.hook.js",
+    "hooks/SatisfactionCapture.hook.ts",
     "hooks/ToolActivityTracker.hook.ts",
   ];
   const missingManagedSources = requiredManagedSources.filter((source) => !isManifestCovered(source));

@@ -25,7 +25,6 @@
 import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { inference } from '../PAI/TOOLS/Inference';
 import { getIdentity, getPrincipal, getPrincipalName } from './lib/identity';
 import { getLearningCategory } from './lib/learning-utils';
 import { getISOTimestamp, getPSTComponents } from './lib/time';
@@ -68,6 +67,7 @@ const SIGNALS_DIR = memoryPath('LEARNING', 'SIGNALS');
 const RATINGS_FILE = join(SIGNALS_DIR, 'ratings.jsonl');
 const LAST_RESPONSE_CACHE = memoryPath('STATE', 'last-response.txt');
 const MIN_PROMPT_LENGTH = 3;
+const CODEX_NEUTRAL_CONFIDENCE = 0.35;
 
 // ── Stdin Reader ──
 
@@ -88,6 +88,15 @@ function getLastResponse(): string {
     if (existsSync(LAST_RESPONSE_CACHE)) return readFileSync(LAST_RESPONSE_CACHE, 'utf-8');
   } catch {}
   return '';
+}
+
+function isCodexFramework(): boolean {
+  return String(process.env.PAI_FRAMEWORK || '').toLowerCase() === 'codex';
+}
+
+function codexImplicitInferenceEnabled(): boolean {
+  const raw = String(process.env.PAI_CODEX_SATISFACTION_INFERENCE || '').toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
 }
 
 // ── Word-to-Number Map (for "ten", "eight", etc.) ──
@@ -399,6 +408,28 @@ async function main() {
       }
     }
 
+    if (isCodexFramework() && !codexImplicitInferenceEnabled()) {
+      console.error('[SatisfactionCapture] Codex fast neutral path; implicit inference disabled');
+      const cachedResponse = getLastResponse();
+      writeRating({
+        timestamp: getISOTimestamp(),
+        rating: 5,
+        session_id: sessionId,
+        source: 'implicit',
+        sentiment_summary: 'Codex neutral default without blocking inference',
+        confidence: CODEX_NEUTRAL_CONFIDENCE,
+        ...(cachedResponse ? { response_preview: cachedResponse.slice(0, 500) } : {}),
+      });
+
+      addRatingPulse(sessionId, {
+        value: 5,
+        timestamp: Date.now(),
+        message: prompt.trim().slice(0, 32),
+      });
+
+      process.exit(0);
+    }
+
     // ── INFERENCE PATH: Implicit satisfaction analysis ──
     // Stagger 2s to avoid racing SessionAnalysis for the same claude --print slot
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -418,6 +449,7 @@ async function main() {
     userPrompt += `CURRENT USER MESSAGE:\n${cleanPrompt}`;
 
     try {
+      const { inference } = await import('../PAI/TOOLS/Inference');
       const result = await inference({
         systemPrompt: buildSatisfactionPrompt(),
         userPrompt,

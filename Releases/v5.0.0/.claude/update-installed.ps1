@@ -344,6 +344,98 @@ function Test-IsReparsePoint([string]$Path) {
   return (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
 }
 
+# Returns the one-hop reparse target of a path, or "" when it is not a link.
+# Works on both PowerShell 7 (FileSystemInfo.ResolveLinkTarget) and Windows
+# PowerShell 5.1 (where that method is absent and .Target carries the target).
+function Get-LinkTargetSafe([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return "" }
+  try {
+    $item = Get-Item -LiteralPath $Path -Force
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0) { return "" }
+    if ($item.PSObject.Methods.Name -contains "ResolveLinkTarget") {
+      $resolved = $item.ResolveLinkTarget($false)
+      if ($resolved) { return [string]$resolved.FullName }
+    }
+    $target = $item.Target
+    if ($target) {
+      if ($target -is [array]) { return [string]$target[0] }
+      return [string]$target
+    }
+  } catch {
+    # Inaccessible/unsupported reparse points fall through to "" (treated literal).
+  }
+  return ""
+}
+
+# Resolve a path to its canonical on-disk location, following reparse points
+# (symlinks/junctions) on every existing ancestor as well as the leaf. Unlike
+# [System.IO.Path]::GetFullPath this honours junctions in the middle of the path.
+function Resolve-RealPath([string]$Path) {
+  $full = [System.IO.Path]::GetFullPath($Path)
+  $parent = Split-Path -Parent $full
+  if (-not $parent -or $parent -eq $full) { return $full }
+  $leaf = Split-Path -Leaf $full
+  $realParent = Resolve-RealPath $parent
+  $candidate = Join-Path $realParent $leaf
+  $linkTarget = Get-LinkTargetSafe $candidate
+  if ($linkTarget) {
+    return (Resolve-RealPath $linkTarget)
+  }
+  return $candidate
+}
+
+# Returns the reparse-point ancestor of $Path that lives strictly below
+# $InstallRoot (the leaf itself is excluded), or "" when none exists. This is
+# the guard the old updater lacked: a destination can be a plain directory yet
+# still resolve through a junctioned parent into the source tree.
+function Get-ReparseAncestorBelowRoot([string]$InstallRoot, [string]$Path) {
+  $rootFull = ([System.IO.Path]::GetFullPath($InstallRoot)).TrimEnd("\", "/")
+  $parent = Split-Path -Parent ([System.IO.Path]::GetFullPath($Path))
+  $found = ""
+  while ($parent) {
+    $parentTrim = $parent.TrimEnd("\", "/")
+    if ($parentTrim.Length -le $rootFull.Length) { break }
+    if (Test-IsReparsePoint $parent) { $found = $parent }
+    $next = Split-Path -Parent $parent
+    if (-not $next -or $next -eq $parent) { break }
+    $parent = $next
+  }
+  return $found
+}
+
+# Decides what to do with a destination that sits under a reparse-point ancestor:
+#   normal -> no reparse ancestor, behave exactly as before
+#   skip   -> destination already resolves to the managed source (dev junction);
+#             it is already current, so do not delete/recopy through it
+#   fail   -> destination resolves somewhere else through the reparse ancestor;
+#             refuse rather than delete/copy through it
+function Resolve-ReparseTargetAction([string]$InstallRoot, [string]$Target, [string]$Source) {
+  $ancestor = Get-ReparseAncestorBelowRoot $InstallRoot $Target
+  if (-not $ancestor) { return [pscustomobject]@{ Action = "normal"; Ancestor = ""; RealTarget = "" } }
+  $realTarget = (Resolve-RealPath $Target).TrimEnd("\", "/")
+  $realSource = (Resolve-RealPath $Source).TrimEnd("\", "/")
+  if ([string]::Equals($realTarget, $realSource, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return [pscustomobject]@{ Action = "skip"; Ancestor = $ancestor; RealTarget = $realTarget }
+  }
+  return [pscustomobject]@{ Action = "fail"; Ancestor = $ancestor; RealTarget = $realTarget }
+}
+
+# Replace a directory destination with the managed source, but never recursively
+# delete through a reparse-point ancestor. Returns "skipped" when a dev junction
+# already resolves to the source (already current) and "updated" otherwise.
+function Update-DirectoryTarget([string]$Root, [string]$Target, [string]$Source) {
+  if ((Test-Path -LiteralPath $Target) -and -not (Test-IsReparsePoint $Target)) {
+    $reparse = Resolve-ReparseTargetAction $Root $Target $Source
+    if ($reparse.Action -eq "skip") { return "skipped" }
+    if ($reparse.Action -eq "fail") {
+      throw "Refusing to recursively delete '$Target' through reparse-point ancestor '$($reparse.Ancestor)' (resolves to '$($reparse.RealTarget)', not the managed source '$Source'). Replace the junction/symlink before updating."
+    }
+    Remove-ExistingPathSafely $Target
+  }
+  Copy-DirectoryContents $Source $Target
+  return "updated"
+}
+
 function Get-BackupRelativePath([string]$InstallRoot, [string]$Path) {
   $rootFull = [System.IO.Path]::GetFullPath($InstallRoot).TrimEnd("\", "/")
   $pathFull = [System.IO.Path]::GetFullPath($Path)
@@ -406,6 +498,15 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
     throw "Manifest source missing: $source"
   }
 
+  # Dev installs junction managed dirs (e.g. PAI) back into the source tree. When
+  # the destination resolves through a reparse-point ancestor to the very source
+  # being copied it is already current: skip rather than copy a file/dir onto
+  # itself (which would throw or, for files, truncate the source mid-copy).
+  $reparseInfo = Resolve-ReparseTargetAction $InstallRoot $target $source
+  if ($reparseInfo.Action -eq "skip") {
+    return [pscustomobject]@{ Status = "unchanged"; Detail = "dev junction resolves to managed source ($($reparseInfo.Ancestor))"; Target = $target }
+  }
+
   if ($DryRun) {
     return [pscustomobject]@{ Status = "dry-run"; Detail = "$sourceRel -> $targetRel"; Target = $target }
   }
@@ -416,10 +517,9 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
 
   $sourceItem = Get-Item -LiteralPath $source -Force
   if ($sourceItem.PSIsContainer) {
-    if ((Test-Path -LiteralPath $target) -and -not (Test-IsReparsePoint $target)) {
-      Remove-ExistingPathSafely $target
+    if ((Update-DirectoryTarget $InstallRoot $target $source) -eq "skipped") {
+      return [pscustomobject]@{ Status = "unchanged"; Detail = "dev junction resolves to managed source"; Target = $target }
     }
-    Copy-DirectoryContents $source $target
   } elseif ($Entry.transformInstructions) {
     $text = Get-Content -Raw -LiteralPath $source
     $text = Convert-InstructionContent $text $Framework
@@ -448,10 +548,7 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
     $agentsTarget = Join-Path $agentsSkillRoot $skillName
     Backup-Existing $InstallRoot $agentsTarget $BackupRoot | Out-Null
     New-Item -ItemType Directory -Force -Path $agentsSkillRoot | Out-Null
-    if (Test-Path -LiteralPath $agentsTarget) {
-      Remove-ExistingPathSafely $agentsTarget
-    }
-    Copy-DirectoryContents $source $agentsTarget
+    Update-DirectoryTarget $agentsSkillRoot $agentsTarget $source | Out-Null
   }
 
   $detail = if ($backup) { "backup: $backup" } else { "new file/dir" }
@@ -529,6 +626,60 @@ await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJs
     Pop-Location
   }
   Success "Regenerated Codex hooks.json from installed generator."
+}
+
+function Invoke-WithTemporaryEnvironment($Values, [scriptblock]$Script) {
+  $previous = @{}
+  foreach ($key in $Values.Keys) {
+    $previous[$key] = [Environment]::GetEnvironmentVariable($key, "Process")
+    [Environment]::SetEnvironmentVariable($key, [string]$Values[$key], "Process")
+  }
+  try {
+    & $Script
+  } finally {
+    foreach ($key in $Values.Keys) {
+      [Environment]::SetEnvironmentVariable($key, $previous[$key], "Process")
+    }
+  }
+}
+
+function Regenerate-OpenCodeNativeArtifacts([string]$InstallRoot, [string]$BackupRoot) {
+  if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    throw "Bun is required to regenerate OpenCode native artifacts after hotfix update."
+  }
+
+  $paiCli = Join-Path $InstallRoot "PAI\TOOLS\pai.ts"
+  if (-not (Test-Path -LiteralPath $paiCli)) {
+    throw "PAI CLI not found for OpenCode native regeneration: $paiCli"
+  }
+
+  Backup-Existing $InstallRoot (Join-Path $InstallRoot "opencode.json") $BackupRoot | Out-Null
+  Backup-Existing $InstallRoot (Join-Path $InstallRoot "agents") $BackupRoot | Out-Null
+  Backup-Existing $InstallRoot (Join-Path $InstallRoot "commands") $BackupRoot | Out-Null
+
+  $dataDir = Resolve-PaiDataDir
+  $configDir = Resolve-PaiConfigDir
+  $envValues = @{
+    HOME = $EffectiveHome
+    USERPROFILE = $EffectiveHome
+    OPENCODE_CONFIG_DIR = $InstallRoot
+    PAI_DATA_DIR = $dataDir
+    PAI_CONFIG_DIR = $configDir
+    PAI_FRAMEWORK_DIR = $InstallRoot
+    PAI_FRAMEWORK = "opencode"
+    PAI_SKIP_USER_ENV_UPDATE = "1"
+  }
+
+  Push-Location $InstallRoot
+  try {
+    Invoke-WithTemporaryEnvironment $envValues {
+      & bun $paiCli framework switch opencode | Out-Host
+      if ($LASTEXITCODE -ne 0) { throw "OpenCode native artifact regeneration failed" }
+    }
+  } finally {
+    Pop-Location
+  }
+  Success "Regenerated OpenCode opencode.json, agents, and commands from installed PAI CLI."
 }
 
 function Get-PowerShellProfileCandidates {
@@ -662,6 +813,8 @@ try {
   if (-not $DryRun) {
     if ($target.Framework -eq "codex") {
       Regenerate-CodexHooksJson $target.Root $backupRoot
+    } elseif ($target.Framework -eq "opencode") {
+      Regenerate-OpenCodeNativeArtifacts $target.Root $backupRoot
     }
     Write-PaiFrameworkState $target.Root $target.Framework
     Set-PaiUserEnvironment $target.Root $target.Framework

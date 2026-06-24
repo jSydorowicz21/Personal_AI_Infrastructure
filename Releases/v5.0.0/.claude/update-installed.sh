@@ -312,6 +312,52 @@ copy_directory_contents() {
   (cd "$source" && tar cf - .) | (cd "$destination" && tar xf -)
 }
 
+# Decide what to do with an existing directory destination that may sit under a
+# symlinked ancestor. absolute_path resolves symlinks (pwd -P), so when the
+# resolved path differs from the literal path some ancestor is a symlink:
+#   normal -> no symlinked ancestor, behave exactly as before
+#   skip   -> destination already resolves to the managed source (dev symlink);
+#             it is already current, do not delete/recopy through it
+#   fail   -> destination resolves elsewhere through the symlinked ancestor;
+#             refuse rather than recursively delete through it
+reparse_target_action() {
+  local target="$1"
+  local source="$2"
+  local real_target real_source
+  real_target="$(absolute_path "$target")"
+  if [ "$real_target" = "$target" ]; then
+    printf 'normal\n'
+    return 0
+  fi
+  real_source="$(absolute_path "$source")"
+  if [ "$real_target" = "$real_source" ]; then
+    printf 'skip\n'
+  else
+    printf 'fail\n'
+  fi
+}
+
+# Replace a directory destination with the managed source without ever running
+# rm -rf through a symlinked ancestor. Echoes "skipped" or "updated".
+update_directory_target() {
+  local target="$1"
+  local source="$2"
+  if [ -e "$target" ] && [ ! -L "$target" ]; then
+    case "$(reparse_target_action "$target" "$source")" in
+      skip)
+        printf 'skipped\n'
+        return 0
+        ;;
+      fail)
+        fail "Refusing to recursively delete '$target' through a symlinked ancestor (resolves to '$(absolute_path "$target")', not the managed source '$source'). Replace the symlink before updating."
+        ;;
+    esac
+    rm -rf -- "$target"
+  fi
+  copy_directory_contents "$source" "$target"
+  printf 'updated\n'
+}
+
 backup_relative_path() {
   local install_root="$1"
   local path="$2"
@@ -359,13 +405,23 @@ apply_entry() {
     return 0
   fi
 
+  # Dev installs symlink managed dirs back into the source tree. When the
+  # destination resolves through a symlinked ancestor to the very source being
+  # copied it is already current: skip rather than copy a file/dir onto itself.
+  if [ -e "$target" ] && [ "$(reparse_target_action "$target" "$source")" = "skip" ]; then
+    success "$target (dev symlink resolves to managed source; left unchanged)"
+    return 0
+  fi
+
   local backup=""
   backup="$(backup_existing "$install_root" "$target" "$backup_root" || true)"
   mkdir -p "$(dirname "$target")"
 
   if [ -d "$source" ]; then
-    rm -rf -- "$target"
-    copy_directory_contents "$source" "$target"
+    if [ "$(update_directory_target "$target" "$source")" = "skipped" ]; then
+      success "$target (dev symlink resolves to managed source; left unchanged)"
+      return 0
+    fi
   elif [ "$transform" = "1" ] && [ "$framework" != "claude" ]; then
     convert_instruction_content "$source" "$framework" > "$target"
   else
@@ -381,8 +437,7 @@ apply_entry() {
         agents_target="$agents_root/$skill_name"
         backup_existing "$install_root" "$agents_target" "$backup_root" >/dev/null || true
         mkdir -p "$agents_root"
-        rm -rf -- "$agents_target"
-        copy_directory_contents "$source" "$agents_target"
+        update_directory_target "$agents_target" "$source" >/dev/null
         ;;
     esac
   fi
@@ -461,6 +516,37 @@ TS
   success "Regenerated Codex hooks.json from installed generator."
 }
 
+regenerate_opencode_native_artifacts() {
+  local install_root="$1"
+  local backup_root="$2"
+  command -v bun >/dev/null 2>&1 || fail "Bun is required to regenerate OpenCode native artifacts after hotfix update."
+
+  local pai_cli="$install_root/PAI/TOOLS/pai.ts"
+  [ -f "$pai_cli" ] || fail "PAI CLI not found for OpenCode native regeneration: $pai_cli"
+
+  backup_existing "$install_root" "$install_root/opencode.json" "$backup_root" >/dev/null || true
+  backup_existing "$install_root" "$install_root/agents" "$backup_root" >/dev/null || true
+  backup_existing "$install_root" "$install_root/commands" "$backup_root" >/dev/null || true
+
+  local data_dir
+  data_dir="$(resolve_pai_data_dir)"
+  local config_dir
+  config_dir="$(resolve_pai_config_dir)"
+  (
+    cd "$install_root"
+    HOME="$HOME" \
+    USERPROFILE="${USERPROFILE:-$HOME}" \
+    OPENCODE_CONFIG_DIR="$install_root" \
+    PAI_DATA_DIR="$data_dir" \
+    PAI_CONFIG_DIR="$config_dir" \
+    PAI_FRAMEWORK_DIR="$install_root" \
+    PAI_FRAMEWORK="opencode" \
+    PAI_SKIP_USER_ENV_UPDATE="1" \
+    bun "$pai_cli" framework switch opencode
+  )
+  success "Regenerated OpenCode opencode.json, agents, and commands from installed PAI CLI."
+}
+
 printf '\nPAI | Installed Hotfix Updater\n\n'
 
 target="$(resolve_target)"
@@ -492,6 +578,8 @@ done < <(manifest_entries "$manifest_file" "$target_framework")
 if [ "$DRY_RUN" -eq 0 ]; then
   if [ "$target_framework" = "codex" ]; then
     regenerate_codex_hooks_json "$target_root" "$backup_root"
+  elif [ "$target_framework" = "opencode" ]; then
+    regenerate_opencode_native_artifacts "$target_root" "$backup_root"
   fi
   verify_install "$target_root" "$target_framework"
   success "Hotfix update complete. Restart the agent session so instructions reload."

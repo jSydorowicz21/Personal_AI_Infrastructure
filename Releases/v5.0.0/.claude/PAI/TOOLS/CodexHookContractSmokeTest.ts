@@ -92,6 +92,7 @@ function configuredHooks(): HookCase[] {
     { event: "SessionStart", matcher: "startup|resume", target: "KittyEnvPersist.hook.ts" },
     { event: "SessionStart", matcher: "startup|resume", target: "LoadContext.hook.ts" },
     { event: "SessionStart", matcher: "startup|resume", target: "StartupSelfCheck.hook.ts" },
+    { event: "SessionStart", matcher: "startup|resume", target: "KVSync.hook.ts" },
     { event: "PreToolUse", matcher: "Bash|Shell", target: "SecurityPipeline.hook.ts" },
     { event: "PreToolUse", matcher: "Bash|Shell", target: "RtkPreToolUse.hook.js" },
     { event: "PreToolUse", matcher: "Write|Edit|MultiEdit|Read|apply_patch", target: "SecurityPipeline.hook.ts" },
@@ -107,6 +108,7 @@ function configuredHooks(): HookCase[] {
     { event: "UserPromptSubmit", matcher: "*", target: "PromptGuard.hook.ts" },
     { event: "UserPromptSubmit", matcher: "*", target: "RepeatDetection.hook.ts" },
     { event: "UserPromptSubmit", matcher: "*", target: "PromptProcessing.hook.ts" },
+    { event: "UserPromptSubmit", matcher: "*", target: "SatisfactionCapture.hook.ts" },
     { event: "PreCompact", matcher: "*", target: "PreCompact.hook.ts" },
     { event: "Stop", matcher: "*", target: "LastResponseCache.hook.ts" },
     { event: "Stop", matcher: "*", target: "ResponseTabReset.hook.ts" },
@@ -345,7 +347,7 @@ function runRtkPreToolUseWithMissingRtk() {
     input: JSON.stringify({
       hook_event_name: "PreToolUse",
       tool_name: "Bash",
-      tool_input: { command: "bun test --reporter verbose" },
+      tool_input: { command: "Get-Content -Raw hooks/FrameworkHookAdapter.ts" },
       cwd: tempRoot,
       session_id: "hook-contract-rtk-missing",
     }),
@@ -617,6 +619,24 @@ try {
     "FrameworkHookAdapter skips recursive PromptProcessing",
     nestedInference.result.status === 0 && nestedInference.elapsedMs < 3_000,
     `status=${nestedInference.result.status ?? "null"} elapsed=${nestedInference.elapsedMs}ms`
+  );
+
+  const satisfactionRating = runHook("SatisfactionCapture.hook.ts", {
+    session_id: "hook-contract-satisfaction",
+    hook_event_name: "UserPromptSubmit",
+    prompt: "8 nailed it",
+    cwd: tempRoot,
+    transcript_path: tempTranscript,
+  });
+  const ratingsPath = join(tempData, "MEMORY", "LEARNING", "SIGNALS", "ratings.jsonl");
+  const ratingsText = existsSync(ratingsPath) ? readFileSync(ratingsPath, "utf-8") : "";
+  check(
+    "SatisfactionCapture records explicit Codex rating",
+    satisfactionRating.status === 0 &&
+      ratingsText.includes('"session_id":"hook-contract-satisfaction"') &&
+      ratingsText.includes('"rating":8') &&
+      ratingsText.includes('"source":"explicit"'),
+    `status=${satisfactionRating.status ?? "null"} ratings=${ratingsText.trim().slice(-240)}`,
   );
 
   const adapterTimeout = runAdapterTimeoutProbe();

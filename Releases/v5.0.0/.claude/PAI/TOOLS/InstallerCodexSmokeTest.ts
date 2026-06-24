@@ -120,10 +120,13 @@ enabled = true
   const decodedHooks = decodePowerShellCommands(hooks);
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
   assert("Codex PromptProcessing timeout headroom", hooks.includes('"timeout": 40') && decodedHooks.includes("--timeout-ms") && decodedHooks.includes("35000"));
+  assert("Codex satisfaction capture hook", hooks.includes("SatisfactionCapture.hook.ts"));
+  assert("Codex satisfaction capture timeout", hooks.includes('"timeout": 10') && decodedHooks.includes("SatisfactionCapture.hook.ts") && decodedHooks.includes("5000"));
   assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));
   assert("Codex StartupSelfCheck hook", hooks.includes("StartupSelfCheck.hook.ts"));
+  assert("Codex KVSync hook", hooks.includes("KVSync.hook.ts"));
 } catch (err) {
   keepTemp = true;
   console.error(err instanceof Error ? err.message : String(err));

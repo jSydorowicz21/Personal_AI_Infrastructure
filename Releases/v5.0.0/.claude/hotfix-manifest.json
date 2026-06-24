@@ -29,6 +29,10 @@
       "target": "PAI/TOOLS/Inference.ts"
     },
     {
+      "source": "PAI/TOOLS/FailureCapture.ts",
+      "target": "PAI/TOOLS/FailureCapture.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },
@@ -71,6 +75,10 @@
     {
       "source": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts",
+      "target": "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts"
     },
     {
       "source": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
@@ -249,6 +257,10 @@
       "target": "hooks/KittyEnvPersist.hook.ts"
     },
     {
+      "source": "hooks/KVSync.hook.ts",
+      "target": "hooks/KVSync.hook.ts"
+    },
+    {
       "source": "hooks/LastResponseCache.hook.ts",
       "target": "hooks/LastResponseCache.hook.ts"
     },
@@ -275,6 +287,10 @@
     {
       "source": "hooks/RtkPreToolUse.hook.js",
       "target": "hooks/RtkPreToolUse.hook.js"
+    },
+    {
+      "source": "hooks/SatisfactionCapture.hook.ts",
+      "target": "hooks/SatisfactionCapture.hook.ts"
     },
     {
       "source": "hooks/SecurityPipeline.hook.ts",

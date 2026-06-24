@@ -22,7 +22,7 @@
  */
 
 import { spawn, spawnSync } from "bun";
-import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, rmdirSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
 import { join, basename, dirname, delimiter, extname, resolve } from "path";
 import { generateCodexHooksJson, mergeOpenCodeConfigJson } from "../PAI-Install/engine/config-gen";
 import { renderPaiAgentInstructions, slugifyPaiAgentName } from "./lib/provider-agent-renderer";
@@ -237,6 +237,37 @@ function getActiveFramework(): FrameworkId {
   return normalizeFramework(settings.pai?.framework) || normalizeFramework(process.env.PAI_FRAMEWORK) || "claude";
 }
 
+// Remove a symlink/junction destination WITHOUT recursing into (and deleting)
+// its target. A recursive rmSync on a directory junction can delete the real
+// source tree it points at; in dev installs the framework dirs are junctions
+// back into the source repo, so this guard keeps regeneration non-destructive.
+function removeLinkOnly(target: string): void {
+  if (!existsSync(target) && !isSymbolicLinkSafe(target)) return;
+  if (isSymbolicLinkSafe(target)) {
+    try {
+      unlinkSync(target);
+      return;
+    } catch {
+      // Directory junctions (Windows) reject unlink; rmdir removes the link only.
+      try {
+        rmdirSync(target);
+        return;
+      } catch {
+        // Fall through to a guarded recursive remove as a last resort.
+      }
+    }
+  }
+  rmSync(target, { recursive: true, force: true });
+}
+
+function isSymbolicLinkSafe(target: string): boolean {
+  try {
+    return lstatSync(target).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 function copyMissing(src: string, dst: string): number {
   let copied = 0;
   if (!existsSync(src)) return copied;
@@ -269,7 +300,7 @@ function linkDirectory(localPath: string, globalPath: string): number {
       } catch {
         // Broken or inaccessible links are replaced below.
       }
-      rmSync(localPath, { recursive: true, force: true });
+      removeLinkOnly(localPath);
       symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
       return 0;
     }
@@ -324,7 +355,7 @@ function syncManagedFrameworkDirectory(src: string, dst: string) {
   }
   const stat = lstatSync(dst);
   if (stat.isSymbolicLink()) {
-    rmSync(dst, { recursive: true, force: true });
+    removeLinkOnly(dst);
     createDirectoryLink(src, dst);
     return;
   }
@@ -337,7 +368,7 @@ function syncCodexPrompts(root: string): number {
   if (!existsSync(commandsDir)) return 0;
 
   if (existsSync(promptsDir) && lstatSync(promptsDir).isSymbolicLink()) {
-    rmSync(promptsDir, { recursive: true, force: true });
+    removeLinkOnly(promptsDir);
   }
   mkdirSync(promptsDir, { recursive: true });
 
@@ -415,7 +446,7 @@ function syncCodexAgents(root: string): number {
     const stat = lstatSync(agentsDir);
     if (stat.isSymbolicLink()) {
       sourceDir = realpathSync(sourceDir);
-      rmSync(agentsDir, { recursive: true, force: true });
+      removeLinkOnly(agentsDir);
     }
   }
   mkdirSync(agentsDir, { recursive: true });
@@ -472,7 +503,7 @@ function syncOpenCodeAgents(root: string): number {
     const stat = lstatSync(agentsDir);
     if (stat.isSymbolicLink()) {
       sourceDir = realpathSync(sourceDir);
-      rmSync(agentsDir, { recursive: true, force: true });
+      removeLinkOnly(agentsDir);
     }
   }
   mkdirSync(agentsDir, { recursive: true });
@@ -513,7 +544,7 @@ function syncOpenCodeCommands(root: string): number {
     const stat = lstatSync(commandsDir);
     if (stat.isSymbolicLink()) {
       sourceDir = realpathSync(sourceDir);
-      rmSync(commandsDir, { recursive: true, force: true });
+      removeLinkOnly(commandsDir);
     }
   }
   mkdirSync(commandsDir, { recursive: true });

@@ -190,6 +190,9 @@ function main(): void {
       "build",
       "PAI/PAI-Install/main.ts",
       "PAI/TOOLS/pai.ts",
+      "PAI/TOOLS/algorithm.ts",
+      "PAI/TOOLS/Inference.ts",
+      "PAI/TOOLS/FailureCapture.ts",
       "PAI/TOOLS/PaiDoctor.ts",
       "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "PAI/TOOLS/InstallerCodexSmokeTest.ts",
@@ -200,6 +203,7 @@ function main(): void {
       "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
+      "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "PAI/TOOLS/TranscriptParserSmokeTest.ts",
       "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
@@ -209,6 +213,8 @@ function main(): void {
       "PAI/TOOLS/MemoryDelete.ts",
       "PAI/TOOLS/MemoryDeleteSmokeTest.ts",
       "hooks/FrameworkHookAdapter.ts",
+      "hooks/KVSync.hook.ts",
+      "hooks/SatisfactionCapture.hook.ts",
       "hooks/ToolActivityTracker.hook.ts",
       "hooks/RtkPreToolUse.hook.js",
       "--target=bun",
@@ -251,6 +257,7 @@ function main(): void {
     run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
     run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
+    run("Junction-safe update smoke", "bun", ["PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);
 

@@ -762,9 +762,19 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         detail: "Agent hook",
       });
       checks.push({
+        name: "codex hooks include session KV sync",
+        passed: hooksText.includes("KVSync.hook.ts"),
+        detail: "SessionStart observability sync hook",
+      });
+      checks.push({
         name: "codex hooks include mode classification",
         passed: hooksText.includes("PromptProcessing.hook.ts"),
         detail: "UserPromptSubmit mode hook",
+      });
+      checks.push({
+        name: "codex hooks include satisfaction capture",
+        passed: hooksText.includes("SatisfactionCapture.hook.ts"),
+        detail: "UserPromptSubmit satisfaction hook",
       });
       checks.push({
         name: "codex PromptProcessing hook leaves adapter headroom",
