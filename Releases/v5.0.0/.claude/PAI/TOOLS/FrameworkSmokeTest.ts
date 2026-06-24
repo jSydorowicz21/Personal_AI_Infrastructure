@@ -819,27 +819,27 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
       });
       checks.push({
         name: "codex hooks include question tab",
-        passed: hooksText.includes("SetQuestionTab.hook.ts"),
+        passed: decodedHooksText.includes("SetQuestionTab.hook.ts"),
         detail: "AskUserQuestion/request_user_input hook",
       });
       checks.push({
         name: "codex hooks include agent invocation",
-        passed: hooksText.includes("AgentInvocation.hook.ts"),
+        passed: decodedHooksText.includes("AgentInvocation.hook.ts"),
         detail: "Agent hook",
       });
       checks.push({
         name: "codex hooks include session KV sync",
-        passed: hooksText.includes("KVSync.hook.ts"),
+        passed: decodedHooksText.includes("KVSync.hook.ts"),
         detail: "SessionStart observability sync hook",
       });
       checks.push({
         name: "codex hooks include mode classification",
-        passed: hooksText.includes("PromptProcessing.hook.ts"),
+        passed: decodedHooksText.includes("PromptProcessing.hook.ts"),
         detail: "UserPromptSubmit mode hook",
       });
       checks.push({
         name: "codex hooks include satisfaction capture",
-        passed: hooksText.includes("SatisfactionCapture.hook.ts"),
+        passed: decodedHooksText.includes("SatisfactionCapture.hook.ts"),
         detail: "UserPromptSubmit satisfaction hook",
       });
       checks.push({
@@ -849,13 +849,17 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
       });
       checks.push({
         name: "codex hooks include ISA checkpoint sync",
-        passed: hooksText.includes("ISASync.hook.ts") && hooksText.includes("CheckpointPerISC.hook.ts"),
+        passed: decodedHooksText.includes("ISASync.hook.ts") && decodedHooksText.includes("CheckpointPerISC.hook.ts"),
         detail: "PostToolUse write hooks",
       });
       checks.push({
         name: "codex Windows hook commands use encoded PowerShell",
-        passed: hooksText.includes("-EncodedCommand") && !hooksText.includes("-Command"),
-        detail: "commandWindows quoting",
+        passed: hooksText.includes("-EncodedCommand")
+          && hooksText.includes("-WindowStyle Hidden")
+          && !hooksText.includes("-Command")
+          && !hooksText.includes("cmd.exe /d /s /c")
+          && !hooksText.includes("bun.cmd"),
+        detail: "commandWindows hidden encoded runner",
       });
     }
     if (existsSync(join(root, "config.toml"))) {

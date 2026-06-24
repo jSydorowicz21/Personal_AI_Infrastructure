@@ -359,6 +359,7 @@ async function main() {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: timeoutMs(),
+      windowsHide: true,
       env: {
         ...process.env,
         PAI_FRAMEWORK: framework,

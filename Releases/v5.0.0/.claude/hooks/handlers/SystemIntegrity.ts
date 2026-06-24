@@ -108,7 +108,9 @@ function spawnIntegrityMaintenance(
     // through PATH can resolve to a cmd shim and flash visible cmd.exe windows.
     const child = spawn(process.execPath, [INTEGRITY_SCRIPT], {
       detached: true,
-      stdio: ['pipe', 'ignore', 'inherit'],  // stdin for input, ignore stdout, inherit stderr for logging
+      // Detached background work must never inherit terminal handles on Windows:
+      // inherited stderr can keep or flash a console window while integrity runs.
+      stdio: ['pipe', 'ignore', 'ignore'],
       windowsHide: true,
       env: { ...process.env },
     });

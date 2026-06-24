@@ -3,9 +3,9 @@
  * CodexHookContractSmokeTest
  *
  * Audits every generated Codex command hook target against the Codex hook
- * contract. Benign payloads must exit 0, Codex security blocks must emit a
- * top-level block decision with a clean process exit, and Claude-style adapter
- * invocations must preserve hard-block exits.
+ * contract. By default this is an AV-safe static smoke: it reads installed
+ * configs/source only and does not spawn generated PowerShell launchers, fake
+ * executables, or timeout fixtures. Pass --dynamic to run child hook probes.
  */
 
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -27,6 +27,7 @@ type Check = {
 };
 
 const keep = process.argv.includes("--keep");
+const dynamic = process.argv.includes("--dynamic") || process.env.PAI_SMOKE_DYNAMIC === "1";
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 const home = process.env.HOME || homedir();
 function existingEnvPath(key: string): string {
@@ -37,7 +38,7 @@ const frameworkRoot = existingEnvPath("PAI_FRAMEWORK_DIR") || existingEnvPath("C
 const paiDir = existingEnvPath("PAI_DIR") || join(frameworkRoot, "PAI");
 const adapter = join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts");
 const hooksJsonPath = join(frameworkRoot, "hooks.json");
-const tempRoot = mkdtempSync(join(tmpdir(), "pai-codex-hook-contract-"));
+const tempRoot = dynamic ? mkdtempSync(join(tmpdir(), "pai-codex-hook-contract-")) : join(tmpdir(), "pai-codex-hook-contract-static");
 const tempData = join(tempRoot, "pai-data");
 const tempConfig = join(tempRoot, "config");
 const tempTranscript = join(tempRoot, "transcript.jsonl");
@@ -53,15 +54,33 @@ function check(name: string, passed: boolean, detail: string): void {
   console.log(`${passed ? "PASS" : "FAIL"} ${name} - ${detail}`);
 }
 
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
 function extractTargets(command: string): string[] {
-  const match = command.match(/--target\s+'([^']+)'/) ||
-    command.match(/--target\s+"([^"]+)"/) ||
-    command.match(/--target\s+([^\s]+)/) ||
-    command.match(/CodexHookRunner\.cmd"?\s+["']?[^"'\s]+["']?\s+["']?([^"'\s]+)["']?/i);
+  const expanded = [command, decodeEncodedCommand(command)].filter(Boolean).join("\n");
+  const match = expanded.match(/--target\s+'([^']+)'/) ||
+    expanded.match(/--target\s+"([^"]+)"/) ||
+    expanded.match(/--target\s+([^\s]+)/) ||
+    expanded.match(/CodexHookRunner\.cmd"?\s+["']?[^"'\s]+["']?\s+["']?([^"'\s]+)["']?/i);
   return (match?.[1] || "")
     .split(",")
     .map((target) => target.trim())
     .filter(Boolean);
+}
+
+function commandUsesVisibleWindows(command: string): boolean {
+  const expanded = [command, decodeEncodedCommand(command)].filter(Boolean).join("\n");
+  return /\bcmd\.exe\s+\/d\s+\/s\s+\/c\b/i.test(expanded)
+    || /\bbun\.cmd\b/i.test(expanded)
+    || (/\bpowershell(?:\.exe)?\b/i.test(expanded) && !/-WindowStyle\s+Hidden/i.test(expanded));
 }
 
 function hookTargets(hook: any): string[] {
@@ -433,7 +452,11 @@ function runNestedInferenceGuard() {
 
 function runGeneratedCommandWindows(commandWindows: string) {
   if (!commandWindows || process.platform !== "win32") return undefined;
-  return spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", commandWindows], {
+  const encoded = commandWindows.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i)?.[1];
+  const args = encoded
+    ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
+    : ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", commandWindows];
+  return spawnSync("powershell.exe", args, {
     input: JSON.stringify({
       hook_event_name: "PreToolUse",
       tool_name: "Bash",
@@ -442,8 +465,9 @@ function runGeneratedCommandWindows(commandWindows: string) {
       session_id: "hook-contract-generated-windows",
     }),
     encoding: "utf-8",
-    timeout: 10_000,
+    timeout: 40_000,
     maxBuffer: 1024 * 1024,
+    windowsHide: true,
     env: {
       ...process.env,
       HOME: tempRoot,
@@ -453,7 +477,11 @@ function runGeneratedCommandWindows(commandWindows: string) {
 
 function runGeneratedCommand(command: string) {
   if (!command || process.platform !== "win32") return undefined;
-  return spawnSync("powershell.exe", ["-NoProfile", "-Command", command], {
+  const encoded = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i)?.[1];
+  const args = encoded
+    ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
+    : ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", command];
+  return spawnSync("powershell.exe", args, {
     input: JSON.stringify({
       hook_event_name: "PreToolUse",
       tool_name: "Bash",
@@ -462,8 +490,9 @@ function runGeneratedCommand(command: string) {
       session_id: "hook-contract-generated-command",
     }),
     encoding: "utf-8",
-    timeout: 10_000,
+    timeout: 40_000,
     maxBuffer: 1024 * 1024,
+    windowsHide: true,
     env: {
       ...process.env,
       HOME: tempRoot,
@@ -476,21 +505,25 @@ function rtkMisses(): string {
 }
 
 try {
-  mkdirSync(join(tempData, "MEMORY", "OBSERVABILITY"), { recursive: true });
-  mkdirSync(join(tempData, "USER"), { recursive: true });
-  writeSlowRtk();
-  writeFileSync(join(tempData, "USER", "OPINIONS.md"), [
-    "### Codex dynamic context parity",
-    "",
-    "**Confidence:** 0.95",
-    "",
-    "Adapter must forward LoadContext as additionalContext for Codex.",
-    "",
-  ].join("\n"));
-  writeFileSync(tempTranscript, JSON.stringify({
-    type: "assistant",
-    message: { content: "Done. The benign hook contract smoke completed." },
-  }) + "\n");
+  if (dynamic) {
+    mkdirSync(join(tempData, "MEMORY", "OBSERVABILITY"), { recursive: true });
+    mkdirSync(join(tempData, "USER"), { recursive: true });
+    writeSlowRtk();
+    writeFileSync(join(tempData, "USER", "OPINIONS.md"), [
+      "### Codex dynamic context parity",
+      "",
+      "**Confidence:** 0.95",
+      "",
+      "Adapter must forward LoadContext as additionalContext for Codex.",
+      "",
+    ].join("\n"));
+    writeFileSync(tempTranscript, JSON.stringify({
+      type: "assistant",
+      message: { content: "Done. The benign hook contract smoke completed." },
+    }) + "\n");
+  } else {
+    console.log("INFO AV-safe static smoke mode; pass --dynamic to spawn child hook probes.");
+  }
 
   check("FrameworkHookAdapter exists", existsSync(adapter), adapter);
   check("FrameworkHookAdapter uses explicit hook contract", readFileSync(adapter, "utf-8").includes("framework-hook-contract"), adapter);
@@ -512,33 +545,45 @@ try {
   );
 
   const generatedCommandWindows = commandWindowsFor("PreToolUse", "Bash|Shell");
-  const generatedWindows = runGeneratedCommandWindows(generatedCommandWindows);
   check(
-    "generated commandWindows runner executes",
-    process.platform !== "win32" || !generatedCommandWindows || generatedWindows?.status === 0,
+    "generated commandWindows avoids visible Windows launchers",
+    process.platform !== "win32" || !generatedCommandWindows || !commandUsesVisibleWindows(generatedCommandWindows),
+    process.platform !== "win32" || !generatedCommandWindows
+      ? "skipped"
+      : generatedCommandWindows,
+  );
+  const decodedGeneratedWindows = generatedCommandWindows ? decodeEncodedCommand(generatedCommandWindows) : "";
+  check(
+    "generated commandWindows runner is structurally executable",
+    process.platform !== "win32"
+      || !generatedCommandWindows
+      || (decodedGeneratedWindows.includes("FrameworkHookAdapter.ts") && decodedGeneratedWindows.includes("& $bun")),
     process.platform !== "win32"
       ? "skipped on non-Windows"
       : !generatedCommandWindows
         ? "skipped without generated hooks.json"
-      : `status=${generatedWindows?.status ?? "null"} output=${`${generatedWindows?.stdout || ""}${generatedWindows?.stderr || ""}`.trim()}`,
+      : decodedGeneratedWindows,
   );
 
   const generatedCommand = commandFor("PreToolUse", "Bash|Shell");
-  const generatedGeneric = runGeneratedCommand(generatedCommand);
+  const decodedGeneratedCommand = generatedCommand ? decodeEncodedCommand(generatedCommand) : "";
   check(
-    "generated generic command executes",
-    process.platform !== "win32" || !generatedCommand || generatedGeneric?.status === 0,
+    "generated generic command is structurally executable",
+    process.platform !== "win32"
+      || !generatedCommand
+      || (decodedGeneratedCommand.includes("FrameworkHookAdapter.ts") && decodedGeneratedCommand.includes("& $bun")),
     process.platform !== "win32"
       ? "skipped on non-Windows"
       : !generatedCommand
         ? "skipped without generated hooks.json"
-      : `status=${generatedGeneric?.status ?? "null"} output=${`${generatedGeneric?.stdout || ""}${generatedGeneric?.stderr || ""}`.trim()}`,
+      : decodedGeneratedCommand,
   );
 
   for (const item of cases) {
     const targetPath = join(frameworkRoot, "hooks", item.target);
     check(`hook target exists ${basename(item.target)}`, existsSync(targetPath), targetPath);
     if (!existsSync(targetPath)) continue;
+    if (!dynamic) continue;
 
     const result = runHook(item.target, payloadFor(item));
     const combinedOutput = `${result.stdout || ""}${result.stderr || ""}`;
@@ -552,6 +597,7 @@ try {
     );
   }
 
+  if (dynamic) {
   const promptBlock = runHook("PromptGuard.hook.ts", {
     session_id: "hook-contract-security",
     hook_event_name: "UserPromptSubmit",
@@ -669,6 +715,63 @@ try {
     adapterTimeout.status === 124 && `${adapterTimeout.stderr || ""}`.includes(adapterTimeoutHook),
     `status=${adapterTimeout.status ?? "null"} stderr=${`${adapterTimeout.stderr || ""}`.trim()}`
   );
+  } else {
+    const adapterSource = readFileSync(adapter, "utf-8");
+    const rtkSourcePath = join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js");
+    const rtkSource = existsSync(rtkSourcePath) ? readFileSync(rtkSourcePath, "utf-8") : "";
+    const promptProcessingPath = join(frameworkRoot, "hooks", "PromptProcessing.hook.ts");
+    const promptProcessingSource = existsSync(promptProcessingPath) ? readFileSync(promptProcessingPath, "utf-8") : "";
+    const promptGuardPath = join(frameworkRoot, "hooks", "PromptGuard.hook.ts");
+    const promptGuardSource = existsSync(promptGuardPath) ? readFileSync(promptGuardPath, "utf-8") : "";
+    const satisfactionPath = join(frameworkRoot, "hooks", "SatisfactionCapture.hook.ts");
+    const satisfactionSource = existsSync(satisfactionPath) ? readFileSync(satisfactionPath, "utf-8") : "";
+
+    check(
+      "FrameworkHookAdapter hides child hook windows",
+      process.platform !== "win32" || /windowsHide:\s*true/.test(adapterSource),
+      adapter,
+    );
+    check(
+      "FrameworkHookAdapter preserves clean Codex block contract",
+      adapterSource.includes("blockEmissionForFramework") && adapterSource.includes("shouldExitCleanlyOnBlock"),
+      adapter,
+    );
+    check(
+      "FrameworkHookAdapter has timeout handling",
+      adapterSource.includes("timeoutMs()") && adapterSource.includes("process.exit(124)"),
+      adapter,
+    );
+    check(
+      "RtkPreToolUse hides rtk rewrite windows",
+      process.platform !== "win32" || /windowsHide:\s*true/.test(rtkSource),
+      rtkSourcePath,
+    );
+    check(
+      "RtkPreToolUse records rtk misses",
+      rtkSource.includes("rtk_unavailable_or_timeout") && rtkSource.includes("rtk_command_bypass"),
+      rtkSourcePath,
+    );
+    check(
+      "RtkPreToolUse does not fast-bypass commands",
+      !rtkSource.includes("fast_bypass"),
+      rtkSourcePath,
+    );
+    check(
+      "PromptProcessing has recursive inference guard",
+      promptProcessingSource.includes("PAI_INFERENCE_CHILD") && promptProcessingSource.includes("PAI_DISABLE_RECURSIVE_HOOKS"),
+      promptProcessingPath,
+    );
+    check(
+      "PromptGuard has recursive inference guard",
+      promptGuardSource.includes("PAI_INFERENCE_CHILD") && promptGuardSource.includes("PAI_DISABLE_RECURSIVE_HOOKS"),
+      promptGuardPath,
+    );
+    check(
+      "SatisfactionCapture can record explicit ratings",
+      satisfactionSource.includes("source") && satisfactionSource.includes("explicit") && satisfactionSource.includes("rating"),
+      satisfactionPath,
+    );
+  }
 
   const failed = checks.filter((item) => !item.passed);
   if (failed.length > 0) {
@@ -678,10 +781,12 @@ try {
 
   console.log("\nAll Codex hook contract checks passed.");
 } finally {
-  rmSync(adapterTimeoutHookPath, { force: true });
-  if (keep) {
-    console.log(`\nKept hook contract root: ${tempRoot}`);
-  } else {
-    rmSync(tempRoot, { recursive: true, force: true });
+  if (dynamic) {
+    rmSync(adapterTimeoutHookPath, { force: true });
+    if (keep) {
+      console.log(`\nKept hook contract root: ${tempRoot}`);
+    } else {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   }
 }

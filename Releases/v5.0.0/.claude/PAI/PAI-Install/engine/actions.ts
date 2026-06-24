@@ -791,13 +791,16 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
     "}",
   ].join("\n");
 
-  const result = spawnSync("powershell", [
+  const result = spawnSync("powershell.exe", [
     "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden",
     "-ExecutionPolicy",
     "Bypass",
     "-Command",
     script,
-  ], { stdio: "ignore" });
+  ], { stdio: "ignore", windowsHide: true });
 
   return result.status === 0;
 }
@@ -2274,9 +2277,10 @@ async function installPulse(paiDir: string, emit: EngineEventHandler): Promise<b
 
     await emit({ event: "progress", step: "voice", percent: 20, detail: "Installing Pulse (voice + dashboard + observability)..." });
     const installOk = await new Promise<boolean>((resolve) => {
-      const child = spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", manageScript, "install"], {
+      const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", manageScript, "install"], {
         cwd: pulseDir,
         stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
         env: {
           ...process.env,
           PAI_DIR: join(paiDir, "PAI"),
@@ -2375,9 +2379,10 @@ async function reloadPulse(paiDir: string, emit: EngineEventHandler): Promise<vo
     if (!existsSync(manageScript) || !await isPulseRunning()) return;
     await emit({ event: "message", content: "Reloading Pulse to pick up new voice configuration..." });
     await new Promise<void>((resolve) => {
-      const child = spawn("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", manageScript, "restart"], {
+      const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", manageScript, "restart"], {
         cwd: dirname(manageScript),
         stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
         env: {
           ...process.env,
           PAI_DIR: join(paiDir, "PAI"),
@@ -2945,14 +2950,15 @@ async function restartPulse(paiDir: string): Promise<boolean> {
     ? join(paiDir, "PAI", "PULSE", "manage.ps1")
     : join(paiDir, "PAI", "PULSE", "manage.sh");
   if (!existsSync(manage)) return false;
-  const command = process.platform === "win32" ? "powershell" : "bash";
+  const command = process.platform === "win32" ? "powershell.exe" : "bash";
   const args = process.platform === "win32"
-    ? ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", manage, "restart"]
+    ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", manage, "restart"]
     : [manage, "restart"];
   return new Promise<boolean>((resolve) => {
     const child = spawn(command, args, {
       cwd: dirname(manage),
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       env: {
         ...process.env,
         PAI_DIR: join(paiDir, "PAI"),

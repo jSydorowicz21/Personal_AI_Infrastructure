@@ -660,13 +660,20 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
     "}",
   ].join("\n");
   const result = spawnSync([
-    "powershell",
+    "powershell.exe",
     "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden",
     "-ExecutionPolicy",
     "Bypass",
     "-Command",
     script,
-  ]);
+  ], {
+    windowsHide: true,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
 
   return result.exitCode === 0;
 }
@@ -691,10 +698,25 @@ function codexHookCommandWindows(root: string, hookFile: string): string {
   const envAssignments = Object.entries(env)
     .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
     .join(" ");
-  const script = `${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`;
+  const runnerPrefix = [
+    "$ProgressPreference='SilentlyContinue';",
+    "$bunCandidates=@();",
+    "if ($env:PAI_BUN_EXE) { $bunCandidates += $env:PAI_BUN_EXE }",
+    "if ($env:BUN_INSTALL) { $bunCandidates += (Join-Path $env:BUN_INSTALL 'bin\\bun.exe') }",
+    "$bunCandidates += (Join-Path $HOME '.bun\\bin\\bun.exe');",
+    "if ($env:APPDATA) { $bunCandidates += (Join-Path $env:APPDATA 'npm\\node_modules\\bun\\bin\\bun.exe') }",
+    "if ($env:LOCALAPPDATA) { $bunCandidates += (Join-Path $env:LOCALAPPDATA 'bun\\bin\\bun.exe') }",
+    "$bun=$bunCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1;",
+    "if (-not $bun) { $cmd=Get-Command bun.exe -CommandType Application -ErrorAction SilentlyContinue; if ($cmd) { $bun=$cmd.Source } }",
+    "if (-not $bun) { throw 'bun.exe not found' }",
+  ].join(" ");
+  const script = `${runnerPrefix} ${envAssignments} & $bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`;
   return [
-    "powershell",
+    "powershell.exe",
     "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden",
     "-ExecutionPolicy",
     "Bypass",
     "-EncodedCommand",

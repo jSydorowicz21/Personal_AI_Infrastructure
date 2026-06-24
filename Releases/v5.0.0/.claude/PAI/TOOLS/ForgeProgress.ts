@@ -83,7 +83,11 @@ async function readPrompt(prompt: string | undefined): Promise<string> {
 }
 function spawnCodex(codexPath: string, args: Args, finalFile: string, prompt: string): ChildProcessWithoutNullStreams {
   const argv = [codexPath, "exec", "--model", args.model, "-c", `model_reasoning_effort=${args.effort}`, "--sandbox", args.sandbox, "--skip-git-repo-check", "--cd", process.cwd(), "--json", "-o", finalFile, "-"];
-  const child = spawn(argv[0], argv.slice(1), { stdio: ["pipe", "pipe", "pipe"], detached: true });
+  const child = spawn(argv[0], argv.slice(1), {
+    stdio: ["pipe", "pipe", "pipe"],
+    detached: true,
+    windowsHide: true,
+  });
   child.stdin.end(prompt);
   return child;
 }

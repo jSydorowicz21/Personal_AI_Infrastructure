@@ -60,13 +60,27 @@ function logHookOrder(logPath: string): string[] {
     .map((e) => e.hook as string);
 }
 
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return '';
+  try {
+    return Buffer.from(match[1], 'base64').toString('utf16le');
+  } catch {
+    return '';
+  }
+}
+
 function commandStringsOf(sessionEnd: any): string[] {
   const out: string[] = [];
   if (!Array.isArray(sessionEnd)) return out;
   for (const group of sessionEnd) {
     for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
       const command = `${hook?.command || ''} ${hook?.commandWindows || ''}`;
-      if (command.trim()) out.push(command);
+      if (command.trim()) {
+        out.push(command);
+        const decoded = decodeEncodedCommand(command);
+        if (decoded) out.push(decoded);
+      }
     }
   }
   return out;
@@ -155,6 +169,7 @@ try {
     input: JSON.stringify({ session_id: 'session-end-smoke', hook_event_name: 'SessionEnd', transcript_path: join(tempRoot, 't.jsonl') }),
     encoding: 'utf-8',
     timeout: 15_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PAI_DATA_DIR: dispatcherDataDir,

@@ -104,6 +104,7 @@ function runHook(hookPath: string, payload: string, timeoutMs: number) {
     timeout: timeoutMs,
     maxBuffer: 10 * 1024 * 1024,
     env: process.env,
+    windowsHide: true,
   });
 }
 

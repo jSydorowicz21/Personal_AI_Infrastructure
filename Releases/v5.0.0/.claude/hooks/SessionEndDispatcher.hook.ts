@@ -68,6 +68,7 @@ async function main(): Promise<void> {
       detached: true,
       stdio: 'ignore',
       env: process.env,
+      windowsHide: true,
     });
     child.unref();
   } catch (error) {

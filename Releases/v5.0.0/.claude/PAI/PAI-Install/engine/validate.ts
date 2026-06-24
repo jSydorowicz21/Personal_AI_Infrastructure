@@ -34,14 +34,18 @@ async function checkPulseHealth(): Promise<boolean> {
 
 function checkWindowsPulseTask(): boolean {
   if (process.platform !== "win32") return false;
-  const res = spawnSync("powershell", [
+  const res = spawnSync("powershell.exe", [
     "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden",
     "-Command",
     "if (Get-ScheduledTask -TaskName 'PAI Pulse' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
   ], {
     encoding: "utf-8",
     timeout: 5000,
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
   return res.status === 0;
 }
