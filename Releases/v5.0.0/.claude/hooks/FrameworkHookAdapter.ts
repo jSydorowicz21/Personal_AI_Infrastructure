@@ -9,8 +9,8 @@
 import { spawnSync } from "child_process";
 import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { basename, dirname, extname, join, resolve } from "path";
-import { homedir } from "os";
 import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "./lib/framework-hook-contract";
+import { homeDir } from "./lib/paths";
 import { isSubagentSession } from "./lib/session";
 
 type JsonObject = Record<string, any>;
@@ -206,10 +206,6 @@ function targetArgs(): string[] {
 function timeoutMs(): number {
   const raw = Number(argValue("--timeout-ms") || process.env.PAI_HOOK_CHILD_TIMEOUT_MS || "");
   return Number.isFinite(raw) && raw > 0 ? raw : 15_000;
-}
-
-function homeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || homedir();
 }
 
 function existingEnvPath(name: string): string {

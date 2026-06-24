@@ -567,7 +567,15 @@ try {
   }
 
   check("FrameworkHookAdapter exists", existsSync(adapter), adapter);
-  check("FrameworkHookAdapter uses explicit hook contract", readFileSync(adapter, "utf-8").includes("framework-hook-contract"), adapter);
+  const adapterSource = readFileSync(adapter, "utf-8");
+  check("FrameworkHookAdapter uses explicit hook contract", adapterSource.includes("framework-hook-contract"), adapter);
+  check(
+    "FrameworkHookAdapter uses shared Windows home resolver",
+    adapterSource.includes('import { homeDir } from "./lib/paths"') &&
+      !adapterSource.includes('from "os"') &&
+      !adapterSource.includes("process.env.HOME || process.env.USERPROFILE || homedir()"),
+    adapter,
+  );
   const openCodeBlock = blockEmissionForFramework("opencode", "opencode block contract smoke");
   check(
     "OpenCode block contract exits cleanly",

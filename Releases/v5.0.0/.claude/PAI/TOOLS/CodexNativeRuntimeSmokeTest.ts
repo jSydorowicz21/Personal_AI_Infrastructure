@@ -311,6 +311,9 @@ check(
 check(
   "Framework hook adapter derives PAI env fallback",
   hookAdapter.includes("const frameworkDir = resolve(join(hooksDir, \"..\"))") &&
+    hookAdapter.includes('import { homeDir } from "./lib/paths"') &&
+    !hookAdapter.includes('from "os"') &&
+    !hookAdapter.includes("process.env.HOME || process.env.USERPROFILE || homedir()") &&
     hookAdapter.includes("PAI_DIR: paiDir") &&
     hookAdapter.includes("PAI_DATA_DIR: dataDir") &&
     hookAdapter.includes("PAI_FRAMEWORK_DIR: frameworkDir") &&
