@@ -17,7 +17,7 @@
 // module reads ISA.md first and falls back to PRD.md for sessions created
 // before the rename. New sessions always write ISA.md.
 
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync, renameSync } from 'fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getMemoryDir, getPaiDir, memoryPath } from './paths';
 
@@ -378,9 +378,26 @@ export function parseCapabilities(content: string): string[] {
   return capabilities;
 }
 
+function readTailLines(path: string, maxLines: number, maxBytes = 256 * 1024): string {
+  const stats = statSync(path);
+  const bytesToRead = Math.min(stats.size, maxBytes);
+  if (bytesToRead <= 0) return '';
+
+  const fd = openSync(path, 'r');
+  try {
+    const buffer = Buffer.alloc(bytesToRead);
+    readSync(fd, buffer, 0, bytesToRead, stats.size - bytesToRead);
+    let raw = buffer.toString('utf-8');
+    if (stats.size > bytesToRead) raw = raw.replace(/^[^\n]*(?:\n|$)/, '');
+    return raw.split('\n').slice(-maxLines).join('\n');
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /**
  * Read subagent events for a given session UUID.
- * Uses tail approach: only reads last 200 lines to stay fast (<50ms).
+ * Reads only the bounded file tail to stay fast without shelling out.
  * Returns unique agents with name, type, status, task, phase.
  */
 export function getSessionAgents(sessionUUID: string): AgentEntry[] {
@@ -388,12 +405,7 @@ export function getSessionAgents(sessionUUID: string): AgentEntry[] {
     const eventsPath = memoryPath('OBSERVABILITY', 'subagent-events.jsonl');
     if (!existsSync(eventsPath)) return [];
 
-    // Use execSync with tail for performance — only read last 200 lines
-    const { execSync } = require('child_process');
-    const raw: string = execSync(`tail -200 "${eventsPath}"`, {
-      encoding: 'utf-8',
-      timeout: 30, // 30ms hard cap
-    });
+    const raw = readTailLines(eventsPath, 200);
 
     const agents: Map<string, AgentEntry> = new Map();
 

@@ -818,6 +818,8 @@ try {
     const telosSummarySource = existsSync(telosSummaryPath) ? readFileSync(telosSummaryPath, "utf-8") : "";
     const tabSetterPath = join(frameworkRoot, "hooks", "lib", "tab-setter.ts");
     const tabSetterSource = existsSync(tabSetterPath) ? readFileSync(tabSetterPath, "utf-8") : "";
+    const isaUtilsPath = join(frameworkRoot, "hooks", "lib", "isa-utils.ts");
+    const isaUtilsSource = existsSync(isaUtilsPath) ? readFileSync(isaUtilsPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -893,6 +895,16 @@ try {
         !tabSetterSource.includes("execSync") &&
         !tabSetterSource.includes("| jq"),
       tabSetterPath,
+    );
+    check(
+      "isa-utils subagent tail reads avoid shell exec",
+      isaUtilsSource.includes("function readTailLines") &&
+        isaUtilsSource.includes("readSync(fd, buffer") &&
+        isaUtilsSource.includes("readTailLines(eventsPath, 200)") &&
+        !isaUtilsSource.includes("execSync") &&
+        !isaUtilsSource.includes("tail -200") &&
+        !isaUtilsSource.includes("require('child_process')"),
+      isaUtilsPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",

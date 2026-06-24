@@ -64,6 +64,7 @@ const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
+const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
@@ -260,6 +261,17 @@ check(
     !tabSetter.includes("execSync") &&
     !tabSetter.includes("| jq"),
   "hooks/lib/tab-setter.ts",
+);
+
+check(
+  "ISA utils reads subagent tail without shell exec",
+  isaUtils.includes("function readTailLines") &&
+    isaUtils.includes("readSync(fd, buffer") &&
+    isaUtils.includes("readTailLines(eventsPath, 200)") &&
+    !isaUtils.includes("execSync") &&
+    !isaUtils.includes("tail -200") &&
+    !isaUtils.includes("require('child_process')"),
+  "hooks/lib/isa-utils.ts",
 );
 
 check(
