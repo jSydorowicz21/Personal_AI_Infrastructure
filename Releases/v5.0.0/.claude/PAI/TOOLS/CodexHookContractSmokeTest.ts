@@ -12,6 +12,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "../../hooks/lib/framework-hook-contract";
 
 type HookCase = {
   event: string;
@@ -493,6 +494,14 @@ try {
 
   check("FrameworkHookAdapter exists", existsSync(adapter), adapter);
   check("FrameworkHookAdapter uses explicit hook contract", readFileSync(adapter, "utf-8").includes("framework-hook-contract"), adapter);
+  const openCodeBlock = blockEmissionForFramework("opencode", "opencode block contract smoke");
+  check(
+    "OpenCode block contract exits cleanly",
+    openCodeBlock.exitCode === 0 &&
+      openCodeBlock.output?.decision === "block" &&
+      shouldExitCleanlyOnBlock("opencode"),
+    JSON.stringify(openCodeBlock),
+  );
 
   const cases = configuredHooks();
   check("Codex hook targets discovered", cases.length > 0, `${cases.length} target/event pair(s)`);

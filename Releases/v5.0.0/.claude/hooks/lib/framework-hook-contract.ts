@@ -16,7 +16,8 @@ export function frameworkHookContract(framework: string): FrameworkHookContract 
 
 export function blockEmissionForFramework(framework: string, reason: string): BlockEmission {
   const cleaned = reason.trim() || "[PAI SECURITY] Tool call blocked by security policy.";
-  if (frameworkHookContract(framework) === "codex") {
+  const contract = frameworkHookContract(framework);
+  if (contract === "codex" || contract === "opencode") {
     return {
       output: {
         decision: "block",
@@ -30,5 +31,6 @@ export function blockEmissionForFramework(framework: string, reason: string): Bl
 }
 
 export function shouldExitCleanlyOnBlock(framework: string): boolean {
-  return frameworkHookContract(framework) === "codex";
+  const contract = frameworkHookContract(framework);
+  return contract === "codex" || contract === "opencode";
 }
