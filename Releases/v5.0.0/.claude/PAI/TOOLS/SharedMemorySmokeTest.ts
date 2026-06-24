@@ -28,6 +28,7 @@ function runTool(tool: string, args: string[], env: Record<string, string>, cwd:
     input,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
 }
 
@@ -126,6 +127,17 @@ writeFileSync(join(queueDir, "candidate.json"), JSON.stringify({
 }));
 const harvestDryRun = runTool("KnowledgeHarvester.ts", ["harvest", "--source", "memory", "--dry-run"], env, root);
 const retriever = runTool("MemoryRetriever.ts", ["shared opencode", "--raw"], env, root);
+const fakePaiDir = join(root, "fake-pai");
+mkdirSync(join(fakePaiDir, "TOOLS"), { recursive: true });
+writeFileSync(join(fakePaiDir, "TOOLS", "Inference.ts"), [
+  "#!/usr/bin/env bun",
+  "console.log('FAKE_COMPRESSED_SHARED_MEMORY');",
+  "",
+].join("\n"));
+const compressedRetriever = runTool("MemoryRetriever.ts", ["shared opencode"], {
+  ...env,
+  PAI_DIR: fakePaiDir,
+}, root);
 const graph = runTool("KnowledgeGraph.ts", ["stats"], env, root);
 const wisdom = runTool("WisdomFrameUpdater.ts", [
   "--domain",
@@ -235,6 +247,11 @@ checks.push({
   name: "MemoryRetriever reads shared knowledge",
   passed: retriever.status === 0 && retriever.stdout.includes("Shared Memory Test"),
   detail: `status=${retriever.status ?? "null"}`,
+});
+checks.push({
+  name: "MemoryRetriever compresses via provider-aware Inference path",
+  passed: compressedRetriever.status === 0 && compressedRetriever.stdout.includes("FAKE_COMPRESSED_SHARED_MEMORY"),
+  detail: `status=${compressedRetriever.status ?? "null"}`,
 });
 checks.push({
   name: "KnowledgeGraph reads shared knowledge",

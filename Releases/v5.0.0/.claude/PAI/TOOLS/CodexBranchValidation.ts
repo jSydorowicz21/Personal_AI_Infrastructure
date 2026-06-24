@@ -273,6 +273,7 @@ function main(): void {
     run("Performance cost aggregator smoke", "bun", ["PAI/TOOLS/PerformanceCostAggregatorSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
+    run("MemoryRetriever smoke", "bun", ["PAI/TOOLS/MemoryRetrieverSmokeTest.ts"]);
     run("Codex framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"], { timeout: 120_000 });
     run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);
     validateReadmeUrls();

@@ -35,7 +35,7 @@ import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
 import { spawnSync } from "child_process";
-import { memoryPath } from "./lib/paths";
+import { memoryPath, paiPath } from "./lib/paths";
 
 // ============================================================================
 // Configuration
@@ -282,7 +282,7 @@ function extractExcerpt(note: KnowledgeNote, queryTerms: string[]): string {
 // ============================================================================
 
 function compress(text: string, budget: number): string {
-  const inferPath = path.join(PAI_DIR, "Tools", "Inference.ts");
+  const inferPath = paiPath("TOOLS", "Inference.ts");
 
   if (!fs.existsSync(inferPath)) {
     // Fallback: truncate to approximate token count
@@ -293,9 +293,9 @@ function compress(text: string, budget: number): string {
   const userPrompt = text.substring(0, MAX_EXCERPT_CHARS);
 
   const result = spawnSync(
-    "bun",
+    process.execPath,
     [inferPath, "--level", "fast", systemPrompt, userPrompt],
-    { encoding: "utf-8", timeout: 15000 }
+    { encoding: "utf-8", timeout: 15000, windowsHide: true }
   );
 
   if (result.status === 0 && result.stdout.trim()) {
