@@ -253,6 +253,7 @@ const updatedCheckpointTool = read(join(installRoot, "PAI", "TOOLS", "Checkpoint
 const updatedMemoryRetriever = read(join(installRoot, "PAI", "TOOLS", "MemoryRetriever.ts"));
 const updatedArchitectureSummaryGenerator = read(join(installRoot, "PAI", "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const updatedCostTracker = read(join(installRoot, "PAI", "TOOLS", "CostTracker.ts"));
+const updatedRemoveBg = read(join(installRoot, "PAI", "TOOLS", "RemoveBg.ts"));
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedSmartApproverHook = read(join(installRoot, "hooks", "SmartApprover.hook.ts"));
@@ -298,6 +299,7 @@ const requiredManifestSources = [
   "PAI/TOOLS/MemoryRetrieverSmokeTest.ts",
   "PAI/TOOLS/ArchitectureSummaryGenerator.ts",
   "PAI/TOOLS/CostTracker.ts",
+  "PAI/TOOLS/RemoveBg.ts",
   "hooks/CheckpointPerISC.hook.ts",
   "hooks/SmartApprover.hook.ts",
   "hooks/ToolActivityTracker.hook.ts",
@@ -320,6 +322,7 @@ const beforeRollbackChecks: Check[] = [
   check("MemoryRetriever smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "MemoryRetrieverSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "MemoryRetrieverSmokeTest.ts")),
   check("ArchitectureSummaryGenerator updated from release", updatedArchitectureSummaryGenerator.includes("const HOME = homeDir()"), join(installRoot, "PAI", "TOOLS", "ArchitectureSummaryGenerator.ts")),
   check("CostTracker updated from release", updatedCostTracker.includes("const HOME = homeDir()"), join(installRoot, "PAI", "TOOLS", "CostTracker.ts")),
+  check("RemoveBg updated from release", updatedRemoveBg.includes("resolve(homeDir(), \".local/bin/rembg\")") && updatedRemoveBg.includes("windowsHide: true"), join(installRoot, "PAI", "TOOLS", "RemoveBg.ts")),
   check("hotfix preserves unmanaged PAI/TOOLS file", read(join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")) === "UNMANAGED_EXTRA_TOOL_SENTINEL", join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")),
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),

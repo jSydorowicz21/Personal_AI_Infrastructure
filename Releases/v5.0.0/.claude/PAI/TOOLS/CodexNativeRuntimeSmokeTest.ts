@@ -56,6 +56,7 @@ const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
 const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
 const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
+const removeBg = read(join(paiRoot, "TOOLS", "RemoveBg.ts"));
 const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
 const anvilProgress = read(join(paiRoot, "TOOLS", "AnvilProgress.ts"));
 const bannerSources = [
@@ -332,6 +333,15 @@ check(
     !forgeProgress.includes('throw new Error("HOME is not set")') &&
     !anvilProgress.includes('throw new Error("HOME is not set")'),
   "PAI/TOOLS/ForgeProgress.ts and AnvilProgress.ts",
+);
+
+check(
+  "Image tools use shared home helper and hidden child processes",
+  removeBg.includes('import { homeDir } from "./lib/paths"') &&
+    removeBg.includes("resolve(homeDir(), \".local/bin/rembg\")") &&
+    removeBg.includes("windowsHide: true") &&
+    !removeBg.includes("const home = process.env.HOME"),
+  "PAI/TOOLS/RemoveBg.ts",
 );
 
 check(

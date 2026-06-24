@@ -45,6 +45,10 @@
       "target": "PAI/TOOLS/CostTracker.ts"
     },
     {
+      "source": "PAI/TOOLS/RemoveBg.ts",
+      "target": "PAI/TOOLS/RemoveBg.ts"
+    },
+    {
       "source": "PAI/TOOLS/FailureCapture.ts",
       "target": "PAI/TOOLS/FailureCapture.ts"
     },
