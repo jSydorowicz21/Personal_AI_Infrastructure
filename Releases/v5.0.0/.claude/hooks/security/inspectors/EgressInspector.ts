@@ -31,10 +31,48 @@ const EGRESS_ALERTS: [RegExp, string][] = [
   [/perl\s+-e\s/i, 'Perl inline execution'],
 ];
 
-const PIPE_TO_SHELL = /\|\s*(sh|bash|zsh)\b/i;
-
 function isShellTool(toolName: string): boolean {
   return ['Bash', 'Shell', 'exec'].includes(toolName);
+}
+
+function hasPipeToShellInterpreter(command: string): boolean {
+  let quote: '"' | "'" | "`" | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+
+    if (char !== "|") continue;
+
+    let cursor = i + 1;
+    if (command[cursor] === "&") cursor++;
+    while (/\s/.test(command[cursor] ?? "")) cursor++;
+
+    const rest = command.slice(cursor);
+    if (/^(sh|bash|zsh)\b/i.test(rest)) return true;
+  }
+
+  return false;
 }
 
 class EgressInspector implements Inspector {
@@ -61,7 +99,7 @@ class EgressInspector implements Inspector {
     }
 
     // Pipe to shell interpreter
-    if (PIPE_TO_SHELL.test(command)) {
+    if (hasPipeToShellInterpreter(command)) {
       return deny('Piping output to shell interpreter');
     }
 

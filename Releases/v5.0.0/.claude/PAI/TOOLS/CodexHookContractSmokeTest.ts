@@ -576,6 +576,19 @@ try {
   });
   check("SecurityPipeline emits Codex block decision", isCodexBlock(toolBlock), `status=${toolBlock.status ?? "null"} stdout=${String(toolBlock.stdout || "").trim()}`);
 
+  const quotedPipeAllow = runHook("SecurityPipeline.hook.ts", {
+    session_id: "hook-contract-security",
+    hook_event_name: "PreToolUse",
+    tool_name: "Bash",
+    tool_input: { command: 'rg -n "tool_name|Bash|shell_command|rtk|gain|skip|Codex" hooks PAI' },
+    cwd: tempRoot,
+  });
+  check(
+    "SecurityPipeline allows quoted regex alternation with shell-like word",
+    quotedPipeAllow.status === 0 && !isCodexBlock(quotedPipeAllow),
+    `status=${quotedPipeAllow.status ?? "null"} stdout=${String(quotedPipeAllow.stdout || "").trim()}`,
+  );
+
   const claudeStyleToolBlock = runHook("SecurityPipeline.hook.ts", {
     session_id: "hook-contract-security",
     hook_event_name: "PreToolUse",

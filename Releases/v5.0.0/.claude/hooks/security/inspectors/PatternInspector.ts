@@ -173,6 +173,61 @@ function matchesBashPattern(command: string, pattern: string): boolean {
   }
 }
 
+function maskQuotedSegments(command: string): string {
+  let quote: '"' | "'" | "`" | null = null;
+  let escaped = false;
+  let masked = '';
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaped) {
+      masked += quote ? ' ' : char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      masked += quote ? ' ' : char;
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+        masked += char;
+      } else {
+        masked += ' ';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      masked += char;
+      continue;
+    }
+
+    masked += char;
+  }
+
+  return masked;
+}
+
+function isPipeToShellPattern(entry: PatternEntry): boolean {
+  const pattern = entry.pattern.toLowerCase();
+  const reason = entry.reason.toLowerCase();
+  return pattern.includes("\\|") &&
+    (pattern.includes("sh") || pattern.includes("bash") || pattern.includes("zsh")) &&
+    reason.includes("shell");
+}
+
+function matchesShellPattern(command: string, entry: PatternEntry): boolean {
+  const target = isPipeToShellPattern(entry) ? maskQuotedSegments(command) : command;
+  return matchesBashPattern(target, entry.pattern);
+}
+
 function expandTilde(p: string): string {
   return p.startsWith('~') ? p.replace('~', homedir()) : p;
 }
@@ -232,19 +287,19 @@ function inspectBash(command: string, config: PatternsConfig): InspectionResult 
   if (!normalized) return ALLOW;
 
   for (const p of (config.bash.trusted || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return ALLOW;
+    if (matchesShellPattern(normalized, p)) return ALLOW;
   }
 
   for (const p of (config.bash.blocked || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return deny(p.reason);
+    if (matchesShellPattern(normalized, p)) return deny(p.reason);
   }
 
   for (const p of (config.bash.confirm || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return requireApproval(p.reason);
+    if (matchesShellPattern(normalized, p)) return requireApproval(p.reason);
   }
 
   for (const p of (config.bash.alert || [])) {
-    if (matchesBashPattern(normalized, p.pattern)) return alert(p.reason);
+    if (matchesShellPattern(normalized, p)) return alert(p.reason);
   }
 
   return ALLOW;
