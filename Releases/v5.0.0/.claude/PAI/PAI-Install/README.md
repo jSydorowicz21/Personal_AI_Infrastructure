@@ -170,7 +170,7 @@ After install or after returning to PAI later, run:
 k doctor
 ```
 
-The doctor verifies the active framework's native config, instructions, MCP profile files, provider-appropriate hook/runtime smoke tests, and Pulse health routes. Codex-only hook/session probes run only when Codex is the active framework.
+The default doctor verifies the active framework's native config, instructions, MCP profile files, and Pulse health routes without running child/session/install probes. Use `k doctor --smoke` for static source smoke checks, or `k doctor --deep` when you intentionally want the provider hook/session/install probes.
 
 If the doctor reports optional warnings, add the relevant credentials before using that feature:
 
@@ -480,7 +480,7 @@ Each section is skippable. If you have existing data (Obsidian, Notion, journals
 | ElevenLabs key invalid | Verify at elevenlabs.io - ensure no trailing spaces, key starts with `xi-` or `sk_` |
 | Permission denied | macOS/Linux: run `chmod -R 755 <framework-home>`. Windows: rerun PowerShell normally, not from a restricted directory, and close processes using the target framework home. |
 | `k` or `pai` command not found | PowerShell: run `. $PROFILE`. zsh/bash: run `source ~/.zshrc` or `source ~/.bashrc`. |
-| Startup self-check reports PAI issues | Run `k doctor` for full diagnostics. Optional credential reminders are warnings; critical failures identify the config, hook, Pulse, or install surface to repair. |
+| Startup self-check reports PAI issues | Run `k doctor` for AV-safe diagnostics. Use `k doctor --deep` only when you intentionally want child/session/install probes. Optional credential reminders are warnings; critical failures identify the config, hook, Pulse, or install surface to repair. |
 | Pulse / voice notifications not working | Check port 31337 is free. macOS: restart Pulse with `bash <framework-home>/PAI/PULSE/manage.sh restart`. Windows: restart Pulse with `powershell -NoProfile -ExecutionPolicy Bypass -File <framework-home>/PAI/PULSE/manage.ps1 restart`. |
 | Pulse menu bar icon missing | macOS only: install or reinstall from the active framework home with `bash <framework-home>/PAI/PULSE/MenuBar/install.sh`. Verify launchd plist: `ls ~/Library/LaunchAgents/com.pai.pulse-menubar.plist`. |
 | Banner shows wrong algorithm version | Check `<framework-home>/PAI/Algorithm/LATEST` contains the correct version |

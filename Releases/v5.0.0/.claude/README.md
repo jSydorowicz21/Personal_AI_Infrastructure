@@ -157,7 +157,7 @@ Run this any time you come back to PAI and want to verify the local active-frame
 k doctor
 ```
 
-The doctor checks the active framework's native config (`CLAUDE.md`/`settings.json`, Codex `AGENTS.md`/`config.toml`/`hooks.json`, or OpenCode `AGENTS.md`/`opencode.json`/plugin), shared MCP profile packaging, provider-appropriate smoke tests, and Pulse `/health`, `/voice/health`, `/notify`, and `/assistant/health`. Codex-only hook/session probes run only when Codex is the active framework.
+The default doctor checks the active framework's native config (`CLAUDE.md`/`settings.json`, Codex `AGENTS.md`/`config.toml`/`hooks.json`, or OpenCode `AGENTS.md`/`opencode.json`/plugin), shared MCP profile packaging, and Pulse `/health`, `/voice/health`, `/notify`, and `/assistant/health` without running child/session/install probes. Use `k doctor --smoke` for static source smoke checks, or `k doctor --deep` when you intentionally want the provider hook/session/install probes.
 
 Optional reminders are warnings, not runtime failures:
 

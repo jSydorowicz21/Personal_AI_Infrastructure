@@ -1698,11 +1698,11 @@ function cmdMemory(args: string[]) {
   process.exit(result.exitCode ?? 1);
 }
 
-function cmdDoctor() {
+function cmdDoctor(args: string[] = []) {
   const activeFramework = getActiveFramework();
   const activeRoot = frameworkRoot(activeFramework);
   const tool = join(CURRENT_PAI_DIR, "TOOLS", "PaiDoctor.ts");
-  const result = spawnSync([process.execPath, tool], {
+  const result = spawnSync([process.execPath, tool, ...args], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
@@ -1766,7 +1766,9 @@ COMMANDS:
   k framework switch codex Switch framework (claude|codex|opencode)
   k memory delete          Delete a memory file and redact cache/log copies
   k memory redact          Redact exact literals from PAI cache/log files
-  k doctor                 Run PAI runtime diagnostics (config, hooks, Pulse, MCPs)
+  k doctor                 Run AV-safe PAI diagnostics (config, hooks, Pulse, MCPs)
+  k doctor --smoke         Add static source smoke checks
+  k doctor --deep          Add child/session/install smoke probes
   k profiles               List available MCP profiles
   k mcp list               List all available MCPs
   k mcp set <profile>      Set MCP profile permanently
@@ -1801,7 +1803,9 @@ EXAMPLES:
   k mcp set research       Switch to research profile
   k framework switch codex Switch to Codex while keeping ~/.pai/MEMORY
   k memory delete --path MEMORY/RELATIONSHIP/note.md --patterns-file /tmp/patterns.txt
-  k doctor                 Run full local PAI runtime diagnostics
+  k doctor                 Run AV-safe local PAI runtime diagnostics
+  k doctor --smoke         Include static source smoke checks
+  k doctor --deep          Include child/session/install smoke probes
   k update                 Update active framework CLI
   k prompt "What time is it?"   One-shot prompt
   k -w                     List available wallpapers
@@ -1900,6 +1904,8 @@ async function main() {
         break;
       case "doctor":
         command = "doctor";
+        passthroughArgs = args.slice(i + 1);
+        i = args.length; // Exit loop
         break;
       case "prompt":
       case "-p":
@@ -1951,7 +1957,7 @@ async function main() {
       cmdMemory(passthroughArgs);
       break;
     case "doctor":
-      cmdDoctor();
+      cmdDoctor(passthroughArgs);
       break;
     case "prompt":
       if (!promptText) {

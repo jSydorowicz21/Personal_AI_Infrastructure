@@ -19,6 +19,8 @@ type Check = {
   critical?: boolean;
 };
 
+type DoctorMode = "safe" | "smoke" | "deep";
+
 const frameworkRoot = getFrameworkDir();
 const paiDir = getPaiDir();
 const dataDir = getPaiDataDir();
@@ -100,9 +102,19 @@ function timeoutForTool(name: string): number {
   return 60_000;
 }
 
-function runBunTool(name: string, framework: FrameworkId): Check {
+function doctorModeFromArgs(args: string[]): DoctorMode {
+  if (args.includes("--deep") || args.includes("--dynamic") || process.env.PAI_DOCTOR_DEEP === "1") return "deep";
+  if (args.includes("--smoke") || process.env.PAI_DOCTOR_SMOKE === "1") return "smoke";
+  return "safe";
+}
+
+function runBunTool(name: string, framework: FrameworkId, mode: DoctorMode): Check {
   const path = join(toolsDir, name);
-  const res = spawnSync(process.execPath, [path], {
+  const args = [path];
+  if (mode === "deep" && (name === "CodexHookContractSmokeTest.ts" || name === "StartupSelfCheckSmokeTest.ts")) {
+    args.push("--dynamic");
+  }
+  const res = spawnSync(process.execPath, args, {
     encoding: "utf-8",
     timeout: timeoutForTool(name),
     windowsHide: true,
@@ -153,7 +165,20 @@ function optionalSecretChecks(): Check[] {
   ];
 }
 
-function frameworkSmokeTools(framework: FrameworkId): string[] {
+function frameworkSmokeTools(framework: FrameworkId, mode: DoctorMode): string[] {
+  if (mode === "safe") return [];
+
+  const staticShared = [
+    "PaiDoctorSmokeTest.ts",
+    "StartupSelfCheckSmokeTest.ts",
+    "PaiSecurityAuditSmokeTest.ts",
+    "TranscriptParserSmokeTest.ts",
+    "ChangeDetectionSmokeTest.ts",
+    "CodexNativeRuntimeSmokeTest.ts",
+  ];
+
+  if (mode === "smoke") return staticShared;
+
   const shared = [
     "HookSharedPathSmokeTest.ts",
     "PaiSecurityAuditSmokeTest.ts",
@@ -187,6 +212,16 @@ function frameworkSmokeTools(framework: FrameworkId): string[] {
   }
 
   return shared;
+}
+
+function doctorModeCheck(mode: DoctorMode): Check {
+  if (mode === "deep") {
+    return ok("Doctor mode", true, "--deep: child/session/install probes enabled", false);
+  }
+  if (mode === "smoke") {
+    return ok("Doctor mode", true, "--smoke: static source smoke checks enabled", false);
+  }
+  return ok("Doctor mode", true, "safe default: pass --smoke for static smoke checks or --deep for child/session/install probes", false);
 }
 
 function activeFrameworkFrom(frameworkState: any): FrameworkId {
@@ -267,6 +302,7 @@ function frameworkSpecificChecks(framework: FrameworkId): Check[] {
 }
 
 async function main() {
+  const doctorMode = doctorModeFromArgs(process.argv.slice(2));
   const frameworkState = readJson(join(dataDir, "framework.json"));
   const activeFramework = activeFrameworkFrom(frameworkState);
   const activeName = frameworkName(activeFramework);
@@ -275,6 +311,7 @@ async function main() {
   const mcpDir = join(frameworkRoot, "MCPs");
 
   const checks: Check[] = [
+    doctorModeCheck(doctorMode),
     ok(`Active framework is ${activeName}`, stateFramework === activeFramework, join(dataDir, "framework.json"), false),
     ok(`${activeName} root exists`, existsSync(frameworkRoot), frameworkRoot),
     ok(`${instructionFile} exists`, existsSync(join(frameworkRoot, instructionFile)), join(frameworkRoot, instructionFile)),
@@ -291,7 +328,7 @@ async function main() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "PAI doctor check", voice_enabled: false }),
     }),
-    ...frameworkSmokeTools(activeFramework).map((tool) => runBunTool(tool, activeFramework)),
+    ...frameworkSmokeTools(activeFramework, doctorMode).map((tool) => runBunTool(tool, activeFramework, doctorMode)),
     ...optionalSecretChecks(),
   ];
 

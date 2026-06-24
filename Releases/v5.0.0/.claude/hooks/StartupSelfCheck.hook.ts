@@ -178,7 +178,7 @@ async function main() {
   console.log([
     "⚠️ PAI startup self-check found doctor-critical issue(s):",
     ...lines,
-    `${suffix}\nRun \`k doctor\` for full diagnostics.`,
+    `${suffix}\nRun \`k doctor\` for AV-safe diagnostics.`,
   ].join("\n"));
 }
 

@@ -3,8 +3,8 @@
  * PaiDoctorSmokeTest
  *
  * Source-level guards for provider-native doctor wiring.
- * Runtime doctor checks talk to live Pulse and can run expensive provider
- * probes, so branch CI keeps the parity contract focused and deterministic.
+ * Runtime doctor checks talk to live Pulse. Expensive provider probes are
+ * opt-in, so branch CI keeps the parity contract focused and deterministic.
  */
 
 import { readFileSync } from "node:fs";
@@ -52,9 +52,8 @@ check(
   "doctor has Codex-native checks",
   doctor.includes('framework === "codex"') &&
     doctor.includes("Codex config.toml has PAI root block") &&
-    doctor.includes("Codex hooks.json has runnable hook commands") &&
-    doctor.includes("CodexRealSessionHookProof.ts"),
-  "config.toml/hooks.json/Codex proof",
+    doctor.includes("Codex hooks.json has runnable hook commands"),
+  "config.toml/hooks.json",
 );
 
 check(
@@ -64,6 +63,32 @@ check(
     doctor.includes("OpenCode plugin includes SessionEndDispatcher") &&
     doctor.includes("OpenCodeFrameworkAgentExecutionSmokeTest.ts"),
   "opencode.json/plugin",
+);
+
+check(
+  "doctor default skips child smoke tools",
+  doctor.includes('type DoctorMode = "safe" | "smoke" | "deep"') &&
+    doctor.includes('if (mode === "safe") return []') &&
+    doctor.includes("safe default: pass --smoke"),
+  "AV-safe default mode",
+);
+
+check(
+  "doctor smoke mode is static",
+  doctor.includes('if (mode === "smoke") return staticShared') &&
+    doctor.includes("PaiDoctorSmokeTest.ts") &&
+    doctor.includes("CodexNativeRuntimeSmokeTest.ts"),
+  "--smoke static source checks",
+);
+
+check(
+  "doctor deep mode keeps provider probes opt-in",
+  doctor.includes("CodexRealSessionHookProof.ts") &&
+    doctor.includes("HotfixUpdateRollbackSmokeTest.ts") &&
+    doctor.includes("CodexFreshInstallSmokeTest.ts") &&
+    doctor.includes('name === "CodexHookContractSmokeTest.ts"') &&
+    doctor.includes('args.push("--dynamic")'),
+  "--deep child/session/install probes",
 );
 
 check(
