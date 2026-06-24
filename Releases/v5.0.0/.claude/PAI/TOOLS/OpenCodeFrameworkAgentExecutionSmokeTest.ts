@@ -16,6 +16,9 @@
  * re-execs itself; the child inherits the patched PATH at startup and drives
  * the real launcher:
  * - runFrameworkAgent() -> `opencode run -`, prompt on stdin, cwd = opts.cwd.
+ * - PAI_OPENCODE_BIN overrides Bun.which (parity with PAI_CODEX_BIN).
+ * - opts.model is intentionally NOT propagated: OpenCode's `run` model-flag
+ *   contract is undocumented in this repo, so no `--model`/`-m` flag is invented.
  *
  * Inference coverage: Inference.ts intentionally routes only Claude/Codex — its
  * provider switch is `useCodex = framework === "codex" || ...` with a Claude
@@ -159,7 +162,7 @@ function runParent(): number {
 // Child: PATH already patched at startup; drive the real exported launcher.
 // ---------------------------------------------------------------------------
 async function runChild(): Promise<void> {
-  const { runFrameworkAgent } = await import("./lib/framework-agent");
+  const { runFrameworkAgent, buildFrameworkAgentCommand } = await import("./lib/framework-agent");
   const { getActiveFramework } = await import("./lib/transcripts");
 
   const binDir = process.env.FAKE_OPENCODE_BIN_DIR!;
@@ -213,6 +216,39 @@ async function runChild(): Promise<void> {
       agent.env.ANTHROPIC_API_KEY === undefined &&
       agent.env.ANTHROPIC_AUTH_TOKEN === undefined,
     `PAI_FRAMEWORK=${agent.env.PAI_FRAMEWORK} ANTHROPIC_API_KEY=${agent.env.ANTHROPIC_API_KEY ?? "<unset>"}`,
+  );
+
+  // --- 1b. PAI_OPENCODE_BIN override (parity with PAI_CODEX_BIN) --------------
+  // The launcher must prefer an explicit PAI_OPENCODE_BIN over Bun.which. We use
+  // buildFrameworkAgentCommand (pure, no spawn) so the pinned path need not exist.
+  const sentinelBin = join(binDir, "pinned-opencode-sentinel");
+  const prevBin = process.env.PAI_OPENCODE_BIN;
+  process.env.PAI_OPENCODE_BIN = sentinelBin;
+  const pinnedSpec = buildFrameworkAgentCommand("PAI-FAKE-OPENCODE::override probe", { cwd: workspace });
+  if (prevBin === undefined) delete process.env.PAI_OPENCODE_BIN;
+  else process.env.PAI_OPENCODE_BIN = prevBin;
+  check(
+    "PAI_OPENCODE_BIN overrides Bun.which for the opencode command",
+    pinnedSpec.command === sentinelBin && pinnedSpec.framework === "opencode",
+    `command=${pinnedSpec.command} expected=${sentinelBin}`,
+  );
+
+  // --- 1c. Model propagation: intentional non-support ------------------------
+  // OpenCode's `run` model-flag contract is not documented in this repo, so the
+  // launcher does NOT forward opts.model (no invented flag). Assert that passing
+  // a model leaves the argv as the bare `run -` contract — no `--model`/`-m`.
+  const modeledSpec = buildFrameworkAgentCommand("PAI-FAKE-OPENCODE::model probe", {
+    cwd: workspace,
+    model: "anthropic/claude-sonnet-4-6",
+  });
+  check(
+    "opts.model is intentionally not propagated to opencode (no --model/-m flag)",
+    modeledSpec.args.length === 2 &&
+      modeledSpec.args[0] === "run" &&
+      modeledSpec.args[1] === "-" &&
+      !modeledSpec.args.includes("--model") &&
+      !modeledSpec.args.includes("-m"),
+    modeledSpec.args.join(" "),
   );
 
   // --- 2. Inference path: documented non-support ------------------------------

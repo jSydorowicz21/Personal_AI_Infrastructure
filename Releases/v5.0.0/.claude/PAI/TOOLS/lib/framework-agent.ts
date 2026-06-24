@@ -83,7 +83,11 @@ export function buildFrameworkAgentCommand(
   }
 
   if (framework === "opencode") {
-    const command = Bun.which("opencode") ?? "opencode";
+    // Mirror the Codex PAI_CODEX_BIN override so an explicit binary can be pinned.
+    // Model propagation is intentionally omitted: OpenCode's `run` model contract
+    // (provider/model form) is not documented in this repo, so opts.model is not
+    // forwarded — see maybeModelArg(), which returns [] for opencode.
+    const command = process.env.PAI_OPENCODE_BIN || Bun.which("opencode") || "opencode";
     return {
       framework,
       label: "opencode run",
