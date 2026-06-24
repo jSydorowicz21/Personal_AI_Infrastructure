@@ -14,13 +14,13 @@
 import { parseArgs } from "util";
 import * as fs from "fs";
 import * as path from "path";
-import { getFrameworkDir, getPaiDir } from "./lib/paths";
+import { getFrameworkDir, getPaiDir, homeDir } from "./lib/paths";
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-const HOME = process.env.HOME || process.env.USERPROFILE || "";
+const HOME = homeDir();
 const PAI_DIR = getPaiDir();
 const FRAMEWORK_DIR = getFrameworkDir();
 const INSTRUCTIONS_MD = fs.existsSync(path.join(FRAMEWORK_DIR, "AGENTS.md"))

@@ -53,6 +53,7 @@ const installDetect = read(join(paiRoot, "PAI-Install", "engine", "detect.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
+const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
 const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
 const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
@@ -161,14 +162,17 @@ check(
 );
 
 check(
-  "Algorithm and CostTracker use Windows-aware home helper",
+  "Core PAI tools use Windows-aware home helper",
   algorithm.includes('import { homeDir, memoryPath } from "./lib/paths"') &&
     algorithm.includes("const HOME = homeDir()") &&
     !algorithm.includes('const HOME = process.env.HOME || "~"') &&
     costTracker.includes("homeDir, memoryPath") &&
     costTracker.includes("const HOME = homeDir()") &&
-    !costTracker.includes("process.env.HOME ?? process.env.USERPROFILE"),
-  "PAI/TOOLS/algorithm.ts and CostTracker.ts",
+    !costTracker.includes("process.env.HOME ?? process.env.USERPROFILE") &&
+    architectureSummaryGenerator.includes('import { getFrameworkDir, getPaiDir, homeDir } from "./lib/paths"') &&
+    architectureSummaryGenerator.includes("const HOME = homeDir()") &&
+    !architectureSummaryGenerator.includes('process.env.HOME || process.env.USERPROFILE || ""'),
+  "PAI/TOOLS/algorithm.ts, CostTracker.ts, and ArchitectureSummaryGenerator.ts",
 );
 
 check(
