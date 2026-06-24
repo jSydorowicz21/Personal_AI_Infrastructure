@@ -144,7 +144,7 @@ try {
     check("RTK.md generated", existsSync(join(codexHome, "RTK.md")), join(codexHome, "RTK.md")),
     check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(codexHome, "config.toml")),
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
-    check("hooks.json generated", hookCommandText.includes("FrameworkHookAdapter.ts") || hookCommandText.includes("CodexHookRunner.cmd"), join(codexHome, "hooks.json")),
+    check("hooks.json generated", hookCommandText.includes("FrameworkHookAdapter.ts") && !hookCommandText.includes("CodexHookRunner.cmd"), join(codexHome, "hooks.json")),
     check("startup self-check hook generated", hookCommandText.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
     check("PromptProcessing timeout leaves adapter headroom", hooksJson.includes('"timeout": 40') && hookCommandText.includes("--timeout-ms") && hookCommandText.includes("35000"), join(codexHome, "hooks.json")),
     check("hooks ignore stale PAI_CONFIG_DIR", hookConfigDirs.length > 0 && hookConfigDirs.every((value) => value === expectedConfigDir && !value.includes(staleConfigSegment)), JSON.stringify(hookConfigDirs)),

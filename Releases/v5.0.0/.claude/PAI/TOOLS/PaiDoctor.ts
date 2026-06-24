@@ -225,11 +225,12 @@ function frameworkSpecificChecks(framework: FrameworkId): Check[] {
     const hooksJsonPath = join(frameworkRoot, "hooks.json");
     const hooksConfig = readJson(hooksJsonPath);
     const hookText = collectHookCommandTexts(hooksConfig).join("\n");
-    const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
+    const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts");
     checks.push(
       ok("Codex config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(frameworkRoot, "config.toml")),
       ok("Codex config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
       ok("Codex hooks.json has runnable hook commands", collectHookCommandTexts(hooksConfig).length > 0 && hasAdapterInvocation, hooksJsonPath),
+      ok("Codex hooks.json avoids legacy CodexHookRunner", !hookText.includes("CodexHookRunner.cmd"), hooksJsonPath),
       ok("Codex hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     );
   }

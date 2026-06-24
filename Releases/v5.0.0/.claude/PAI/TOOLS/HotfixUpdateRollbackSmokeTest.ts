@@ -83,9 +83,6 @@ function codexHookDataDirs(hooksJson: string): string[] {
     for (const match of text.matchAll(/\$env:PAI_DATA_DIR='([^']*)'/g)) {
       values.push(match[1]);
     }
-    for (const match of text.matchAll(/CodexHookRunner\.cmd"?\s+\S+\s+\S+\s+\d+\s+([^\s"]+)/gi)) {
-      values.push(match[1]);
-    }
   }
   return [...new Set(values.filter(Boolean))];
 }
@@ -107,7 +104,7 @@ function promptProcessingTimeoutHasHeadroom(hooksJson: string): boolean {
   const hasChildTimeout = hookCommandTexts(hooksJson).some((text) =>
     text.includes("PromptProcessing.hook.ts") &&
     text.includes("35000") &&
-    (text.includes("--timeout-ms") || text.includes("CodexHookRunner.cmd")),
+    text.includes("--timeout-ms"),
   );
 
   return hasOuterTimeout && hasChildTimeout;

@@ -673,6 +673,14 @@ function Migrate-ClaudeSessionEndLifecycle([string]$InstallRoot, [string]$Backup
   else { Success "SessionEnd lifecycle migration complete." }
 }
 
+function Remove-StaleCodexHookRunner([string]$InstallRoot, [string]$BackupRoot) {
+  $staleRunner = Join-Path $InstallRoot "hooks\CodexHookRunner.cmd"
+  if (-not (Test-Path -LiteralPath $staleRunner)) { return }
+  Backup-Existing $InstallRoot $staleRunner $BackupRoot | Out-Null
+  Remove-Item -LiteralPath $staleRunner -Force
+  Success "Removed stale CodexHookRunner.cmd wrapper."
+}
+
 function Invoke-WithTemporaryEnvironment($Values, [scriptblock]$Script) {
   $previous = @{}
   foreach ($key in $Values.Keys) {
@@ -856,6 +864,7 @@ try {
   }
 
   if (-not $DryRun) {
+    Remove-StaleCodexHookRunner $target.Root $backupRoot
     if ($target.Framework -eq "codex") {
       Regenerate-CodexHooksJson $target.Root $backupRoot
     } elseif ($target.Framework -eq "opencode") {

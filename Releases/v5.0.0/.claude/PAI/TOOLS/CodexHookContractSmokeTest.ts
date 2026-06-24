@@ -79,6 +79,7 @@ function extractTargets(command: string): string[] {
 function commandUsesVisibleWindows(command: string): boolean {
   const expanded = [command, decodeEncodedCommand(command)].filter(Boolean).join("\n");
   return /\bcmd\.exe\s+\/d\s+\/s\s+\/c\b/i.test(expanded)
+    || /\bCodexHookRunner\.cmd\b/i.test(expanded)
     || /\bbun\.cmd\b/i.test(expanded)
     || (/\bpowershell(?:\.exe)?\b/i.test(expanded) && !/-WindowStyle\s+Hidden/i.test(expanded));
 }

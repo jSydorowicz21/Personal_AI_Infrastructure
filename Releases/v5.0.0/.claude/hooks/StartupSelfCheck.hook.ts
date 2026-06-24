@@ -97,7 +97,8 @@ async function main() {
   const hooksConfig = readJson(hooksJsonPath);
   const hookTexts = collectHookCommandTexts(hooksConfig);
   const hookText = hookTexts.join("\n");
-  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
+  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts");
+  const avoidsLegacyRunner = !hookText.includes("CodexHookRunner.cmd");
 
   const checks: Check[] = [
     check("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
@@ -106,6 +107,7 @@ async function main() {
     check("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), configTomlPath),
     check("FrameworkHookAdapter exists", existsSync(join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")), join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")),
     check("hooks.json has runnable hook commands", hookTexts.length > 0 && hasAdapterInvocation, hooksJsonPath),
+    check("hooks.json avoids legacy CodexHookRunner", avoidsLegacyRunner, hooksJsonPath),
     check("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     check("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),
     check("Shared PAI data exists", existsSync(dataDir), dataDir),
