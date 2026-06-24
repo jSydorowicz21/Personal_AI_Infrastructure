@@ -71,6 +71,7 @@ const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const hookPathHelpers = read(join(releaseRoot, "hooks", "lib", "paths.ts"));
+const toolActivityTracker = read(join(releaseRoot, "hooks", "ToolActivityTracker.hook.ts"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
@@ -199,6 +200,14 @@ check(
     !checkpointTool.includes("from 'node:os'") &&
     checkpointTool.includes("windowsHide: true"),
   "hooks/CheckpointPerISC.hook.ts and PAI/TOOLS/Checkpoint.ts",
+);
+
+check(
+  "Tool activity tracker hides git snapshots on Windows",
+  toolActivityTracker.includes("CAPTURE_GIT_SNAPSHOT") &&
+    toolActivityTracker.includes("windowsHide: true") &&
+    (toolActivityTracker.match(/windowsHide:\s*true/g)?.length ?? 0) >= 2,
+  "hooks/ToolActivityTracker.hook.ts",
 );
 
 check(

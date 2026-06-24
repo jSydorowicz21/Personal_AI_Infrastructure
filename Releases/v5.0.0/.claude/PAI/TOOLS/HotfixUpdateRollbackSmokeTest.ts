@@ -256,6 +256,7 @@ const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedSmartApproverHook = read(join(installRoot, "hooks", "SmartApprover.hook.ts"));
 const updatedCheckpointHook = read(join(installRoot, "hooks", "CheckpointPerISC.hook.ts"));
+const updatedToolActivityTrackerHook = read(join(installRoot, "hooks", "ToolActivityTracker.hook.ts"));
 const updatedHookPaths = read(join(installRoot, "hooks", "lib", "paths.ts"));
 const updatedOpenCodePlugin = read(join(installRoot, "plugins", "pai-opencode.ts"));
 const updatedHooksJson = read(join(installRoot, "hooks.json"));
@@ -298,6 +299,7 @@ const requiredManifestSources = [
   "PAI/TOOLS/CostTracker.ts",
   "hooks/CheckpointPerISC.hook.ts",
   "hooks/SmartApprover.hook.ts",
+  "hooks/ToolActivityTracker.hook.ts",
   "hooks/lib",
   "plugins/pai-opencode.ts",
 ];
@@ -322,6 +324,7 @@ const beforeRollbackChecks: Check[] = [
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
   check("SmartApprover updated from release", updatedSmartApproverHook.includes("const HOME = homeDir()") && updatedSmartApproverHook.includes("getFrameworkDir, homeDir, userPath"), join(installRoot, "hooks", "SmartApprover.hook.ts")),
   check("Checkpoint hook updated from release", updatedCheckpointHook.includes("const HOME = homeDir()") && updatedCheckpointHook.includes("windowsHide: true"), join(installRoot, "hooks", "CheckpointPerISC.hook.ts")),
+  check("ToolActivityTracker updated from release", updatedToolActivityTrackerHook.includes("CAPTURE_GIT_SNAPSHOT") && updatedToolActivityTrackerHook.includes("windowsHide: true"), join(installRoot, "hooks", "ToolActivityTracker.hook.ts")),
   check("hook path helper exports homeDir", updatedHookPaths.includes("export function homeDir()"), join(installRoot, "hooks", "lib", "paths.ts")),
   check("OpenCode plugin updated from release", updatedOpenCodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS"), join(installRoot, "plugins", "pai-opencode.ts")),
   check("MemoryDelete smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")),
