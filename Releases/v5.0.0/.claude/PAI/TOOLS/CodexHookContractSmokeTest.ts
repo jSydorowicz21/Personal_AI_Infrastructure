@@ -442,6 +442,36 @@ function runRtkPreToolUseWithMissingRtk() {
   });
 }
 
+function runRtkPreToolUseWithoutDataDir() {
+  mkdirSync(missingRtkBin, { recursive: true });
+  const fallbackHome = join(tempRoot, "rtk-fallback-home");
+  const staleHome = join(tempRoot, "deleted-home");
+  mkdirSync(fallbackHome, { recursive: true });
+  return {
+    fallbackHome,
+    result: spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
+      input: JSON.stringify({
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_input: { command: "Get-Content -Raw hooks/FrameworkHookAdapter.ts" },
+        cwd: tempRoot,
+        session_id: "hook-contract-rtk-fallback-data-dir",
+      }),
+      encoding: "utf-8",
+      timeout: 5_000,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PATH: missingRtkBin,
+        HOME: staleHome,
+        USERPROFILE: fallbackHome,
+        PAI_DATA_DIR: "",
+        PAI_RTK_REWRITE_TIMEOUT_MS: "100",
+      },
+    }),
+  };
+}
+
 function runRtkPreToolUseProxyBypass() {
   return spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
     input: JSON.stringify({
@@ -702,6 +732,15 @@ try {
     `status=${missingRtk.status ?? "null"} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
   );
 
+  const fallbackRtk = runRtkPreToolUseWithoutDataDir();
+  const fallbackMissPath = join(fallbackRtk.fallbackHome, ".pai", "MEMORY", "OBSERVABILITY", "rtk-hook-misses.jsonl");
+  const fallbackMisses = existsSync(fallbackMissPath) ? readFileSync(fallbackMissPath, "utf-8") : "";
+  check(
+    "RtkPreToolUse falls back to USERPROFILE data dir",
+    fallbackRtk.result.status === 0 && fallbackMisses.includes('"reason":"rtk_unavailable_or_timeout"'),
+    `status=${fallbackRtk.result.status ?? "null"} misses=${fallbackMisses.trim().split(/\r?\n/).slice(-2).join(" | ")}`
+  );
+
   const proxyBypass = runRtkPreToolUseProxyBypass();
   check(
     "RtkPreToolUse records rtk proxy bypass",
@@ -847,7 +886,7 @@ try {
     );
     check(
       "RtkPreToolUse records rtk misses",
-      rtkSource.includes("rtk_unavailable_or_timeout") && rtkSource.includes("rtk_command_bypass"),
+      rtkSource.includes("function homeDir()") && rtkSource.includes("rtk_unavailable_or_timeout") && rtkSource.includes("rtk_command_bypass"),
       rtkSourcePath,
     );
     check(

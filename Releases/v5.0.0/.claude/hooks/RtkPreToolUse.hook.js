@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("node:child_process");
-const { appendFileSync, mkdirSync } = require("node:fs");
+const { appendFileSync, existsSync, mkdirSync } = require("node:fs");
 const { join } = require("node:path");
 const { homedir } = require("node:os");
 
@@ -33,8 +33,16 @@ function getCommand(payload) {
   return { input, command: input.command };
 }
 
+function homeDir() {
+  const home = process.env.HOME;
+  if (home && existsSync(home)) return home;
+  const userProfile = process.env.USERPROFILE;
+  if (userProfile && existsSync(userProfile)) return userProfile;
+  return home || userProfile || homedir();
+}
+
 function dataDir() {
-  return process.env.PAI_DATA_DIR || join(process.env.HOME || process.env.USERPROFILE || homedir(), ".pai");
+  return process.env.PAI_DATA_DIR || join(homeDir(), ".pai");
 }
 
 function recordMiss(reason, command, detail = "") {

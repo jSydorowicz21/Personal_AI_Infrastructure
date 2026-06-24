@@ -256,6 +256,7 @@ const updatedCostTracker = read(join(installRoot, "PAI", "TOOLS", "CostTracker.t
 const updatedRemoveBg = read(join(installRoot, "PAI", "TOOLS", "RemoveBg.ts"));
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
+const updatedRtkHook = read(join(installRoot, "hooks", "RtkPreToolUse.hook.js"));
 const updatedSmartApproverHook = read(join(installRoot, "hooks", "SmartApprover.hook.ts"));
 const updatedCheckpointHook = read(join(installRoot, "hooks", "CheckpointPerISC.hook.ts"));
 const updatedToolActivityTrackerHook = read(join(installRoot, "hooks", "ToolActivityTracker.hook.ts"));
@@ -301,6 +302,7 @@ const requiredManifestSources = [
   "PAI/TOOLS/CostTracker.ts",
   "PAI/TOOLS/RemoveBg.ts",
   "hooks/CheckpointPerISC.hook.ts",
+  "hooks/RtkPreToolUse.hook.js",
   "hooks/SmartApprover.hook.ts",
   "hooks/ToolActivityTracker.hook.ts",
   "hooks/lib",
@@ -326,6 +328,7 @@ const beforeRollbackChecks: Check[] = [
   check("hotfix preserves unmanaged PAI/TOOLS file", read(join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")) === "UNMANAGED_EXTRA_TOOL_SENTINEL", join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")),
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
+  check("RtkPreToolUse updated from release", updatedRtkHook.includes("function homeDir()") && updatedRtkHook.includes('join(homeDir(), ".pai")'), join(installRoot, "hooks", "RtkPreToolUse.hook.js")),
   check("SmartApprover updated from release", updatedSmartApproverHook.includes("const HOME = homeDir()") && updatedSmartApproverHook.includes("getFrameworkDir, homeDir, userPath"), join(installRoot, "hooks", "SmartApprover.hook.ts")),
   check("Checkpoint hook updated from release", updatedCheckpointHook.includes("const HOME = homeDir()") && updatedCheckpointHook.includes("windowsHide: true"), join(installRoot, "hooks", "CheckpointPerISC.hook.ts")),
   check("ToolActivityTracker updated from release", updatedToolActivityTrackerHook.includes("CAPTURE_GIT_SNAPSHOT") && updatedToolActivityTrackerHook.includes("windowsHide: true"), join(installRoot, "hooks", "ToolActivityTracker.hook.ts")),

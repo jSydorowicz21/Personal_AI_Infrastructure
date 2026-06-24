@@ -397,6 +397,8 @@ check(
     rtkHook.includes("windows_unsafe_rtk_rewrite") &&
     rtkHook.includes("isWindowsUnresolvableRtkRewrite") &&
     rtkHook.includes("windows_unresolvable_rtk_rewrite") &&
+    rtkHook.includes("function homeDir()") &&
+    rtkHook.includes("return process.env.PAI_DATA_DIR || join(homeDir(), \".pai\")") &&
     !rtkHook.includes("fast_bypass"),
   "hooks/RtkPreToolUse.hook.js",
 );
