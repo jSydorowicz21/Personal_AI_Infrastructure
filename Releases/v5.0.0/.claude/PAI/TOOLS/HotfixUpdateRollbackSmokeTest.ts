@@ -248,6 +248,9 @@ const update = spawnSync(updateCommand, updateArgs, {
 
 const backupRoot = latestBackupRoot(home);
 const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
+const updatedMemoryRetriever = read(join(installRoot, "PAI", "TOOLS", "MemoryRetriever.ts"));
+const updatedArchitectureSummaryGenerator = read(join(installRoot, "PAI", "TOOLS", "ArchitectureSummaryGenerator.ts"));
+const updatedCostTracker = read(join(installRoot, "PAI", "TOOLS", "CostTracker.ts"));
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedOpenCodePlugin = read(join(installRoot, "plugins", "pai-opencode.ts"));
@@ -284,6 +287,10 @@ const profileTexts = [
 const sources = manifestSources();
 const requiredManifestSources = [
   "PAI/TOOLS/InstallerCodexSmokeTest.ts",
+  "PAI/TOOLS/MemoryRetriever.ts",
+  "PAI/TOOLS/MemoryRetrieverSmokeTest.ts",
+  "PAI/TOOLS/ArchitectureSummaryGenerator.ts",
+  "PAI/TOOLS/CostTracker.ts",
   "plugins/pai-opencode.ts",
 ];
 
@@ -296,7 +303,11 @@ const beforeRollbackChecks: Check[] = [
   check("RepeatDetection backup captured old content", read(join(backupRoot, "hooks", "RepeatDetection.hook.ts")) === sentinels.repeatHook, join(backupRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard backup captured old content", read(join(backupRoot, "hooks", "PromptGuard.hook.ts")) === sentinels.promptGuardHook, join(backupRoot, "hooks", "PromptGuard.hook.ts")),
   check("OpenCode plugin backup captured old content", read(join(backupRoot, "plugins", "pai-opencode.ts")) === sentinels.opencodePlugin, join(backupRoot, "plugins", "pai-opencode.ts")),
-  check("pai.ts updated from release", updatedPaiTool.includes("Run PAI runtime diagnostics"), join(installRoot, "PAI", "TOOLS", "pai.ts")),
+  check("pai.ts updated from release", updatedPaiTool.includes("k doctor                 Run AV-safe PAI diagnostics"), join(installRoot, "PAI", "TOOLS", "pai.ts")),
+  check("MemoryRetriever updated from release", updatedMemoryRetriever.includes('paiPath("TOOLS", "Inference.ts")'), join(installRoot, "PAI", "TOOLS", "MemoryRetriever.ts")),
+  check("MemoryRetriever smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "MemoryRetrieverSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "MemoryRetrieverSmokeTest.ts")),
+  check("ArchitectureSummaryGenerator updated from release", updatedArchitectureSummaryGenerator.includes("const HOME = homeDir()"), join(installRoot, "PAI", "TOOLS", "ArchitectureSummaryGenerator.ts")),
+  check("CostTracker updated from release", updatedCostTracker.includes("const HOME = homeDir()"), join(installRoot, "PAI", "TOOLS", "CostTracker.ts")),
   check("hotfix preserves unmanaged PAI/TOOLS file", read(join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")) === "UNMANAGED_EXTRA_TOOL_SENTINEL", join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")),
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),

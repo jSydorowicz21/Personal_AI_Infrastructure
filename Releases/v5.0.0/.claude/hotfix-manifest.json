@@ -29,6 +29,22 @@
       "target": "PAI/TOOLS/Inference.ts"
     },
     {
+      "source": "PAI/TOOLS/MemoryRetriever.ts",
+      "target": "PAI/TOOLS/MemoryRetriever.ts"
+    },
+    {
+      "source": "PAI/TOOLS/MemoryRetrieverSmokeTest.ts",
+      "target": "PAI/TOOLS/MemoryRetrieverSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/ArchitectureSummaryGenerator.ts",
+      "target": "PAI/TOOLS/ArchitectureSummaryGenerator.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CostTracker.ts",
+      "target": "PAI/TOOLS/CostTracker.ts"
+    },
+    {
       "source": "PAI/TOOLS/FailureCapture.ts",
       "target": "PAI/TOOLS/FailureCapture.ts"
     },
