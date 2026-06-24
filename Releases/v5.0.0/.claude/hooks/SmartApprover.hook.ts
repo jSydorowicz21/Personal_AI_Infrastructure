@@ -12,11 +12,10 @@
  */
 
 import { resolve } from 'path';
-import { homedir } from 'os';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { getFrameworkDir, userPath } from './lib/paths';
+import { getFrameworkDir, homeDir, userPath } from './lib/paths';
 
-const HOME = homedir();
+const HOME = homeDir();
 const FRAMEWORK_DIR = getFrameworkDir();
 const TRUSTED_FRAMEWORK_DIR = resolve(FRAMEWORK_DIR);
 

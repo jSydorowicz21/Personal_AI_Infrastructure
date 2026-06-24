@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve, sep } from 'path';
 
-function homeDir(): string {
+export function homeDir(): string {
   const home = process.env.HOME;
   if (home && existsSync(home)) return home;
   const userProfile = process.env.USERPROFILE;

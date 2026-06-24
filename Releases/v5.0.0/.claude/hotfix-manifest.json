@@ -325,6 +325,10 @@
       "target": "hooks/SetQuestionTab.hook.ts"
     },
     {
+      "source": "hooks/SmartApprover.hook.ts",
+      "target": "hooks/SmartApprover.hook.ts"
+    },
+    {
       "source": "hooks/TelosSummarySync.hook.ts",
       "target": "hooks/TelosSummarySync.hook.ts"
     },

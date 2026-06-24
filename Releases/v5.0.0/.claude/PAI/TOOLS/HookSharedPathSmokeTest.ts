@@ -4,7 +4,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -27,15 +27,18 @@ function printChecks(checks: Check[]) {
 }
 
 const root = uniqueRoot();
+const home = join(root, "home");
 const data = join(root, "pai-data");
-const framework = join(root, "framework");
+const framework = join(home, ".codex");
 const paiDir = join(framework, "PAI");
-const home = process.env.HOME || homedir();
 
+mkdirSync(home, { recursive: true });
 mkdirSync(join(data, "MEMORY", "WORK", "20260617-120000_shared-hook-path"), { recursive: true });
 mkdirSync(join(data, "USER"), { recursive: true });
 mkdirSync(paiDir, { recursive: true });
 
+process.env.HOME = home;
+process.env.USERPROFILE = home;
 process.env.PAI_DATA_DIR = data;
 process.env.PAI_FRAMEWORK_DIR = framework;
 process.env.PAI_DIR = paiDir;
@@ -43,6 +46,7 @@ process.env.PAI_DIR = paiDir;
 const paths = await import("../../hooks/lib/paths.ts");
 const isa = await import("../../hooks/lib/isa-utils.ts");
 const adapterPath = join(import.meta.dir, "..", "..", "hooks", "FrameworkHookAdapter.ts");
+const smartApproverPath = join(import.meta.dir, "..", "..", "hooks", "SmartApprover.hook.ts");
 
 const artifactPath = join(data, "MEMORY", "WORK", "20260617-120000_shared-hook-path", "ISA.md");
 writeFileSync(artifactPath, [
@@ -107,6 +111,14 @@ const subagentRun = spawnSync(process.execPath, [adapterPath, "--framework", "co
   timeout: 20_000,
 });
 const subagentKittyEnvPath = join(subagentData, "MEMORY", "STATE", "kitty-env.json");
+const smartApproverRun = spawnSync(process.execPath, [smartApproverPath], {
+  cwd: framework,
+  env: adapterEnv,
+  input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: join(framework, "PAI", "SMOKE.md") } }),
+  encoding: "utf-8",
+  timeout: 20_000,
+  windowsHide: true,
+});
 
 const workJsonPath = join(data, "MEMORY", "STATE", "work.json");
 const workJsonText = existsSync(workJsonPath) ? readFileSync(workJsonPath, "utf-8") : "";
@@ -160,6 +172,11 @@ const checks: Check[] = [
     name: "adapter subagent marker skips session state",
     passed: subagentRun.status === 0 && !existsSync(subagentKittyEnvPath),
     detail: `status=${subagentRun.status ?? "null"} ${subagentKittyEnvPath}`,
+  },
+  {
+    name: "SmartApprover trusts active framework home",
+    passed: smartApproverRun.status === 0 && smartApproverRun.stdout.includes('"behavior":"allow"'),
+    detail: `status=${smartApproverRun.status ?? "null"} stdout=${smartApproverRun.stdout.trim()}`,
   },
 ];
 

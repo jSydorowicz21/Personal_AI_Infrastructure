@@ -67,7 +67,9 @@ const bannerSources = [
 ].map((file) => read(join(paiRoot, "TOOLS", file))).join("\n");
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
+const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
+const hookPathHelpers = read(join(releaseRoot, "hooks", "lib", "paths.ts"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
@@ -173,6 +175,15 @@ check(
     architectureSummaryGenerator.includes("const HOME = homeDir()") &&
     !architectureSummaryGenerator.includes('process.env.HOME || process.env.USERPROFILE || ""'),
   "PAI/TOOLS/algorithm.ts, CostTracker.ts, and ArchitectureSummaryGenerator.ts",
+);
+
+check(
+  "SmartApprover uses active framework home helper",
+  hookPathHelpers.includes("export function homeDir()") &&
+    smartApprover.includes("import { getFrameworkDir, homeDir, userPath } from './lib/paths'") &&
+    smartApprover.includes("const HOME = homeDir()") &&
+    !smartApprover.includes("from 'os'"),
+  "hooks/SmartApprover.hook.ts and hooks/lib/paths.ts",
 );
 
 check(
