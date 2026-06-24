@@ -16,15 +16,15 @@
  * 2. Skip system text and very short prompts
  * 3. Deterministic tab title → set purple/thinking immediately
  * 4. Deterministic session name (first prompt only)
- * 5. Haiku inference → tab title + session name
+ * 5. Fast classifier inference → tab title + session name
  * 6. Set tab, store name, voice announce
  *
  * PERFORMANCE:
  * - Deterministic path: <50ms (no inference)
- * - Inference path: ~1-1.5s (one Haiku call for tab title + session name)
+ * - Inference path: bounded transcript tail + one fast classifier call
  */
 
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmdirSync, renameSync, statSync } from 'fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmdirSync, renameSync, statSync, openSync, readSync, closeSync } from 'fs';
 import { join, dirname } from 'path';
 
 import { inference } from '../PAI/TOOLS/Inference';
@@ -54,6 +54,38 @@ interface InferenceResult {
 }
 
 type Mode = 'MINIMAL' | 'NATIVE' | 'ALGORITHM';
+
+const DEFAULT_CLASSIFIER_CONTEXT_BYTES = 32 * 1024;
+const DEFAULT_CLASSIFIER_CONTEXT_TURNS = 3;
+
+function positiveIntEnv(name: string, fallback: number, max: number): number {
+  const raw = Number(process.env[name] || '');
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.min(Math.floor(raw), max);
+}
+
+function classifierContextBytes(): number {
+  return positiveIntEnv('PAI_PROMPT_CLASSIFIER_CONTEXT_BYTES', DEFAULT_CLASSIFIER_CONTEXT_BYTES, 256 * 1024);
+}
+
+function classifierContextTurns(): number {
+  return positiveIntEnv('PAI_PROMPT_CLASSIFIER_CONTEXT_TURNS', DEFAULT_CLASSIFIER_CONTEXT_TURNS, 8);
+}
+
+function readFileTail(path: string, maxBytes: number): string {
+  const stats = statSync(path);
+  if (stats.size <= maxBytes) return readFileSync(path, 'utf-8');
+
+  const fd = openSync(path, 'r');
+  try {
+    const start = Math.max(0, stats.size - maxBytes);
+    const buffer = Buffer.alloc(stats.size - start);
+    readSync(fd, buffer, 0, buffer.length, start);
+    return buffer.toString('utf-8');
+  } finally {
+    closeSync(fd);
+  }
+}
 
 function emitAdditionalContext(mode: Mode, tier: number | null, reason: string): void {
   const additionalContext = (mode === 'ALGORITHM' && tier !== null)
@@ -771,10 +803,10 @@ OUTPUT FORMAT (JSON only, single object on one line, no prose, no markdown):
 // leak into session names — producing garbage like "Review Entering Yet Forge" instead of the
 // user's actual subject. Callers set `includeAssistant: false` when generating the permanent
 // session name (first prompt), and can opt in for tab-title-only context on later prompts.
-function getRecentContext(transcriptPath: string, maxTurns: number = 6, includeAssistant: boolean = false): string {
+function getRecentContext(transcriptPath: string, maxTurns: number = classifierContextTurns(), includeAssistant: boolean = false): string {
   try {
     if (!transcriptPath || !existsSync(transcriptPath)) return '';
-    const content = readFileSync(transcriptPath, 'utf-8');
+    const content = readFileTail(transcriptPath, classifierContextBytes());
     const lines = content.trim().split('\n');
     const turns: { role: string; text: string }[] = [];
 
@@ -931,7 +963,7 @@ async function main() {
     // Naming is permanent and first-prompt-only; exclude Assistant turns so Algorithm scaffolding
     // (phase headers, agent names, SUMMARY lines) cannot contaminate the session name. Tab-title
     // inference on later prompts keeps Assistant context for "continue with X" style follow-ups.
-    const context = getRecentContext(data.transcript_path, 6, !isFirstPrompt);
+    const context = getRecentContext(data.transcript_path, classifierContextTurns(), !isFirstPrompt);
     const userPrompt = context ? `CONTEXT:\n${context}\n\nCURRENT MESSAGE:\n${cleanPrompt}` : cleanPrompt;
 
     const inferenceStart = Date.now();

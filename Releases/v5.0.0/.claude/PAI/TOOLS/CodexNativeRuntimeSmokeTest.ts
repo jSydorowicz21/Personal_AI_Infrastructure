@@ -49,6 +49,7 @@ const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
+const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
@@ -84,6 +85,18 @@ check(
     inferenceTool.includes('const useCodex = !useOpenCode && (framework === "codex"') &&
     inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("spawn('claude'"),
   "PAI/TOOLS/Inference.ts (source shape; runtime: CodexFrameworkAgentExecutionSmokeTest)",
+);
+
+check(
+  "Prompt classifier reads bounded transcript context",
+  promptProcessing.includes("DEFAULT_CLASSIFIER_CONTEXT_BYTES") &&
+    promptProcessing.includes("PAI_PROMPT_CLASSIFIER_CONTEXT_BYTES") &&
+    promptProcessing.includes("DEFAULT_CLASSIFIER_CONTEXT_TURNS") &&
+    promptProcessing.includes("PAI_PROMPT_CLASSIFIER_CONTEXT_TURNS") &&
+    promptProcessing.includes("readFileTail(transcriptPath, classifierContextBytes())") &&
+    promptProcessing.includes("getRecentContext(data.transcript_path, classifierContextTurns(), !isFirstPrompt)") &&
+    !promptProcessing.includes("const content = readFileSync(transcriptPath, 'utf-8');"),
+  "hooks/PromptProcessing.hook.ts",
 );
 
 check(
