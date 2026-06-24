@@ -63,6 +63,7 @@ const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
+const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
@@ -248,6 +249,17 @@ check(
     telosSummaryHook.includes("windowsHide: true") &&
     !telosSummaryHook.includes("execSync"),
   "hooks/TelosSummarySync.hook.ts",
+);
+
+check(
+  "Tab setter avoids shell exec for terminal metadata",
+  tabSetter.includes("spawnSync(resolved, args") &&
+    tabSetter.includes("findExecutable(command)") &&
+    tabSetter.includes("windowsHide: true") &&
+    tabSetter.includes("JSON.parse(liveOutput)") &&
+    !tabSetter.includes("execSync") &&
+    !tabSetter.includes("| jq"),
+  "hooks/lib/tab-setter.ts",
 );
 
 check(

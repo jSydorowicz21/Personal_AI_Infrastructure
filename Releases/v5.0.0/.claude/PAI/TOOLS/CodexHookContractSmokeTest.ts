@@ -816,6 +816,8 @@ try {
     const satisfactionSource = existsSync(satisfactionPath) ? readFileSync(satisfactionPath, "utf-8") : "";
     const telosSummaryPath = join(frameworkRoot, "hooks", "TelosSummarySync.hook.ts");
     const telosSummarySource = existsSync(telosSummaryPath) ? readFileSync(telosSummaryPath, "utf-8") : "";
+    const tabSetterPath = join(frameworkRoot, "hooks", "lib", "tab-setter.ts");
+    const tabSetterSource = existsSync(tabSetterPath) ? readFileSync(tabSetterPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -881,6 +883,16 @@ try {
         telosSummarySource.includes("windowsHide: true") &&
         !telosSummarySource.includes("execSync"),
       telosSummaryPath,
+    );
+    check(
+      "tab-setter terminal metadata updates avoid shell exec",
+      tabSetterSource.includes("spawnSync(resolved, args") &&
+        tabSetterSource.includes("findExecutable(command)") &&
+        tabSetterSource.includes("windowsHide: true") &&
+        tabSetterSource.includes("JSON.parse(liveOutput)") &&
+        !tabSetterSource.includes("execSync") &&
+        !tabSetterSource.includes("| jq"),
+      tabSetterPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",
