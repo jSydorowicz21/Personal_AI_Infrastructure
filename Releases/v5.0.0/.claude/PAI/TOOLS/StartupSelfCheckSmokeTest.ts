@@ -12,6 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { homeDir } from "./lib/paths";
 
 type Check = {
   name: string;
@@ -64,7 +65,8 @@ function hookCommandText(hooksJson: string): string {
 
 const keep = process.argv.includes("--keep");
 const dynamic = process.argv.includes("--dynamic") || process.env.PAI_SMOKE_DYNAMIC === "1";
-const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(process.env.HOME || "", ".codex");
+const home = homeDir();
+const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(home, ".codex");
 const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
 const hookPath = join(frameworkRoot, "hooks", "StartupSelfCheck.hook.ts");
 const hooksJsonPath = join(frameworkRoot, "hooks.json");
@@ -92,6 +94,7 @@ if (dynamic) {
   run = spawnSync(process.execPath, [hookPath], {
     encoding: "utf-8",
     timeout: 10_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PAI_FRAMEWORK: "codex",

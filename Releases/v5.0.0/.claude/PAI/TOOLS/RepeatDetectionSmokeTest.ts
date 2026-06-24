@@ -11,6 +11,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { homeDir } from "./lib/paths";
 
 type Check = {
   name: string;
@@ -29,7 +30,8 @@ function print(checks: Check[]) {
 }
 
 const keep = process.argv.includes("--keep");
-const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(process.env.HOME || "", ".codex");
+const home = homeDir();
+const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(home, ".codex");
 const hookPath = join(frameworkRoot, "hooks", "RepeatDetection.hook.ts");
 const root = join(tmpdir(), `pai-repeat-detection-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 const dataDir = join(root, "pai-data");
@@ -52,6 +54,7 @@ function runPrompt() {
     }),
     encoding: "utf-8",
     timeout: 10_000,
+    windowsHide: true,
     env,
   });
 }

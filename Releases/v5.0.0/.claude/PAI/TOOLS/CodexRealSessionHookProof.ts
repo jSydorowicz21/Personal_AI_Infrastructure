@@ -8,8 +8,8 @@
 
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { homeDir } from "./lib/paths";
 
 type Check = {
   name: string;
@@ -17,7 +17,7 @@ type Check = {
   detail: string;
 };
 
-const home = homedir();
+const home = homeDir();
 function existingEnvPath(key: string): string {
   const value = process.env[key];
   return value && existsSync(value) ? value : "";

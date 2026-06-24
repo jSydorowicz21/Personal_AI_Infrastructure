@@ -84,6 +84,8 @@ const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts")
 const patternInspector = read(join(releaseRoot, "hooks", "security", "inspectors", "PatternInspector.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
+const repeatDetectionSmoke = read(join(paiRoot, "TOOLS", "RepeatDetectionSmokeTest.ts"));
+const startupSelfCheckSmoke = read(join(paiRoot, "TOOLS", "StartupSelfCheckSmokeTest.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
@@ -480,9 +482,23 @@ check(
 
 check(
   "Codex hook proof utilities keep child windows hidden",
-  codexHookTriggerSmoke.includes("windowsHide: true") &&
-    codexRealSessionHookProof.includes("windowsHide: true"),
-  "PAI/TOOLS/CodexHookTriggerSmokeTest.ts and CodexRealSessionHookProof.ts",
+  codexHookTriggerSmoke.includes('import { homeDir } from "./lib/paths"') &&
+    codexHookTriggerSmoke.includes("const home = homeDir()") &&
+    !codexHookTriggerSmoke.includes("homedir()") &&
+    codexHookTriggerSmoke.includes("windowsHide: true") &&
+    codexRealSessionHookProof.includes('import { homeDir } from "./lib/paths"') &&
+    codexRealSessionHookProof.includes("const home = homeDir()") &&
+    !codexRealSessionHookProof.includes("homedir()") &&
+    codexRealSessionHookProof.includes("windowsHide: true") &&
+    repeatDetectionSmoke.includes('import { homeDir } from "./lib/paths"') &&
+    repeatDetectionSmoke.includes("const home = homeDir()") &&
+    repeatDetectionSmoke.includes("windowsHide: true") &&
+    !repeatDetectionSmoke.includes('join(process.env.HOME || "", ".codex")') &&
+    startupSelfCheckSmoke.includes('import { homeDir } from "./lib/paths"') &&
+    startupSelfCheckSmoke.includes("const home = homeDir()") &&
+    startupSelfCheckSmoke.includes("windowsHide: true") &&
+    !startupSelfCheckSmoke.includes('join(process.env.HOME || "", ".codex")'),
+  "CodexHookTriggerSmokeTest, CodexRealSessionHookProof, RepeatDetectionSmokeTest, StartupSelfCheckSmokeTest",
 );
 
 check(
