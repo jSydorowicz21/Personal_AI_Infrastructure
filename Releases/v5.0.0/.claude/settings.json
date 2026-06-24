@@ -297,27 +297,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/WorkCompletionLearning.hook.ts"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/SessionCleanup.hook.ts"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/RelationshipMemory.hook.ts"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/UpdateCounts.hook.ts"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/IntegrityCheck.hook.ts"
-          },
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/KVSync.hook.ts"
+            "command": "$HOME/.claude/hooks/SessionEndDispatcher.hook.ts"
           }
         ]
       }

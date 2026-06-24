@@ -424,7 +424,19 @@ function Resolve-ReparseTargetAction([string]$InstallRoot, [string]$Target, [str
 # delete through a reparse-point ancestor. Returns "skipped" when a dev junction
 # already resolves to the source (already current) and "updated" otherwise.
 function Update-DirectoryTarget([string]$Root, [string]$Target, [string]$Source) {
-  if ((Test-Path -LiteralPath $Target) -and -not (Test-IsReparsePoint $Target)) {
+  if (Test-Path -LiteralPath $Target) {
+    if (Test-IsReparsePoint $Target) {
+      # The destination leaf itself is a symlink/junction (the ancestor scan in
+      # Resolve-ReparseTargetAction deliberately excludes the leaf). Same-source ->
+      # already current, skip. Foreign -> refuse rather than copy through the link
+      # into an unmanaged tree.
+      $leafReal = (Resolve-RealPath $Target).TrimEnd("\", "/")
+      $sourceReal = (Resolve-RealPath $Source).TrimEnd("\", "/")
+      if ([string]::Equals($leafReal, $sourceReal, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return "skipped"
+      }
+      throw "Refusing to copy into reparse-point leaf '$Target' (resolves to '$leafReal', not the managed source '$Source'). Replace the junction/symlink before updating."
+    }
     $reparse = Resolve-ReparseTargetAction $Root $Target $Source
     if ($reparse.Action -eq "skip") { return "skipped" }
     if ($reparse.Action -eq "fail") {
@@ -498,13 +510,34 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
     throw "Manifest source missing: $source"
   }
 
+  $sourceIsDir = Test-Path -LiteralPath $source -PathType Container
+
   # Dev installs junction managed dirs (e.g. PAI) back into the source tree. When
   # the destination resolves through a reparse-point ancestor to the very source
   # being copied it is already current: skip rather than copy a file/dir onto
-  # itself (which would throw or, for files, truncate the source mid-copy).
+  # itself (which would throw or, for files, truncate the source mid-copy). When
+  # a destination resolves elsewhere through that ancestor, refuse BEFORE any
+  # backup/copy so files are never written and directories are never deleted
+  # through an unmanaged reparse point.
   $reparseInfo = Resolve-ReparseTargetAction $InstallRoot $target $source
   if ($reparseInfo.Action -eq "skip") {
     return [pscustomobject]@{ Status = "unchanged"; Detail = "dev junction resolves to managed source ($($reparseInfo.Ancestor))"; Target = $target }
+  }
+  if ($reparseInfo.Action -eq "fail") {
+    throw "Refusing to update '$target' through reparse-point ancestor '$($reparseInfo.Ancestor)' (resolves to '$($reparseInfo.RealTarget)', not the managed source '$source'). Replace the junction/symlink before updating."
+  }
+
+  # The destination LEAF itself may be a symlink/junction (the ancestor scan above
+  # excludes the leaf). Same-source (any type) -> already current, skip rather than
+  # copy onto itself. Foreign leaf -> refuse before any backup/copy so we never
+  # write files or dump directories into the link target.
+  if (Test-IsReparsePoint $target) {
+    $leafReal = (Resolve-RealPath $target).TrimEnd("\", "/")
+    $sourceReal = (Resolve-RealPath $source).TrimEnd("\", "/")
+    if ([string]::Equals($leafReal, $sourceReal, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return [pscustomobject]@{ Status = "unchanged"; Detail = "dev junction leaf resolves to managed source"; Target = $target }
+    }
+    throw "Refusing to update reparse-point leaf '$target' (resolves to '$leafReal', not the managed source '$source'). Replace the junction/symlink before updating."
   }
 
   if ($DryRun) {
@@ -626,6 +659,18 @@ await Bun.write(join(root, "hooks.json"), `${JSON.stringify(generateCodexHooksJs
     Pop-Location
   }
   Success "Regenerated Codex hooks.json from installed generator."
+}
+
+function Migrate-ClaudeSessionEndLifecycle([string]$InstallRoot, [string]$BackupRoot) {
+  $settings = Join-Path $InstallRoot "settings.json"
+  if (-not (Test-Path -LiteralPath $settings)) { Info "No settings.json to migrate: $settings"; return }
+  if (-not (Get-Command bun -ErrorAction SilentlyContinue)) { Warn "Bun not found; skipping SessionEnd lifecycle migration."; return }
+  $migrator = Join-Path $InstallRoot "PAI\TOOLS\SessionEndLifecycleMigrate.ts"
+  if (-not (Test-Path -LiteralPath $migrator)) { Warn "SessionEnd migrator not found: $migrator"; return }
+  Backup-Existing $InstallRoot $settings $BackupRoot | Out-Null
+  & bun $migrator --settings $settings | Out-Host
+  if ($LASTEXITCODE -ne 0) { Warn "SessionEnd lifecycle migration reported an error (left settings unchanged)." }
+  else { Success "SessionEnd lifecycle migration complete." }
 }
 
 function Invoke-WithTemporaryEnvironment($Values, [scriptblock]$Script) {
@@ -815,6 +860,8 @@ try {
       Regenerate-CodexHooksJson $target.Root $backupRoot
     } elseif ($target.Framework -eq "opencode") {
       Regenerate-OpenCodeNativeArtifacts $target.Root $backupRoot
+    } elseif ($target.Framework -eq "claude") {
+      Migrate-ClaudeSessionEndLifecycle $target.Root $backupRoot
     }
     Write-PaiFrameworkState $target.Root $target.Framework
     Set-PaiUserEnvironment $target.Root $target.Framework

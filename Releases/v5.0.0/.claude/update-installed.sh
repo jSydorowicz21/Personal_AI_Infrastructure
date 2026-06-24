@@ -342,17 +342,24 @@ reparse_target_action() {
 update_directory_target() {
   local target="$1"
   local source="$2"
-  if [ -e "$target" ] && [ ! -L "$target" ]; then
+  if [ -e "$target" ] || [ -L "$target" ]; then
     case "$(reparse_target_action "$target" "$source")" in
       skip)
         printf 'skipped\n'
         return 0
         ;;
       fail)
-        fail "Refusing to recursively delete '$target' through a symlinked ancestor (resolves to '$(absolute_path "$target")', not the managed source '$source'). Replace the symlink before updating."
+        fail "Refusing to replace '$target' through a symlinked ancestor or leaf (resolves to '$(absolute_path "$target")', not the managed source '$source'). Replace the symlink before updating."
         ;;
     esac
-    rm -rf -- "$target"
+    # A symlinked leaf: remove only the link, never rm -rf through it. A real
+    # directory: recursive delete is safe because no symlinked ancestor/leaf
+    # remains (skip/fail handled above).
+    if [ -L "$target" ]; then
+      rm -- "$target"
+    else
+      rm -rf -- "$target"
+    fi
   fi
   copy_directory_contents "$source" "$target"
   printf 'updated\n'
@@ -405,12 +412,21 @@ apply_entry() {
     return 0
   fi
 
-  # Dev installs symlink managed dirs back into the source tree. When the
-  # destination resolves through a symlinked ancestor to the very source being
-  # copied it is already current: skip rather than copy a file/dir onto itself.
-  if [ -e "$target" ] && [ "$(reparse_target_action "$target" "$source")" = "skip" ]; then
-    success "$target (dev symlink resolves to managed source; left unchanged)"
-    return 0
+  # Dev installs symlink managed dirs back into the source tree. absolute_path
+  # resolves a symlinked leaf AND symlinked ancestors, so this single guard covers
+  # both. Same-source -> already current (skip rather than copy onto itself).
+  # Foreign target -> refuse BEFORE any backup/copy so files are never written and
+  # directories are never deleted or dumped through an unmanaged symlink.
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    case "$(reparse_target_action "$target" "$source")" in
+      skip)
+        success "$target (dev symlink resolves to managed source; left unchanged)"
+        return 0
+        ;;
+      fail)
+        fail "Refusing to update '$target' through a symlinked ancestor or leaf (resolves to '$(absolute_path "$target")', not the managed source '$source'). Replace the symlink before updating."
+        ;;
+    esac
   fi
 
   local backup=""
@@ -547,6 +563,22 @@ regenerate_opencode_native_artifacts() {
   success "Regenerated OpenCode opencode.json, agents, and commands from installed PAI CLI."
 }
 
+migrate_claude_sessionend_lifecycle() {
+  local install_root="$1"
+  local backup_root="$2"
+  local settings="$install_root/settings.json"
+  [ -f "$settings" ] || { info "No settings.json to migrate: $settings"; return 0; }
+  command -v bun >/dev/null 2>&1 || { warn "Bun not found; skipping SessionEnd lifecycle migration."; return 0; }
+  local migrator="$install_root/PAI/TOOLS/SessionEndLifecycleMigrate.ts"
+  [ -f "$migrator" ] || { warn "SessionEnd migrator not found: $migrator"; return 0; }
+  backup_existing "$install_root" "$settings" "$backup_root" >/dev/null || true
+  if bun "$migrator" --settings "$settings"; then
+    success "SessionEnd lifecycle migration complete."
+  else
+    warn "SessionEnd lifecycle migration reported an error (left settings unchanged)."
+  fi
+}
+
 printf '\nPAI | Installed Hotfix Updater\n\n'
 
 target="$(resolve_target)"
@@ -580,6 +612,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
     regenerate_codex_hooks_json "$target_root" "$backup_root"
   elif [ "$target_framework" = "opencode" ]; then
     regenerate_opencode_native_artifacts "$target_root" "$backup_root"
+  elif [ "$target_framework" = "claude" ]; then
+    migrate_claude_sessionend_lifecycle "$target_root" "$backup_root"
   fi
   verify_install "$target_root" "$target_framework"
   success "Hotfix update complete. Restart the agent session so instructions reload."

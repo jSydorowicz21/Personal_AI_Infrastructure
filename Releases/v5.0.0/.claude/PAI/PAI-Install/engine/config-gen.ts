@@ -359,6 +359,13 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           ],
         },
       ],
+      SessionEnd: [
+        {
+          hooks: [
+            commandHook(config, "SessionEndDispatcher.hook.ts", 5),
+          ],
+        },
+      ],
     },
   };
 }

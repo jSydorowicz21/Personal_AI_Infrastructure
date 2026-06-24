@@ -161,6 +161,58 @@ check(
   (update2.stderr || "").split(/\r?\n/).filter((l) => /reparse|symlink|junction|refus/i.test(l)).slice(-2).join(" | ") || "no reason line",
 );
 
+// ---------------------------------------------------------------------------
+// Scenario 3: the manifest TARGET LEAF itself is a junction/symlink that points
+// at the managed source (installRoot/PAI/TOOLS/lib -> source lib), while its
+// parents are plain dirs. The ancestor scan skips the leaf, so the updater must
+// recognise the leaf link, skip it instead of copying a directory onto itself,
+// and leave the source untouched.
+// ---------------------------------------------------------------------------
+const installRoot3 = join(root, "install3", ".claude");
+const home3 = join(root, "home3");
+mkdirSync(join(installRoot3, "PAI", "TOOLS"), { recursive: true });
+mkdirSync(home3, { recursive: true });
+symlinkSync(join(sourceFixture, "PAI", "TOOLS", "lib"), join(installRoot3, "PAI", "TOOLS", "lib"), linkType);
+
+const update3 = runUpdater({ installRoot: installRoot3, sourceDir: sourceFixture, manifestPath, home: home3 });
+
+check("scenario3 updater exits cleanly on same-source leaf link", update3.status === 0, `status=${update3.status ?? "null"} ${(update3.stderr || "").split(/\r?\n/).slice(-3).join(" | ")}`);
+check("scenario3 source lib file survives", read(sourceLib) === LIB_SENTINEL, sourceLib);
+check("scenario3 source nested lib file survives", read(sourceLibDeep) === LIB_SENTINEL, sourceLibDeep);
+check("scenario3 leaf link preserved", existsSync(join(installRoot3, "PAI", "TOOLS", "lib")), join(installRoot3, "PAI", "TOOLS", "lib"));
+check(
+  "scenario3 leaf link skipped (not copied onto itself)",
+  /unchanged|dev junction|left unchanged|dev symlink/i.test(`${update3.stdout || ""}${update3.stderr || ""}`),
+  (update3.stdout || "").split(/\r?\n/).filter((l) => /unchanged|junction|symlink/i.test(l)).slice(-2).join(" | ") || "no skip line",
+);
+
+// ---------------------------------------------------------------------------
+// Scenario 4: the manifest TARGET LEAF is a junction/symlink to a FOREIGN tree
+// (not the managed source). The updater must fail rather than copy through the
+// leaf link into the foreign tree, and the foreign tree must survive.
+// ---------------------------------------------------------------------------
+const LEAF_FOREIGN_SENTINEL = "LEAF_FOREIGN_DO_NOT_DELETE";
+const leafForeign = join(root, "leaf-foreign", "lib");
+write(join(leafForeign, "precious.ts"), LEAF_FOREIGN_SENTINEL);
+
+const installRoot4 = join(root, "install4", ".claude");
+const home4 = join(root, "home4");
+mkdirSync(join(installRoot4, "PAI", "TOOLS"), { recursive: true });
+mkdirSync(home4, { recursive: true });
+symlinkSync(leafForeign, join(installRoot4, "PAI", "TOOLS", "lib"), linkType);
+
+const update4 = runUpdater({ installRoot: installRoot4, sourceDir: sourceFixture, manifestPath, home: home4 });
+const leafForeignFile = join(leafForeign, "precious.ts");
+
+check("scenario4 updater fails on foreign leaf link", update4.status !== 0, `status=${update4.status ?? "null"}`);
+check("scenario4 foreign leaf tree survives (not deleted)", read(leafForeignFile) === LEAF_FOREIGN_SENTINEL, leafForeignFile);
+check("scenario4 source lib untouched by foreign leaf run", read(sourceLib) === LIB_SENTINEL, sourceLib);
+check(
+  "scenario4 failure message names reparse leaf",
+  /reparse|symlink|junction|leaf|refus/i.test(`${update4.stdout || ""}${update4.stderr || ""}`),
+  (update4.stderr || "").split(/\r?\n/).filter((l) => /reparse|symlink|junction|leaf|refus/i.test(l)).slice(-2).join(" | ") || "no reason line",
+);
+
 if (keep) {
   console.log(`\nKept smoke root: ${root}`);
 } else {

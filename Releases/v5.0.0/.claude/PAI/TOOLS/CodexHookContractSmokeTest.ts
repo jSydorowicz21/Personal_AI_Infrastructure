@@ -114,6 +114,7 @@ function configuredHooks(): HookCase[] {
     { event: "Stop", matcher: "*", target: "ResponseTabReset.hook.ts" },
     { event: "Stop", matcher: "*", target: "VoiceCompletion.hook.ts" },
     { event: "Stop", matcher: "*", target: "DocIntegrity.hook.ts" },
+    { event: "SessionEnd", matcher: "*", target: "SessionEndDispatcher.hook.ts" },
   ]);
 }
 

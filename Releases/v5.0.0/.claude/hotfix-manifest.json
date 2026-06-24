@@ -365,6 +365,22 @@
       "source": "skills/Webdesign",
       "target": "skills/Webdesign",
       "mirrorToCodexAgentsSkills": true
+    },
+    {
+      "source": "hooks/SessionEndDispatcher.hook.ts",
+      "target": "hooks/SessionEndDispatcher.hook.ts"
+    },
+    {
+      "source": "hooks/SessionEndWorker.ts",
+      "target": "hooks/SessionEndWorker.ts"
+    },
+    {
+      "source": "PAI/TOOLS/SessionEndLifecycleMigrate.ts",
+      "target": "PAI/TOOLS/SessionEndLifecycleMigrate.ts"
+    },
+    {
+      "source": "PAI/TOOLS/SessionEndLifecycleSmokeTest.ts",
+      "target": "PAI/TOOLS/SessionEndLifecycleSmokeTest.ts"
     }
   ]
 }

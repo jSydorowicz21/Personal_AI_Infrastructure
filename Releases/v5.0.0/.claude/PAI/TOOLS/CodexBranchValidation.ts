@@ -204,6 +204,7 @@ function main(): void {
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts",
+      "PAI/TOOLS/SessionEndLifecycleSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "PAI/TOOLS/TranscriptParserSmokeTest.ts",
       "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
@@ -258,6 +259,7 @@ function main(): void {
     run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);
     run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
     run("Junction-safe update smoke", "bun", ["PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts"]);
+    run("SessionEnd lifecycle smoke", "bun", ["PAI/TOOLS/SessionEndLifecycleSmokeTest.ts"]);
     run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
     run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);
 
