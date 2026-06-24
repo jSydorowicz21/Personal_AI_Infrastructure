@@ -511,7 +511,16 @@ const opencodeChecks: Check[] = [
   check("opencode.json instructions point at AGENTS.md", JSON.stringify(ocOpenCodeConfig?.instructions) === JSON.stringify(["AGENTS.md"]), JSON.stringify(ocOpenCodeConfig?.instructions)),
   check("opencode.json keeps the OpenCode schema", ocOpenCodeConfig?.["$schema"] === "https://opencode.ai/config.json", String(ocOpenCodeConfig?.["$schema"])),
   check("opencode.json strips unsupported env/pai keys", Boolean(ocOpenCodeConfig) && !("env" in (ocOpenCodeConfig as object)) && !("pai" in (ocOpenCodeConfig as object)), JSON.stringify(Object.keys(ocOpenCodeConfig || {}))),
-  check("plugins/pai-opencode.ts updated from release", ocPlugin !== ocSentinels.plugin && ocPlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS"), join(ocInstallRoot, "plugins", "pai-opencode.ts")),
+  check(
+    "plugins/pai-opencode.ts updated from release",
+    ocPlugin !== ocSentinels.plugin &&
+      ocPlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS") &&
+      ocPlugin.includes('import { expandPath, homeDir } from "../hooks/lib/paths"') &&
+      ocPlugin.includes("const HOME = homeDir()") &&
+      !ocPlugin.includes('from "os"') &&
+      !ocPlugin.includes("process.env.HOME || process.env.USERPROFILE || homedir()"),
+    join(ocInstallRoot, "plugins", "pai-opencode.ts"),
+  ),
   check("OpenCode native agent generated with mode: subagent", ocAgentName !== "", join(ocInstallRoot, "agents", ocAgentName || "Architect.md")),
   check("OpenCode native agent is provider-neutral", agentIsNativeOpenCode(ocNativeAgent), join(ocInstallRoot, "agents", ocAgentName || "Architect.md")),
   check("OpenCode command generated without Skill() calls", ocCommand.length > 0 && !ocCommand.includes('Skill("'), join(ocInstallRoot, "commands", "cs.md")),

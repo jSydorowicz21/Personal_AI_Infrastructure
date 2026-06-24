@@ -6,16 +6,16 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
-import { homedir } from "os";
 import { join, resolve } from "path";
 import { spawnSync } from "child_process";
+import { expandPath, homeDir } from "../hooks/lib/paths";
 
 type JsonObject = Record<string, any>;
 type FrameworkState = { active?: string; framework?: string; root?: string; dataDir?: string };
 
 const FRAMEWORK = "opencode";
 const IMPORT_ROOT = resolve(import.meta.dir, "..");
-const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
+const HOME = homeDir();
 
 function readJson(path: string): JsonObject | null {
   try {
@@ -37,7 +37,9 @@ function normalizeFramework(value: unknown): string {
 
 function existingEnvPath(key: string): string {
   const value = process.env[key];
-  return value && existsSync(value) ? value : "";
+  if (!value) return "";
+  const expanded = expandPath(value);
+  return existsSync(expanded) ? expanded : "";
 }
 
 function resolveOpenCodeRoot(): string {
@@ -54,11 +56,11 @@ function resolveDataDir(): string {
   const envData = existingEnvPath("PAI_DATA_DIR");
   if (envData) {
     const state = frameworkStateAt(envData);
-    if (!state || !state.root || existsSync(state.root)) return envData;
+    if (!state || !state.root || existsSync(expandPath(state.root))) return envData;
   }
   const defaultData = join(HOME, ".pai");
   const defaultState = frameworkStateAt(defaultData);
-  if (defaultState?.dataDir && existsSync(defaultState.dataDir)) return defaultState.dataDir;
+  if (defaultState?.dataDir && existsSync(expandPath(defaultState.dataDir))) return expandPath(defaultState.dataDir);
   return defaultData;
 }
 
@@ -66,8 +68,8 @@ const ROOT = resolveOpenCodeRoot();
 const DATA_DIR = resolveDataDir();
 const STATE = frameworkStateAt(DATA_DIR);
 const STATE_IS_OPENCODE = normalizeFramework(STATE?.active || STATE?.framework) === FRAMEWORK;
-const STATE_ROOT_USABLE = Boolean(STATE_IS_OPENCODE && STATE?.root && existsSync(STATE.root));
-const FRAMEWORK_ROOT = STATE_ROOT_USABLE ? STATE!.root! : ROOT;
+const STATE_ROOT_USABLE = Boolean(STATE_IS_OPENCODE && STATE?.root && existsSync(expandPath(STATE.root)));
+const FRAMEWORK_ROOT = STATE_ROOT_USABLE ? expandPath(STATE!.root!) : ROOT;
 const PAI_DIR = join(FRAMEWORK_ROOT, "PAI");
 const CONFIG_DIR = existingEnvPath("PAI_CONFIG_DIR") || join(HOME, ".config", "PAI");
 const SETTINGS_PATH = join(FRAMEWORK_ROOT, "settings.json");

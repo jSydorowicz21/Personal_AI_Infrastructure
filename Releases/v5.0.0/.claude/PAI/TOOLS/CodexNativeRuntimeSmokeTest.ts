@@ -609,6 +609,10 @@ check(
 check(
   "OpenCode plugin bounds hook adapter dispatch",
   opencodePlugin.includes("DEFAULT_HOOK_TIMEOUT_MS") &&
+    opencodePlugin.includes('import { expandPath, homeDir } from "../hooks/lib/paths"') &&
+    opencodePlugin.includes("const HOME = homeDir()") &&
+    !opencodePlugin.includes('from "os"') &&
+    !opencodePlugin.includes("process.env.HOME || process.env.USERPROFILE || homedir()") &&
     opencodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS") &&
     opencodePlugin.includes("--timeout-ms") &&
     opencodePlugin.includes("timeout: timeout + 5_000") &&
