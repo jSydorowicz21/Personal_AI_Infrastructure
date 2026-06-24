@@ -122,8 +122,20 @@ function runParent(): number {
     childEnv.FAKE_CODEX_WORKSPACE = workspace;
     childEnv.FAKE_CODEX_INFER_CWD = inferenceCwd;
     childEnv.FAKE_CODEX_RECORD_DIR = recordDir;
-    delete childEnv.PAI_DIR;
-    delete childEnv.PAI_FRAMEWORK_DIR;
+    for (const key of [
+      "PAI_DIR",
+      "PAI_FRAMEWORK_DIR",
+      "PAI_CODEX_MODEL",
+      "PAI_CODEX_MODEL_FAST",
+      "PAI_CODEX_MODEL_STANDARD",
+      "PAI_CODEX_MODEL_CLASSIFIER",
+      "PAI_CODEX_REASONING_EFFORT",
+      "PAI_CODEX_REASONING_FAST",
+      "PAI_CODEX_REASONING_STANDARD",
+      "PAI_CODEX_REASONING_CLASSIFIER",
+    ]) {
+      delete childEnv[key];
+    }
 
     const child = Bun.spawnSync([process.execPath, import.meta.path], {
       env: childEnv,
@@ -211,6 +223,23 @@ async function runChild(): Promise<void> {
   check(
     "inference passes --ignore-user-config and --ignore-rules",
     infer.argv.includes("--ignore-user-config") && infer.argv.includes("--ignore-rules"),
+    infer.argv.join(" "),
+  );
+  check(
+    "inference disables Codex memories and plugins",
+    infer.argv.join("\0").includes("--disable\0memories") && infer.argv.join("\0").includes("--disable\0plugins"),
+    infer.argv.join(" "),
+  );
+  check(
+    "fast inference uses classifier-sized Codex model by default",
+    hasFlagValue(infer.argv, "--model", "gpt-5.3-codex-spark") &&
+      !hasFlagValue(infer.argv, "--model", "gpt-5.5"),
+    infer.argv.join(" "),
+  );
+  check(
+    "fast inference uses low Codex reasoning",
+    infer.argv.includes('model_reasoning_effort="low"') &&
+      infer.argv.includes('plan_mode_reasoning_effort="low"'),
     infer.argv.join(" "),
   );
   check(

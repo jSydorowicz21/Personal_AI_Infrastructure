@@ -112,6 +112,23 @@ check(
 );
 
 check(
+  "Codex classifier inference stays small and isolated",
+  inferenceTool.includes('const CODEX_DEFAULT_CLASSIFIER_MODEL = "gpt-5.3-codex-spark"') &&
+    inferenceTool.includes('if (level !== "smart" && process.env.PAI_CODEX_MODEL_CLASSIFIER)') &&
+    inferenceTool.includes('if (level !== "smart")') &&
+    inferenceTool.includes("return CODEX_DEFAULT_CLASSIFIER_MODEL") &&
+    inferenceTool.includes('fast: "low"') &&
+    inferenceTool.includes('"--ignore-user-config"') &&
+    inferenceTool.includes('"--ignore-rules"') &&
+    inferenceTool.includes('"--disable", "memories"') &&
+    inferenceTool.includes('"--disable", "plugins"') &&
+    inferenceTool.includes('"--sandbox", "read-only"') &&
+    inferenceTool.includes('"-c", `model_reasoning_effort="${codexReasoning}"`') &&
+    inferenceTool.includes('"-c", `plan_mode_reasoning_effort="${codexReasoning}"`'),
+  "PAI/TOOLS/Inference.ts (runtime argv proof: CodexFrameworkAgentExecutionSmokeTest)",
+);
+
+check(
   "Prompt classifier reads bounded transcript context",
   promptProcessing.includes("DEFAULT_CLASSIFIER_CONTEXT_BYTES") &&
     promptProcessing.includes("PAI_PROMPT_CLASSIFIER_CONTEXT_BYTES") &&
