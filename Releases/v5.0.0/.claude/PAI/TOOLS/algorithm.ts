@@ -1332,6 +1332,7 @@ async function runLoop(isaPath: string, maxOverride?: number, agentCount: number
       timeout: 600_000, // 10 minute timeout per iteration
       cwd: dirname(absPath), // Run from ISA's directory context
       env: spec.env,
+      windowsHide: true,
     });
 
     const iterEndTime = Date.now();

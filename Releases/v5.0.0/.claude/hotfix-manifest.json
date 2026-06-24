@@ -61,6 +61,18 @@
       "target": "PAI/TOOLS/ReferenceCheck.ts"
     },
     {
+      "source": "PAI/TOOLS/SecretScan.ts",
+      "target": "PAI/TOOLS/SecretScan.ts"
+    },
+    {
+      "source": "PAI/TOOLS/SplitAndTranscribe.ts",
+      "target": "PAI/TOOLS/SplitAndTranscribe.ts"
+    },
+    {
+      "source": "PAI/TOOLS/CompactSkillDescriptions.ts",
+      "target": "PAI/TOOLS/CompactSkillDescriptions.ts"
+    },
+    {
       "source": "PAI/TOOLS/RemoveBg.ts",
       "target": "PAI/TOOLS/RemoveBg.ts"
     },

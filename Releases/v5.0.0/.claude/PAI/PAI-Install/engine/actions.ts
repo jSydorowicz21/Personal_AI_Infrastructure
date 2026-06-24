@@ -706,6 +706,7 @@ function codexPromptContent(description: string, body: string): string {
 function frameworkInstructionContent(content: string, target: FrameworkTarget): string {
   return content
     .replace(/\bCLAUDE\.md\b/g, target.instructionFile)
+    .replace(/\bAGENTS\.md\b/g, target.instructionFile)
     .replace(/\bClaude Code\b/g, target.displayName)
     .replace(/~\/\.claude\/PAI/g, "$PAI_DIR")
     .replace(/~\/\.claude/g, "$PAI_FRAMEWORK_DIR")

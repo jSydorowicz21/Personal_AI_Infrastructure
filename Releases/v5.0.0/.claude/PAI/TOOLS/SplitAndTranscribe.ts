@@ -47,7 +47,7 @@ async function splitAudioFile(
       "-c",
       "copy",
       chunkPattern,
-    ]);
+    ], { windowsHide: true });
 
     ffmpeg.stderr.on("data", (data) => {
       // FFmpeg outputs to stderr, filter for progress

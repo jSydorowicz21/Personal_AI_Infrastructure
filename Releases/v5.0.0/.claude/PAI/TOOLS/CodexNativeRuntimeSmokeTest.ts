@@ -63,6 +63,9 @@ const crossVendorAudit = read(join(paiRoot, "TOOLS", "CrossVendorAudit.ts"));
 const docCheck = read(join(paiRoot, "TOOLS", "DocCheck.ts"));
 const gmailTool = read(join(paiRoot, "TOOLS", "gmail.ts"));
 const referenceCheck = read(join(paiRoot, "TOOLS", "ReferenceCheck.ts"));
+const secretScan = read(join(paiRoot, "TOOLS", "SecretScan.ts"));
+const splitAndTranscribe = read(join(paiRoot, "TOOLS", "SplitAndTranscribe.ts"));
+const compactSkillDescriptions = read(join(paiRoot, "TOOLS", "CompactSkillDescriptions.ts"));
 const bannerSources = [
   "Banner.ts",
   "BannerNeofetch.ts",
@@ -87,6 +90,11 @@ const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmoke
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const repeatDetectionSmoke = read(join(paiRoot, "TOOLS", "RepeatDetectionSmokeTest.ts"));
 const startupSelfCheckSmoke = read(join(paiRoot, "TOOLS", "StartupSelfCheckSmokeTest.ts"));
+const codexFrameworkExecutionSmoke = read(join(paiRoot, "TOOLS", "CodexFrameworkAgentExecutionSmokeTest.ts"));
+const openCodeFrameworkExecutionSmoke = read(join(paiRoot, "TOOLS", "OpenCodeFrameworkAgentExecutionSmokeTest.ts"));
+const sessionEndLifecycleSmoke = read(join(paiRoot, "TOOLS", "SessionEndLifecycleSmokeTest.ts"));
+const installerCodexSmoke = read(join(paiRoot, "TOOLS", "InstallerCodexSmokeTest.ts"));
+const frameworkLaunchCwdSmoke = read(join(paiRoot, "TOOLS", "FrameworkLaunchCwdSmokeTest.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
@@ -411,6 +419,16 @@ check(
 );
 
 check(
+  "Runtime helper child processes stay hidden on Windows",
+  secretScan.includes("spawn('trufflehog', args, { windowsHide: true })") &&
+    splitAndTranscribe.includes("], { windowsHide: true })") &&
+    compactSkillDescriptions.includes("windowsHide: true") &&
+    (algorithm.match(/windowsHide:\s*true/g)?.length ?? 0) >= 4 &&
+    (paiCli.match(/windowsHide:\s*true/g)?.length ?? 0) >= 10,
+  "PAI/TOOLS/SecretScan.ts, SplitAndTranscribe.ts, CompactSkillDescriptions.ts, algorithm.ts, pai.ts",
+);
+
+check(
   "PAI banner startup avoids Windows-visible POSIX probes",
   paiCli.includes("spawnSync([process.execPath, BANNER_SCRIPT]") &&
     paiCli.includes("windowsHide: true") &&
@@ -614,11 +632,16 @@ check(
 check(
   "Safe validation smokes hide Windows child processes",
   frameworkCommandResolutionSmoke.includes("windowsHide: true") &&
+    codexFrameworkExecutionSmoke.includes("windowsHide: true") &&
+    openCodeFrameworkExecutionSmoke.includes("windowsHide: true") &&
+    sessionEndLifecycleSmoke.match(/windowsHide:\s*true/g)?.length >= 3 &&
+    installerCodexSmoke.includes("windowsHide: true") &&
+    frameworkLaunchCwdSmoke.match(/windowsHide:\s*true/g)?.length >= 2 &&
     hotfixUpdateRollbackSmoke.match(/windowsHide:\s*true/g)?.length >= 2 &&
     junctionSafeUpdateSmoke.includes("windowsHide: true") &&
     memoryDeleteSmoke.match(/windowsHide:\s*true/g)?.length >= 2 &&
     paiSecurityAuditSmoke.includes("windowsHide: true"),
-  "FrameworkCommandResolution, HotfixUpdateRollback, JunctionSafeUpdate, MemoryDelete, PaiSecurityAudit",
+  "FrameworkCommandResolution, framework execution, session lifecycle, installer, launch cwd, HotfixUpdateRollback, JunctionSafeUpdate, MemoryDelete, PaiSecurityAudit",
 );
 
 check(

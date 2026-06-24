@@ -141,6 +141,7 @@ function runParent(): number {
       env: childEnv,
       stdout: "inherit",
       stderr: "inherit",
+      windowsHide: true,
     });
     return child.exitCode ?? 1;
   } finally {

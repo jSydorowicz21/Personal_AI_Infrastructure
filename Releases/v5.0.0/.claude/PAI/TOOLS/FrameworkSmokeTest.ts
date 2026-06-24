@@ -9,7 +9,7 @@
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 type Framework = "claude" | "codex" | "opencode";
@@ -266,9 +266,28 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const pluginPath = join(root, "plugins", "pai-opencode.ts");
   const pluginSource = existsSync(pluginPath) ? readFileSync(pluginPath, "utf-8") : "";
   const sessionCreatedBranch = pluginSource.match(/session\.created"\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? "";
+  const fakeBin = join(dirname(data), "fake-opencode-bin");
+  mkdirSync(fakeBin, { recursive: true });
+  const fakeOpenCode = process.platform === "win32" ? join(fakeBin, "opencode.cmd") : join(fakeBin, "opencode");
+  if (process.platform === "win32") {
+    writeFileSync(fakeOpenCode, [
+      "@echo off",
+      "echo {\"tab_title\":\"Testing OpenCode.\",\"session_name\":\"Testing OpenCode Cache Path\",\"mode\":\"ALGORITHM\",\"tier\":3,\"mode_reason\":\"framework smoke\"}",
+      "exit /b 0",
+      "",
+    ].join("\r\n"), "utf-8");
+  } else {
+    writeFileSync(fakeOpenCode, [
+      "#!/usr/bin/env sh",
+      "printf '%s\\n' '{\"tab_title\":\"Testing OpenCode.\",\"session_name\":\"Testing OpenCode Cache Path\",\"mode\":\"ALGORITHM\",\"tier\":3,\"mode_reason\":\"framework smoke\"}'",
+      "",
+    ].join("\n"), "utf-8");
+    spawnSync("chmod", ["755", fakeOpenCode], { windowsHide: true });
+  }
   const repeatMarkerPath = join(data, "opencode-repeat-detection.txt");
   const contextMarkerPath = join(data, "opencode-context-injection.txt");
   const shellEnvMarkerPath = join(data, "opencode-shell-env.json");
+  const promptTelemetryPath = join(data, "MEMORY", "OBSERVABILITY", "prompt-processing.jsonl");
   const kittyEnvPath = join(data, "MEMORY", "STATE", "kitty-env.json");
   const kittySessionPath = join(data, "MEMORY", "STATE", "kitty-sessions", "smoke-opencode.json");
   const testEnv = {
@@ -276,9 +295,12 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     PAI_DATA_DIR: data,
     PAI_FRAMEWORK: "opencode",
     PAI_FRAMEWORK_DIR: root,
+    PAI_OPENCODE_BIN: fakeOpenCode,
     PAI_OPENCODE_HOOK_TIMEOUT_MS: "5000",
     KITTY_LISTEN_ON: "unix:/tmp/pai-opencode-smoke-kitty",
     KITTY_WINDOW_ID: "smoke-window",
+    PATH: `${fakeBin}${delimiter}${process.env.PATH || process.env.Path || ""}`,
+    Path: `${fakeBin}${delimiter}${process.env.Path || process.env.PATH || ""}`,
   };
   const script = `
     const { mkdirSync, writeFileSync } = await import("node:fs");
@@ -353,9 +375,14 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const linkedPluginDir = join(linkedImportRoot, "plugins");
   mkdirSync(linkedData, { recursive: true });
   mkdirSync(join(linkedDefaultRoot, "PAI"), { recursive: true });
+  mkdirSync(join(linkedDefaultRoot, "hooks", "lib"), { recursive: true });
   mkdirSync(join(linkedDefaultRoot, "plugins"), { recursive: true });
+  mkdirSync(join(linkedImportRoot, "hooks", "lib"), { recursive: true });
   mkdirSync(linkedPluginDir, { recursive: true });
   writeFileSync(join(linkedDefaultRoot, "opencode.json"), JSON.stringify({ "$schema": "https://opencode.ai/config.json" }), "utf-8");
+  writeFileSync(join(linkedData, "framework.json"), JSON.stringify({ active: "opencode", root: linkedDefaultRoot, dataDir: linkedData }, null, 2), "utf-8");
+  copyFileSync(join(import.meta.dir, "..", "..", "hooks", "lib", "paths.ts"), join(linkedImportRoot, "hooks", "lib", "paths.ts"));
+  copyFileSync(join(import.meta.dir, "..", "..", "hooks", "lib", "paths.ts"), join(linkedDefaultRoot, "hooks", "lib", "paths.ts"));
   copyFileSync(pluginPath, join(linkedPluginDir, "pai-opencode.ts"));
   const linkedEnv = {
     ...process.env,
@@ -386,6 +413,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const transcriptFiles = findJsonlFiles(join(data, "TRANSCRIPTS", "opencode"));
   const staleTranscriptFiles = findJsonlFiles(join(staleEnvData, "TRANSCRIPTS", "opencode"));
   const transcriptText = transcriptFiles.map((file) => readFileSync(file, "utf-8")).join("\n");
+  const promptTelemetry = existsSync(promptTelemetryPath) ? readFileSync(promptTelemetryPath, "utf-8") : "";
   const harvest = spawnSync(process.execPath, [join(import.meta.dir, "SessionHarvester.ts"), "--recent", "1", "--dry-run"], {
     cwd: root,
     env: testEnv,
@@ -501,6 +529,18 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
         && pluginSource.includes("dispatchedSessionEnd.has(id)")
         && pluginSource.includes("dispatchedSessionEnd.add(id)"),
       detail: pluginSource.includes("dispatchedSessionEnd.has(id)") ? "in-memory dedup guard present" : "missing dedup guard",
+    },
+    {
+      name: "opencode shared memory classifier cache written",
+      passed: existsSync(join(data, "MEMORY", "STATE", "classifier-cache", "smoke-opencode.json")),
+      detail: existsSync(join(data, "MEMORY", "STATE", "classifier-cache", "smoke-opencode.json"))
+        ? "classifier cache file present" : "missing classifier cache file",
+    },
+    {
+      name: "opencode shared memory cache hit on repeated prompt",
+      passed: promptTelemetry.includes('"source":"shared-memory-cache"'),
+      detail: promptTelemetry.includes('"source":"shared-memory-cache"')
+        ? "cache hit confirmed" : "no shared-memory-cache telemetry",
     },
   ];
 }
@@ -801,10 +841,14 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     PAI_DATA_DIR: data,
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
+    PAI_DIR: join(root, "PAI"),
     PAI_FRAMEWORK_DIR: root,
+    PAI_SETTINGS_PATH: join(root, "settings.json"),
     PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
+  delete env.PAI_MEMORY_DIR;
+  delete env.PAI_USER_DIR;
   if (framework === "claude") env.CLAUDE_HOME = root;
   if (framework === "codex") env.CODEX_HOME = root;
   if (framework === "opencode") env.OPENCODE_CONFIG_DIR = root;
@@ -1017,10 +1061,14 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
     PAI_DATA_DIR: data,
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
+    PAI_DIR: join(root, "PAI"),
     PAI_FRAMEWORK_DIR: root,
+    PAI_SETTINGS_PATH: join(root, "settings.json"),
     PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
+  delete env.PAI_MEMORY_DIR;
+  delete env.PAI_USER_DIR;
   if (framework === "claude") env.CLAUDE_HOME = root;
   if (framework === "codex") env.CODEX_HOME = root;
   if (framework === "opencode") env.OPENCODE_CONFIG_DIR = root;
@@ -1113,15 +1161,17 @@ function checkCustomProviderHomeCreation(base: string): Check[] {
   const root = join(base, "custom-codex-home");
   const data = join(base, "pai-data");
   const config = join(base, "pai-config");
+  mkdirSync(data, { recursive: true });
   const env: Record<string, string> = {
     ...process.env,
     CODEX_HOME: root,
     PAI_DATA_DIR: data,
     PAI_CONFIG_DIR: config,
+    PAI_SETTINGS_PATH: join(root, "settings.json"),
     PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
-  for (const key of ["PAI_FRAMEWORK", "PAI_FRAMEWORK_DIR", "PAI_DIR"]) delete env[key];
+  for (const key of ["PAI_FRAMEWORK", "PAI_FRAMEWORK_DIR", "PAI_DIR", "PAI_MEMORY_DIR", "PAI_USER_DIR"]) delete env[key];
 
   const result = spawnSync(process.execPath, [paiTool, "framework", "switch", "codex"], {
     cwd: join(import.meta.dir, "..", ".."),

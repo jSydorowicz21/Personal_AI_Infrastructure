@@ -36,7 +36,7 @@ try {
   } else {
     const shim = join(bin, "codex");
     writeFileSync(shim, `#!/usr/bin/env sh\npwd > ${JSON.stringify(cwdFile)}\n`, "utf-8");
-    spawnSync("chmod", ["755", shim]);
+    spawnSync("chmod", ["755", shim], { windowsHide: true });
   }
 
   const testPath = `${bin}${delimiter}${process.env.PATH || process.env.Path || ""}`;
@@ -65,6 +65,7 @@ try {
     env,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
 
   const output = `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`;

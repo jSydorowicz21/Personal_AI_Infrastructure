@@ -452,6 +452,7 @@ function frameworkInstructionContent(content: string, id: FrameworkId): string {
   const framework = frameworkName(id);
   return content
     .replace(/\bCLAUDE\.md\b/g, id === "claude" ? "CLAUDE.md" : "AGENTS.md")
+    .replace(/\bAGENTS\.md\b/g, id === "claude" ? "CLAUDE.md" : "AGENTS.md")
     .replace(/\bClaude Code\b/g, framework)
     .replace(/~\/\.claude\/PAI/g, "$PAI_DIR")
     .replace(/~\/\.claude/g, "$PAI_FRAMEWORK_DIR")
@@ -1301,7 +1302,7 @@ function setWallpaper(filename: string): boolean {
 
   // Set Kitty background
   try {
-    const kittyResult = spawnSync(["kitty", "@", "set-background-image", fullPath]);
+    const kittyResult = spawnSync(["kitty", "@", "set-background-image", fullPath], { windowsHide: true });
     if (kittyResult.exitCode === 0) {
       log("Kitty background set", "✅");
     } else {
@@ -1315,7 +1316,7 @@ function setWallpaper(filename: string): boolean {
   // Set macOS desktop background
   try {
     const script = `tell application "System Events" to tell every desktop to set picture to "${fullPath}"`;
-    const macResult = spawnSync(["osascript", "-e", script]);
+    const macResult = spawnSync(["osascript", "-e", script], { windowsHide: true });
     if (macResult.exitCode === 0) {
       log("macOS desktop set", "✅");
     } else {
@@ -1488,8 +1489,8 @@ async function cmdUpdate() {
   // Step 1: Update Bun
   log("Step 1/2: Updating Bun...", "📦");
   const bunResult = process.platform === "win32"
-    ? spawnSync([process.execPath, "upgrade"], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
-    : spawnSync(["brew", "upgrade", "bun"]);
+    ? spawnSync([process.execPath, "upgrade"], { stdin: "inherit", stdout: "inherit", stderr: "inherit", windowsHide: true })
+    : spawnSync(["brew", "upgrade", "bun"], { windowsHide: true });
   if (bunResult.exitCode !== 0) {
     log("Bun update skipped (may already be latest)", "⚠️");
   } else {
@@ -1503,12 +1504,13 @@ async function cmdUpdate() {
         stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
+        windowsHide: true,
       })
     : spawnSync(["bash", "-c", activeFramework === "codex"
       ? "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
       : activeFramework === "opencode"
         ? "curl -fsSL https://opencode.ai/install | bash"
-        : "curl -fsSL https://claude.ai/install.sh | bash"]);
+        : "curl -fsSL https://claude.ai/install.sh | bash"], { windowsHide: true });
   if (frameworkResult.exitCode !== 0) {
     error(`${frameworkName(activeFramework)} installation failed`);
   }
@@ -1638,6 +1640,7 @@ function cmdMemory(args: string[]) {
       PAI_FRAMEWORK: getActiveFramework(),
       PAI_FRAMEWORK_DIR: frameworkRoot(getActiveFramework()),
     },
+    windowsHide: true,
   });
   process.exit(result.exitCode ?? 1);
 }
@@ -1659,6 +1662,7 @@ function cmdDoctor(args: string[] = []) {
       PAI_SETTINGS_PATH: join(activeRoot, "settings.json"),
       PAI_CONFIG_DIR: CONFIG_DIR,
     },
+    windowsHide: true,
   });
   process.exit(result.exitCode ?? 1);
 }

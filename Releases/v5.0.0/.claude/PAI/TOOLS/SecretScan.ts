@@ -57,7 +57,7 @@ async function runTruffleHog(targetDir: string, options: string[]): Promise<stri
     console.log(`🔍 Running TruffleHog scan on: ${targetDir}\n`);
     console.log(`⏳ This may take a moment...\n`);
     
-    const trufflehog = spawn('trufflehog', args);
+    const trufflehog = spawn('trufflehog', args, { windowsHide: true });
     let output = '';
     let errorOutput = '';
     

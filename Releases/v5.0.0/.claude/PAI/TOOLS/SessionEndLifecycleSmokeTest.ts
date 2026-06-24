@@ -105,6 +105,7 @@ try {
   const workerRun = spawnSync(process.execPath, [workerPath], {
     encoding: 'utf-8',
     timeout: 30_000,
+    windowsHide: true,
     env: {
       ...process.env,
       ORDER_FILE: orderFile,
@@ -140,7 +141,7 @@ try {
   const defaultOrderProbe = spawnSync(process.execPath, [
     '-e',
     `const fs=require('fs');const src=fs.readFileSync(${JSON.stringify(workerPath)},'utf-8');const m=src.match(/const DEFAULT_HOOKS = \\[([\\s\\S]*?)\\];/);process.stdout.write(m?m[1]:'');`,
-  ], { encoding: 'utf-8' });
+  ], { encoding: 'utf-8', windowsHide: true });
   const defaultList = (defaultOrderProbe.stdout || '').match(/'([^']+)'/g)?.map((s) => s.replace(/'/g, '')) || [];
   check(
     'default order matches the six lifecycle hooks',

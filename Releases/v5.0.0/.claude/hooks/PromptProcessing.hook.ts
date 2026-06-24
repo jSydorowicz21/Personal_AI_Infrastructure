@@ -35,6 +35,14 @@ import { setTabState, getSessionOneWord } from './lib/tab-setter';
 import { getFrameworkDir, memoryPath } from './lib/paths';
 import { updateSessionNameInWorkJson, upsertSession } from './lib/isa-utils';
 import { pushStateToTargets } from './lib/observability-transport';
+import {
+  computeIdentityKey,
+  computePromptHash,
+  loadCompiledPrompt,
+  saveCompiledPrompt,
+  loadCachedResult,
+  saveCachedResult,
+} from './lib/classifier-cache';
 
 // ── Types ──
 
@@ -1000,7 +1008,9 @@ async function main() {
     const thinkingTitle = deterministicTitle || getWorkingFallback();
     setTabState({ title: `🧠 ${prefix}${thinkingTitle}`, state: 'thinking', sessionId });
 
-    // ── INFERENCE: Tab title + session name ──
+    // ── INFERENCE: Tab title + session name (with shared memory cache) ──
+    const identityKey = computeIdentityKey();
+    const promptHash = computePromptHash(prompt);
     console.error('[PromptProcessing] Running inference (tab title' + (isFirstPrompt ? ' + session name)...' : ')...'));
 
     const cleanPrompt = prompt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1000);
@@ -1010,10 +1020,47 @@ async function main() {
     const context = getRecentContext(data.transcript_path, classifierContextTurns(), !isFirstPrompt);
     const userPrompt = context ? `CONTEXT:\n${context}\n\nCURRENT MESSAGE:\n${cleanPrompt}` : cleanPrompt;
 
+    // Check shared memory for cached classification result (same prompt hash)
+    const cachedResult = loadCachedResult(sessionId, promptHash);
+    if (cachedResult && cachedResult.mode && !isFirstPrompt) {
+      console.error(`[PromptProcessing] Cache hit for prompt hash ${promptHash}`);
+      const r = cachedResult;
+      // Use deterministic tab title for cached results (fast, no inference)
+      let finalTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
+      if (r.tab_title) {
+        const inferredWords = r.tab_title.split(/\s+/);
+        const validated = trimToValidTitle(inferredWords, isValidWorkingTitle);
+        if (validated) finalTitle = validated;
+      }
+      setTabState({ title: `⚙️ ${prefix}${finalTitle}`, state: 'working', sessionId });
+      const validModes: Mode[] = ['MINIMAL', 'NATIVE', 'ALGORITHM'];
+      const finalMode: Mode = (r.mode && validModes.includes(r.mode as Mode)) ? (r.mode as Mode) : 'ALGORITHM';
+      const finalTier: number | null = (finalMode === 'ALGORITHM') ? (typeof r.tier === 'number' && r.tier >= 1 && r.tier <= 5 ? r.tier : 3) : null;
+      const finalReason: string = (typeof r.mode_reason === 'string' && r.mode_reason.length > 0) ? r.mode_reason.slice(0, 200) : 'classifier';
+      emitAdditionalContext(finalMode, finalTier, finalReason);
+      appendPromptProcessingTelemetry({
+        timestamp: new Date().toISOString(), session_id: sessionId,
+        prompt_excerpt: cleanPrompt.slice(0, 120),
+        tab_title: r.tab_title ?? null, session_name: null,
+        mode: finalMode, tier: finalTier, mode_reason: finalReason,
+        source: 'shared-memory-cache', latency_ms: 0,
+      });
+      await kvPush; process.exit(0);
+    }
+
+    // Check shared memory for cached compiled system prompt
+    let classifierSystemPrompt = loadCompiledPrompt(identityKey, isFirstPrompt);
+    if (!classifierSystemPrompt) {
+      classifierSystemPrompt = buildContextPrompt(isFirstPrompt);
+      saveCompiledPrompt(identityKey, isFirstPrompt, classifierSystemPrompt);
+    } else {
+      console.error('[PromptProcessing] Using cached compiled system prompt');
+    }
+
     const inferenceStart = Date.now();
     try {
       const result = await inference({
-        systemPrompt: buildContextPrompt(isFirstPrompt),
+        systemPrompt: classifierSystemPrompt,
         userPrompt,
         expectJson: true,
         timeout: 20000,
@@ -1022,6 +1069,18 @@ async function main() {
 
       if (result.success && result.parsed) {
         const r = result.parsed as InferenceResult;
+
+        // Cache this result in shared memory for future reuse
+        saveCachedResult({
+          session_id: sessionId,
+          prompt_hash: promptHash,
+          tab_title: r.tab_title ?? null,
+          session_name: r.session_name ?? null,
+          mode: r.mode ?? null,
+          tier: r.tier ?? null,
+          mode_reason: r.mode_reason ?? null,
+          timestamp: new Date().toISOString(),
+        });
 
         // ── Process tab title ──
         let finalTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
@@ -1113,6 +1172,13 @@ async function main() {
         const fallbackTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
         setTabState({ title: `⚙️ ${prefix}${fallbackTitle}`, state: 'working', sessionId });
         emitAdditionalContext('ALGORITHM', 3, `inference failed: ${result.error ?? 'unknown'}`);
+        saveCachedResult({
+          session_id: sessionId, prompt_hash: promptHash,
+          tab_title: fallbackTitle, session_name: isFirstPrompt ? (pendingFallbackName ?? null) : null,
+          mode: 'ALGORITHM', tier: 3,
+          mode_reason: `inference failed: ${result.error ?? 'unknown'}`,
+          timestamp: new Date().toISOString(),
+        });
         appendPromptProcessingTelemetry({
           timestamp: new Date().toISOString(),
           session_id: sessionId,
@@ -1133,6 +1199,13 @@ async function main() {
       const fallbackTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
       setTabState({ title: `⚙️ ${prefix}${fallbackTitle}`, state: 'working', sessionId });
       emitAdditionalContext('ALGORITHM', 3, `inference error: ${String(err).slice(0, 80)}`);
+      saveCachedResult({
+        session_id: sessionId, prompt_hash: promptHash,
+        tab_title: fallbackTitle, session_name: null,
+        mode: 'ALGORITHM', tier: 3,
+        mode_reason: `inference error: ${String(err).slice(0, 80)}`,
+        timestamp: new Date().toISOString(),
+      });
       appendPromptProcessingTelemetry({
         timestamp: new Date().toISOString(),
         session_id: sessionId,

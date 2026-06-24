@@ -88,6 +88,7 @@ function gitHeadText(path: string): string | null {
   const repoPath = relative(process.cwd(), path).replace(/\\/g, "/");
   const result = spawnSync("git", ["show", `HEAD:${repoPath}`], {
     encoding: "utf-8",
+    windowsHide: true,
   });
   return result.status === 0 ? result.stdout : null;
 }
