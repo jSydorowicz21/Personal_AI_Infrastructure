@@ -1,9 +1,8 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { homedir } from 'os';
 import type { Inspector, InspectionContext, InspectionResult } from '../types';
 import { ALLOW, deny, requireApproval, alert } from '../types';
-import { paiPath, userPath } from '../../lib/paths';
+import { homeDir, paiPath, userPath } from '../../lib/paths';
 
 // ── Types ──
 
@@ -229,7 +228,8 @@ function matchesShellPattern(command: string, entry: PatternEntry): boolean {
 }
 
 function expandTilde(p: string): string {
-  return p.startsWith('~') ? p.replace('~', homedir()) : p;
+  const home = homeDir();
+  return p.replace(/^~(?=\/|\\|$)/, home);
 }
 
 function matchesPathPattern(filePath: string, pattern: string): boolean {

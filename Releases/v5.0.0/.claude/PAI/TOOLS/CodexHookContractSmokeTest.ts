@@ -863,6 +863,8 @@ try {
     const restoreContextSource = existsSync(restoreContextPath) ? readFileSync(restoreContextPath, "utf-8") : "";
     const updateCountsPath = join(frameworkRoot, "hooks", "handlers", "UpdateCounts.ts");
     const updateCountsSource = existsSync(updateCountsPath) ? readFileSync(updateCountsPath, "utf-8") : "";
+    const patternInspectorPath = join(frameworkRoot, "hooks", "security", "inspectors", "PatternInspector.ts");
+    const patternInspectorSource = existsSync(patternInspectorPath) ? readFileSync(patternInspectorPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -967,6 +969,13 @@ try {
         !updateCountsSource.includes("execSync") &&
         !updateCountsSource.includes("process.env.HOME || ''"),
       updateCountsPath,
+    );
+    check(
+      "PatternInspector expands tilde through shared home helper",
+      patternInspectorSource.includes("homeDir, paiPath, userPath") &&
+        patternInspectorSource.includes("const home = homeDir()") &&
+        !patternInspectorSource.includes("homedir()"),
+      patternInspectorPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",

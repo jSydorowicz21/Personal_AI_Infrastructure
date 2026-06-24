@@ -77,6 +77,7 @@ const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
 const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts"));
+const patternInspector = read(join(releaseRoot, "hooks", "security", "inspectors", "PatternInspector.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
@@ -401,6 +402,14 @@ check(
     rtkHook.includes("return process.env.PAI_DATA_DIR || join(homeDir(), \".pai\")") &&
     !rtkHook.includes("fast_bypass"),
   "hooks/RtkPreToolUse.hook.js",
+);
+
+check(
+  "Security pattern inspector uses shared home helper",
+  patternInspector.includes("homeDir, paiPath, userPath") &&
+    patternInspector.includes("const home = homeDir()") &&
+    !patternInspector.includes("homedir()"),
+  "hooks/security/inspectors/PatternInspector.ts",
 );
 
 check(
