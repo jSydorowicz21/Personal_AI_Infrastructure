@@ -25,8 +25,8 @@ export async function handleRebuildArchSummary(): Promise<void> {
   const paiDir = getPaiDir();
   const claudeDir = getClaudeDir();
   const userDir = getUserDir();
-  const output = join(paiDir, "DOCUMENTATION", "PAI_ARCHITECTURE_SUMMARY.md");
-  const generator = join(paiDir, "Tools/ArchitectureSummaryGenerator.ts");
+  const output = join(paiDir, "DOCUMENTATION", "ARCHITECTURE_SUMMARY.md");
+  const generator = join(paiDir, "TOOLS", "ArchitectureSummaryGenerator.ts");
 
   if (!existsSync(generator)) return;
 
@@ -73,7 +73,12 @@ export async function handleRebuildArchSummary(): Promise<void> {
       }
     }
 
-    for (const f of [join(claudeDir, "settings.json"), join(claudeDir, "CLAUDE.md")]) {
+    for (const f of [
+      join(claudeDir, "settings.json"),
+      join(claudeDir, "CLAUDE.md"),
+      join(claudeDir, "AGENTS.md"),
+      join(claudeDir, "RTK.md"),
+    ]) {
       if (existsSync(f)) {
         const mtime = statSync(f).mtimeMs;
         if (mtime > newestMtime) {

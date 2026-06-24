@@ -306,7 +306,7 @@ function loadSessionContext(input: JsonObject): void {
   try {
     const result = runHook("LoadContext.hook.ts", sessionPayload(input));
     if (result.code !== 0) return;
-    const context = promptContext(result.stdout);
+    const context = promptContext(`${result.stdout}\n${result.stderr}`);
     if (context) sessionContext.set(id, context);
   } catch {
     // Dynamic context injection should not break OpenCode execution.

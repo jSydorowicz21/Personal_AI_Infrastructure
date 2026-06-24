@@ -508,8 +508,15 @@ try {
     if (!existsSync(targetPath)) continue;
 
     const result = runHook(item.target, payloadFor(item));
-    const output = `${result.stdout || ""}${result.stderr || ""}`.trim().split(/\r?\n/).slice(-3).join(" | ");
-    check(`${item.event} ${item.matcher} ${item.target} benign exit`, result.status === 0, output || `status=${result.status ?? "null"}`);
+    const combinedOutput = `${result.stdout || ""}${result.stderr || ""}`;
+    const output = combinedOutput.trim().split(/\r?\n/).slice(-3).join(" | ");
+    const hiddenDocIntegrityFailure = item.target === "DocIntegrity.hook.ts" &&
+      /\[RebuildArchSummary\] (Regeneration failed|Spawn error)/.test(combinedOutput);
+    check(
+      `${item.event} ${item.matcher} ${item.target} benign exit`,
+      result.status === 0 && !hiddenDocIntegrityFailure,
+      output || `status=${result.status ?? "null"}`,
+    );
   }
 
   const promptBlock = runHook("PromptGuard.hook.ts", {

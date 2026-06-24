@@ -19,6 +19,16 @@ function installerTail(): string {
   return installOutput.split(/\r?\n/).slice(-120).join("\n");
 }
 
+function decodePowerShellCommands(text: string): string {
+  return text.replace(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/g, (_match, encoded) => {
+    try {
+      return Buffer.from(String(encoded), "base64").toString("utf16le");
+    } catch {
+      return "";
+    }
+  });
+}
+
 try {
   const codexHome = join(tempRoot, ".codex");
   const paiData = join(tempRoot, ".pai");
@@ -107,8 +117,9 @@ enabled = true
   const interviewPrompt = readFileSync(interviewPromptPath, "utf-8");
   assert("Codex interview prompt invokes skill", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'));
   const hooks = readFileSync(join(codexHome, "hooks.json"), "utf-8");
+  const decodedHooks = decodePowerShellCommands(hooks);
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
-  assert("Codex PromptProcessing timeout headroom", hooks.includes('"timeout": 40') && hooks.includes("--timeout-ms") && hooks.includes("35000"));
+  assert("Codex PromptProcessing timeout headroom", hooks.includes('"timeout": 40') && decodedHooks.includes("--timeout-ms") && decodedHooks.includes("35000"));
   assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));
   assert("Codex question tab hook", hooks.includes("SetQuestionTab.hook.ts"));
   assert("Codex agent invocation hook", hooks.includes("AgentInvocation.hook.ts"));

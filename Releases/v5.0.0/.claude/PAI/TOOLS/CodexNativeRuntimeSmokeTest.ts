@@ -46,6 +46,7 @@ const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
+const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
@@ -144,6 +145,17 @@ check(
   docCrossRefIntegrity.includes("parseModifiedFilePaths") &&
     !docCrossRefIntegrity.includes("entry.type === 'assistant' && entry.message?.content"),
   "hooks/handlers/DocCrossRefIntegrity.ts",
+);
+
+check(
+  "Arch summary rebuild watches active framework instruction files",
+  rebuildArchSummary.includes('"DOCUMENTATION", "ARCHITECTURE_SUMMARY.md"') &&
+    rebuildArchSummary.includes('"TOOLS", "ArchitectureSummaryGenerator.ts"') &&
+    rebuildArchSummary.includes('"AGENTS.md"') &&
+    rebuildArchSummary.includes('"RTK.md"') &&
+    !rebuildArchSummary.includes('"PAI_ARCHITECTURE_SUMMARY.md"') &&
+    !rebuildArchSummary.includes('"Tools/ArchitectureSummaryGenerator.ts"'),
+  "hooks/handlers/RebuildArchSummary.ts",
 );
 
 check(
