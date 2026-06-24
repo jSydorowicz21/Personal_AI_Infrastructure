@@ -65,6 +65,10 @@
       "target": "PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts",
+      "target": "PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
     },

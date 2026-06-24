@@ -105,6 +105,7 @@ function configuredHooks(): HookCase[] {
     { event: "PostToolUse", matcher: "Write|Edit|MultiEdit|apply_patch", target: "CheckpointPerISC.hook.ts" },
     { event: "PostToolUse", matcher: "Agent", target: "AgentInvocation.hook.ts" },
     { event: "PostToolUse", matcher: "*", target: "ToolActivityTracker.hook.ts" },
+    { event: "PostToolUse", matcher: "*", target: "ContentScanner.hook.ts" },
     { event: "UserPromptSubmit", matcher: "*", target: "PromptGuard.hook.ts" },
     { event: "UserPromptSubmit", matcher: "*", target: "RepeatDetection.hook.ts" },
     { event: "UserPromptSubmit", matcher: "*", target: "PromptProcessing.hook.ts" },

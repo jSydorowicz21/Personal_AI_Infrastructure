@@ -332,6 +332,17 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
             commandHook(config, "ToolActivityTracker.hook.ts", 5),
           ],
         },
+        {
+          // Catch-all injection scan: Claude runs ContentScanner over every
+          // tool result (not just WebFetch/WebSearch) so external content
+          // surfaced by any tool is checked for prompt injection. Mirror that
+          // here so Codex gets the same defense-in-depth coverage. PostToolUse
+          // cannot block; the hook only injects a warning into context.
+          matcher: "*",
+          hooks: [
+            commandHook(config, "ContentScanner.hook.ts", 5),
+          ],
+        },
       ],
       UserPromptSubmit: [
         {
