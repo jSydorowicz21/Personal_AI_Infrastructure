@@ -822,6 +822,8 @@ try {
     const isaUtilsSource = existsSync(isaUtilsPath) ? readFileSync(isaUtilsPath, "utf-8") : "";
     const restoreContextPath = join(frameworkRoot, "hooks", "RestoreContext.hook.ts");
     const restoreContextSource = existsSync(restoreContextPath) ? readFileSync(restoreContextPath, "utf-8") : "";
+    const updateCountsPath = join(frameworkRoot, "hooks", "handlers", "UpdateCounts.ts");
+    const updateCountsSource = existsSync(updateCountsPath) ? readFileSync(updateCountsPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -917,6 +919,15 @@ try {
         !restoreContextSource.includes("fd -t f") &&
         !restoreContextSource.includes("head -1"),
       restoreContextPath,
+    );
+    check(
+      "UpdateCounts credential lookup avoids shell exec",
+      updateCountsSource.includes("spawnSync('security', [") &&
+        updateCountsSource.includes("windowsHide: true") &&
+        updateCountsSource.includes("join(getClaudeDir(), '.credentials.json')") &&
+        !updateCountsSource.includes("execSync") &&
+        !updateCountsSource.includes("process.env.HOME || ''"),
+      updateCountsPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",

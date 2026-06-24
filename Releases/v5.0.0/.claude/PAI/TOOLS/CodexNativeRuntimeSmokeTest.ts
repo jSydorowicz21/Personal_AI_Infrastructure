@@ -72,6 +72,7 @@ const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
+const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
@@ -379,6 +380,16 @@ check(
     !systemIntegrity.includes("spawn('bun'") &&
     !systemIntegrity.includes('spawn("bun"'),
   "hooks/handlers/SystemIntegrity.ts",
+);
+
+check(
+  "UpdateCounts avoids shell credential lookup",
+  updateCounts.includes("spawnSync('security', [") &&
+    updateCounts.includes("windowsHide: true") &&
+    updateCounts.includes("join(getClaudeDir(), '.credentials.json')") &&
+    !updateCounts.includes("execSync") &&
+    !updateCounts.includes("process.env.HOME || ''"),
+  "hooks/handlers/UpdateCounts.ts",
 );
 
 check(

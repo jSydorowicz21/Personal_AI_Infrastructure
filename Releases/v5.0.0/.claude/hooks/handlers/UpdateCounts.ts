@@ -18,7 +18,7 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { getPaiDir, getSettingsPath, getClaudeDir, getMemoryDir, getUserDir, memoryPath } from '../lib/paths';
 
 
@@ -158,6 +158,26 @@ function countSubdirs(dir: string): number {
   }
 }
 
+function readClaudeCredentials(): string {
+  if (process.platform === 'darwin') {
+    const result = spawnSync('security', [
+      'find-generic-password',
+      '-s',
+      'Claude Code-credentials',
+      '-w',
+    ], {
+      encoding: 'utf-8',
+      timeout: 3000,
+      windowsHide: true,
+    });
+    if (result.error || result.status !== 0) return '';
+    return String(result.stdout || '').trim();
+  }
+
+  const credPath = join(getClaudeDir(), '.credentials.json');
+  return readFileSync(credPath, 'utf-8').trim();
+}
+
 /**
  * Get all counts
  */
@@ -191,17 +211,9 @@ async function refreshUsageCache(): Promise<void> {
   const usageCachePath = memoryPath('STATE', 'usage-cache.json');
 
   try {
-    // Extract OAuth token — macOS Keychain or Linux credentials file
-    let credJson: string;
-    if (process.platform === 'darwin') {
-      credJson = execSync(
-        'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
-        { encoding: 'utf-8', timeout: 3000 }
-      ).trim();
-    } else {
-      const credPath = join(process.env.HOME || '', '.claude', '.credentials.json');
-      credJson = readFileSync(credPath, 'utf-8').trim();
-    }
+    // Extract OAuth token — macOS Keychain or framework-home credentials file.
+    const credJson = readClaudeCredentials();
+    if (!credJson) return;
 
     const parsed = JSON.parse(credJson);
     const token = parsed?.claudeAiOauth?.accessToken;
