@@ -88,6 +88,10 @@ function collectHookCommandTexts(config: any): string[] {
   return texts;
 }
 
+function hasAgentsInstruction(value: unknown): boolean {
+  return value === "AGENTS.md" || (Array.isArray(value) && value.includes("AGENTS.md"));
+}
+
 function timeoutForTool(name: string): number {
   if (name === "CodexRealSessionHookProof.ts") return 300_000;
   if (name === "HotfixUpdateRollbackSmokeTest.ts") return 180_000;
@@ -242,7 +246,7 @@ function frameworkSpecificChecks(framework: FrameworkId): Check[] {
     const pluginText = readText(pluginPath);
     checks.push(
       ok("OpenCode opencode.json exists", existsSync(configPath), configPath),
-      ok("OpenCode config keeps AGENTS instructions", Array.isArray(config?.instructions) && config.instructions.includes("AGENTS.md"), configPath),
+      ok("OpenCode config keeps AGENTS instructions", hasAgentsInstruction(config?.instructions), configPath),
       ok("OpenCode plugin exists", existsSync(pluginPath), pluginPath),
       ok("OpenCode plugin includes StartupSelfCheck", pluginText.includes("StartupSelfCheck.hook.ts"), pluginPath),
       ok("OpenCode plugin includes SessionEndDispatcher", pluginText.includes("SessionEndDispatcher.hook.ts"), pluginPath),

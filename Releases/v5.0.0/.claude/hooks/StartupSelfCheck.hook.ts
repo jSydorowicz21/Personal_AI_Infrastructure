@@ -74,6 +74,26 @@ function collectHookCommandTexts(config: unknown): string[] {
   return texts;
 }
 
+function normalizeFramework(value: string | undefined): string {
+  const normalized = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized === "codex" || normalized === "openai" || normalized === "openaicodex") return "codex";
+  if (normalized === "opencode" || normalized === "open") return "opencode";
+  if (normalized === "claude" || normalized === "claudecode") return "claude";
+  return normalized;
+}
+
+function inferFramework(frameworkRoot: string): string {
+  const explicit = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (explicit) return explicit;
+  if (existsSync(join(frameworkRoot, "config.toml")) && existsSync(join(frameworkRoot, "hooks.json"))) return "codex";
+  if (existsSync(join(frameworkRoot, "opencode.json"))) return "opencode";
+  return "claude";
+}
+
+function hasAgentsInstruction(value: unknown): boolean {
+  return value === "AGENTS.md" || (Array.isArray(value) && value.includes("AGENTS.md"));
+}
+
 async function pulseCheck(path: string): Promise<Check> {
   try {
     const res = await fetch(`http://localhost:31337${path}`, {
@@ -89,32 +109,63 @@ async function main() {
   if (isSubagentSession()) return;
 
   const frameworkRoot = getFrameworkDir();
+  const framework = inferFramework(frameworkRoot);
   const dataDir = getDataDir();
-  const configTomlPath = join(frameworkRoot, "config.toml");
-  const hooksJsonPath = join(frameworkRoot, "hooks.json");
   const mcpDir = join(frameworkRoot, "MCPs");
-  const configToml = readText(configTomlPath);
-  const hooksConfig = readJson(hooksJsonPath);
-  const hookTexts = collectHookCommandTexts(hooksConfig);
-  const hookText = hookTexts.join("\n");
-  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts");
-  const avoidsLegacyRunner = !hookText.includes("CodexHookRunner.cmd");
 
   const checks: Check[] = [
-    check("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
-    check("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
-    check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), configTomlPath),
-    check("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), configTomlPath),
     check("FrameworkHookAdapter exists", existsSync(join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")), join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")),
-    check("hooks.json has runnable hook commands", hookTexts.length > 0 && hasAdapterInvocation, hooksJsonPath),
-    check("hooks.json avoids legacy CodexHookRunner", avoidsLegacyRunner, hooksJsonPath),
-    check("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     check("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),
     check("Shared PAI data exists", existsSync(dataDir), dataDir),
+  ];
+
+  if (framework === "codex") {
+    const configTomlPath = join(frameworkRoot, "config.toml");
+    const hooksJsonPath = join(frameworkRoot, "hooks.json");
+    const configToml = readText(configTomlPath);
+    const hooksConfig = readJson(hooksJsonPath);
+    const hookTexts = collectHookCommandTexts(hooksConfig);
+    const hookText = hookTexts.join("\n");
+    checks.push(
+      check("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
+      check("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
+      check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), configTomlPath),
+      check("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), configTomlPath),
+      check("hooks.json has runnable hook commands", hookTexts.length > 0 && hookText.includes("FrameworkHookAdapter.ts"), hooksJsonPath),
+      check("hooks.json avoids legacy CodexHookRunner", !hookText.includes("CodexHookRunner.cmd"), hooksJsonPath),
+      check("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
+    );
+  } else if (framework === "opencode") {
+    const configPath = join(frameworkRoot, "opencode.json");
+    const pluginPath = join(frameworkRoot, "plugins", "pai-opencode.ts");
+    const config = readJson(configPath) as { instructions?: unknown } | null;
+    const pluginText = readText(pluginPath);
+    checks.push(
+      check("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
+      check("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
+      check("opencode.json exists", existsSync(configPath), configPath),
+      check("opencode.json keeps AGENTS instructions", hasAgentsInstruction(config?.instructions), configPath),
+      check("OpenCode PAI plugin exists", existsSync(pluginPath), pluginPath),
+      check("OpenCode PAI plugin has StartupSelfCheck", pluginText.includes("StartupSelfCheck.hook.ts"), pluginPath),
+    );
+  } else {
+    const settingsPath = join(frameworkRoot, "settings.json");
+    const settings = readJson(settingsPath);
+    const hookText = collectHookCommandTexts(settings).join("\n");
+    checks.push(
+      check("CLAUDE.md exists", existsSync(join(frameworkRoot, "CLAUDE.md")), join(frameworkRoot, "CLAUDE.md")),
+      check("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
+      check("settings.json exists", existsSync(settingsPath), settingsPath),
+      check("settings.json has hooks", Boolean((settings as { hooks?: unknown } | null)?.hooks), settingsPath),
+      check("Claude hooks avoid legacy CodexHookRunner", !hookText.includes("CodexHookRunner.cmd"), settingsPath),
+    );
+  }
+
+  checks.push(
     await pulseCheck("/health"),
     await pulseCheck("/voice/health"),
     await pulseCheck("/assistant/health"),
-  ];
+  );
 
   const failures = checks.filter((item) => !item.passed);
   if (failures.length === 0) return;
