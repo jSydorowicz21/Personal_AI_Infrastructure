@@ -15,15 +15,14 @@
 import { spawn } from "node:child_process";
 import { readFile, writeFile, readdir, appendFile, mkdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { memoryPath } from "./lib/paths";
+import { extname, join, resolve } from "node:path";
+import { expandHome, homeDir, memoryPath } from "./lib/paths";
 
-const HOME = homedir();
+const HOME = homeDir();
 const WORK_DIR = memoryPath("WORK");
 const FINDINGS_LOG = memoryPath("VERIFICATION", "cato-findings.jsonl");
 const TOOL_ACTIVITY_LOG = memoryPath("OBSERVABILITY", "tool-activity.jsonl");
-const CODEX_BIN = join(HOME, ".bun", "bin", "codex");
+const CODEX_BIN = resolveCodexBin();
 
 const BUNDLE_TOKEN_CAP = 80_000;
 const CHARS_PER_TOKEN = 4; // rough estimate for bundle sizing
@@ -44,6 +43,36 @@ Signal over noise. If the Advisor was right and there is nothing to flag, say so
 Output ONLY this JSON on one line, no markdown, no prose, no preamble:
 
 {"verdict":"pass|concerns|fail","criticality":"high|medium|low","findings":[{"severity":"critical|warning|info","isc_ref":"ISC-N or null","issue":"...","evidence":"..."}],"blind_spots_surfaced":["..."],"agrees_with_advisor":"yes|no|partial","model_used":"gpt-5.4","tokens_used":0}`;
+
+function resolveCodexBin(): string | null {
+  const candidates = [
+    process.env.PAI_CODEX_BIN ? expandHome(process.env.PAI_CODEX_BIN) : "",
+    Bun.which("codex"),
+    process.platform === "win32" ? join(HOME, ".bun", "bin", "codex.exe") : "",
+    process.platform === "win32" ? join(HOME, ".bun", "bin", "codex.cmd") : "",
+    join(HOME, ".bun", "bin", "codex"),
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function quoteCmdArg(value: string): string {
+  if (value === "") return "\"\"";
+  if (!/[ \t&()^|<>"%]/.test(value)) return value;
+  return `"${value.replace(/"/g, "\"\"").replace(/%/g, "%%")}"`;
+}
+
+function windowsSpawnArgs(args: string[]): string[] {
+  if (process.platform !== "win32") return args;
+  const command = args[0];
+  const ext = extname(command).toLowerCase();
+  if (ext !== ".cmd" && ext !== ".bat") return args;
+  const shell = process.env.ComSpec || "cmd.exe";
+  return [shell, "/d", "/s", "/c", args.map(quoteCmdArg).join(" ")];
+}
 
 interface Args {
   slug: string;
@@ -94,7 +123,7 @@ async function readArtifacts(slug: string, isa: string): Promise<string> {
   let match;
   while ((match = pathPattern.exec(decisions))) {
     let p = match[1];
-    if (p.startsWith("~/")) p = join(HOME, p.slice(2));
+    if (p.startsWith("~/")) p = expandHome(p);
     paths.add(resolve(p));
   }
 
@@ -187,12 +216,21 @@ function assembleBundle(isa: string, artifacts: string, toolTail: string, adviso
   return bundle;
 }
 
-function invokeCodex(bundle: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+function invokeCodex(codexBin: string, bundle: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolvePromise) => {
+    const argv = windowsSpawnArgs([
+      codexBin,
+      "exec",
+      "--sandbox",
+      "read-only",
+      "--model",
+      "gpt-5.4",
+      "-",
+    ]);
     const proc = spawn(
-      CODEX_BIN,
-      ["exec", "--sandbox", "read-only", "--model", "gpt-5.4", "-"],
-      { stdio: ["pipe", "pipe", "pipe"] }
+      argv[0],
+      argv.slice(1),
+      { stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
     );
     let stdout = "";
     let stderr = "";
@@ -263,7 +301,7 @@ async function main() {
     process.exit(2);
   }
 
-  if (!existsSync(CODEX_BIN)) {
+  if (!CODEX_BIN) {
     const resp = { verdict: "skipped" as const, reason: "codex CLI not installed" };
     await appendFinding(args.slug, args.advisorVerdict, resp, "unknown");
     console.log(JSON.stringify(resp));
@@ -286,7 +324,7 @@ async function main() {
   ]);
   const bundle = assembleBundle(isa, artifacts, toolTail, args.advisorVerdict);
 
-  const { stdout, stderr, code } = await invokeCodex(bundle);
+  const { stdout, stderr, code } = await invokeCodex(CODEX_BIN, bundle);
   if (code === 124) {
     const resp = { verdict: "skipped" as const, reason: "codex timeout at 120s" };
     await appendFinding(args.slug, args.advisorVerdict, resp, tier);

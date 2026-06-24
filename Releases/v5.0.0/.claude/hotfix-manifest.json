@@ -45,6 +45,22 @@
       "target": "PAI/TOOLS/CostTracker.ts"
     },
     {
+      "source": "PAI/TOOLS/CrossVendorAudit.ts",
+      "target": "PAI/TOOLS/CrossVendorAudit.ts"
+    },
+    {
+      "source": "PAI/TOOLS/DocCheck.ts",
+      "target": "PAI/TOOLS/DocCheck.ts"
+    },
+    {
+      "source": "PAI/TOOLS/gmail.ts",
+      "target": "PAI/TOOLS/gmail.ts"
+    },
+    {
+      "source": "PAI/TOOLS/ReferenceCheck.ts",
+      "target": "PAI/TOOLS/ReferenceCheck.ts"
+    },
+    {
       "source": "PAI/TOOLS/RemoveBg.ts",
       "target": "PAI/TOOLS/RemoveBg.ts"
     },

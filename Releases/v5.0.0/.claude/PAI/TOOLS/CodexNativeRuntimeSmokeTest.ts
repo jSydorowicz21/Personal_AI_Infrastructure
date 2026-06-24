@@ -59,6 +59,10 @@ const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
 const removeBg = read(join(paiRoot, "TOOLS", "RemoveBg.ts"));
 const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
 const anvilProgress = read(join(paiRoot, "TOOLS", "AnvilProgress.ts"));
+const crossVendorAudit = read(join(paiRoot, "TOOLS", "CrossVendorAudit.ts"));
+const docCheck = read(join(paiRoot, "TOOLS", "DocCheck.ts"));
+const gmailTool = read(join(paiRoot, "TOOLS", "gmail.ts"));
+const referenceCheck = read(join(paiRoot, "TOOLS", "ReferenceCheck.ts"));
 const bannerSources = [
   "Banner.ts",
   "BannerNeofetch.ts",
@@ -383,6 +387,24 @@ check(
   "Manual PAI tools avoid shell-string exec",
   manualToolShellFiles.length === 0,
   manualToolShellFiles.length ? manualToolShellFiles.slice(0, 8).join("\n") : "manual tools scanned",
+);
+
+check(
+  "Manual PAI tools use shared home helpers",
+  !docCheck.includes("const HOME = process.env.HOME ||") &&
+    !referenceCheck.includes("const HOME = process.env.HOME ||") &&
+    gmailTool.includes('import { expandHome, userPath } from "./lib/paths"') &&
+    gmailTool.includes("expandHome(process.env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE)") &&
+    !gmailTool.includes('from "node:os"') &&
+    crossVendorAudit.includes('import { expandHome, homeDir, memoryPath } from "./lib/paths"') &&
+    crossVendorAudit.includes("const HOME = homeDir()") &&
+    crossVendorAudit.includes("function resolveCodexBin()") &&
+    crossVendorAudit.includes('Bun.which("codex")') &&
+    crossVendorAudit.includes("function windowsSpawnArgs") &&
+    crossVendorAudit.includes("windowsHide: true") &&
+    !crossVendorAudit.includes('from "node:os"') &&
+    !crossVendorAudit.includes('const CODEX_BIN = join(HOME, ".bun", "bin", "codex")'),
+  "PAI/TOOLS/CrossVendorAudit.ts, DocCheck.ts, gmail.ts, ReferenceCheck.ts",
 );
 
 check(

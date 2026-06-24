@@ -20,7 +20,6 @@ import { join, resolve, dirname, relative } from 'path';
 import { spawnSync } from 'child_process';
 import { getFrameworkDir, getPaiDir } from './lib/paths';
 
-const HOME = process.env.HOME || '';
 const CLAUDE_DIR = getFrameworkDir();
 const PAI_DIR = getPaiDir();
 const HOOKS_DIR = join(CLAUDE_DIR, 'hooks');
