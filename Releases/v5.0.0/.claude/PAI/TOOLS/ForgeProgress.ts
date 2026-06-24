@@ -3,9 +3,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import { accessSync, constants, createWriteStream, existsSync, type WriteStream } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import process from "node:process";
-import { memoryPath } from "./lib/paths";
+import { homeDir, memoryPath } from "./lib/paths";
 
 type Args = { slug: string; prompt?: string; model: string; effort: string; sandbox: string; timeoutMs: number; pulseUrl: string };
 type JsonRecord = Record<string, unknown>;
@@ -61,11 +61,35 @@ function validUrl(flag: string, value: string): string {
   try { return new URL(nonEmpty(flag, value)).toString(); }
   catch (error: unknown) { throw new Error(`${flag} must be a valid URL: ${String(error)}`); }
 }
-function homeDir(): string { const home = process.env.HOME; if (!home) throw new Error("HOME is not set"); return home; }
+function canExecute(path: string): boolean {
+  try { accessSync(path, constants.X_OK); return true; }
+  catch (_error: unknown) { return existsSync(path); }
+}
 function preflightCodex(home: string): string | null {
-  const codexPath = join(home, ".bun", "bin", "codex");
-  try { accessSync(codexPath, constants.X_OK); return codexPath; }
-  catch (_error: unknown) { return null; } // Safe: caller emits the exact unavailable JSON.
+  const candidates = [
+    process.env.PAI_CODEX_BIN,
+    Bun.which("codex"),
+    process.platform === "win32" ? join(home, ".bun", "bin", "codex.exe") : "",
+    join(home, ".bun", "bin", "codex"),
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  for (const candidate of candidates) {
+    if (canExecute(candidate)) return candidate;
+  }
+  return null; // Safe: caller emits the exact unavailable JSON.
+}
+function quoteCmdArg(value: string): string {
+  if (value === "") return "\"\"";
+  if (!/[ \t&()^|<>"%]/.test(value)) return value;
+  return `"${value.replace(/"/g, "\"\"").replace(/%/g, "%%")}"`;
+}
+function windowsSpawnArgs(args: string[]): string[] {
+  if (process.platform !== "win32") return args;
+  const command = args[0];
+  const ext = extname(command).toLowerCase();
+  if (ext !== ".cmd" && ext !== ".bat") return args;
+  const shell = process.env.ComSpec || "cmd.exe";
+  return [shell, "/d", "/s", "/c", args.map(quoteCmdArg).join(" ")];
 }
 async function ensureSlugDir(home: string, slug: string): Promise<Paths> {
   const slugDir = memoryPath("WORK", slug);
@@ -83,7 +107,8 @@ async function readPrompt(prompt: string | undefined): Promise<string> {
 }
 function spawnCodex(codexPath: string, args: Args, finalFile: string, prompt: string): ChildProcessWithoutNullStreams {
   const argv = [codexPath, "exec", "--model", args.model, "-c", `model_reasoning_effort=${args.effort}`, "--sandbox", args.sandbox, "--skip-git-repo-check", "--cd", process.cwd(), "--json", "-o", finalFile, "-"];
-  const child = spawn(argv[0], argv.slice(1), {
+  const spawnArgs = windowsSpawnArgs(argv);
+  const child = spawn(spawnArgs[0], spawnArgs.slice(1), {
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
     windowsHide: true,
@@ -227,7 +252,7 @@ function formatFinalLine(input: FinalInput): string {
 export default async function main(argv: string[]): Promise<number> {
   try {
     const args = parseArgs(argv), home = homeDir(), codexPath = preflightCodex(home);
-    if (!codexPath) { process.stdout.write('{"verdict":"unavailable","reason":"codex CLI not found at ~/.bun/bin/codex"}\n'); return 2; }
+    if (!codexPath) { process.stdout.write('{"verdict":"unavailable","reason":"codex CLI not found via PAI_CODEX_BIN, PATH, or ~/.bun/bin/codex"}\n'); return 2; }
     const prompt = await readPrompt(args.prompt);
     if (prompt.length === 0) throw new Error("no prompt provided; pass --prompt or pipe stdin data");
     const paths = await ensureSlugDir(home, args.slug), state: RunState = { startMs: Date.now(), childAlive: true, timedOut: false, interrupted: false }, ring: RingEntry[] = [];

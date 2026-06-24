@@ -52,6 +52,8 @@ const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
+const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
+const anvilProgress = read(join(paiRoot, "TOOLS", "AnvilProgress.ts"));
 const bannerSources = [
   "Banner.ts",
   "BannerNeofetch.ts",
@@ -224,6 +226,25 @@ check(
     algorithm.includes("windowsHide: true") &&
     paiCli.includes("windowsHide: true"),
   "PAI/TOOLS/Inference.ts, algorithm.ts, pai.ts, and lib/framework-agent.ts",
+);
+
+check(
+  "Forge and Anvil progress tools resolve Windows homes",
+  forgeProgress.includes('import { homeDir, memoryPath } from "./lib/paths"') &&
+    anvilProgress.includes('import { getEnvPath, homeDir, memoryPath } from "./lib/paths"') &&
+    !forgeProgress.includes('throw new Error("HOME is not set")') &&
+    !anvilProgress.includes('throw new Error("HOME is not set")'),
+  "PAI/TOOLS/ForgeProgress.ts and AnvilProgress.ts",
+);
+
+check(
+  "Forge progress resolves Codex without hardcoded bun path",
+  forgeProgress.includes("process.env.PAI_CODEX_BIN") &&
+    forgeProgress.includes('Bun.which("codex")') &&
+    forgeProgress.includes("function windowsSpawnArgs") &&
+    forgeProgress.includes("windowsHide: true") &&
+    !forgeProgress.includes('const codexPath = join(home, ".bun", "bin", "codex")'),
+  "PAI/TOOLS/ForgeProgress.ts",
 );
 
 check(
