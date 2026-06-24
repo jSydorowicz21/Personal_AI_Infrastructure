@@ -264,6 +264,19 @@ function isCodexBlock(result: ReturnType<typeof runHook>): boolean {
   return false;
 }
 
+function hookAdditionalContext(result: ReturnType<typeof runHook>): string {
+  for (const line of String(result.stdout || "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      const value = parsed?.hookSpecificOutput?.additionalContext;
+      if (typeof value === "string") return value;
+    } catch {}
+  }
+  return "";
+}
+
 function runAdapterTimeoutProbe() {
   writeFileSync(adapterTimeoutHookPath, "setTimeout(() => {}, 10_000);\n");
   return spawnSync(process.execPath, [adapter, "--framework", "codex", "--target", adapterTimeoutHook, "--timeout-ms", "1"], {
@@ -461,7 +474,14 @@ try {
   mkdirSync(join(tempData, "MEMORY", "OBSERVABILITY"), { recursive: true });
   mkdirSync(join(tempData, "USER"), { recursive: true });
   writeSlowRtk();
-  writeFileSync(join(tempData, "USER", "OPINIONS.md"), "");
+  writeFileSync(join(tempData, "USER", "OPINIONS.md"), [
+    "### Codex dynamic context parity",
+    "",
+    "**Confidence:** 0.95",
+    "",
+    "Adapter must forward LoadContext as additionalContext for Codex.",
+    "",
+  ].join("\n"));
   writeFileSync(tempTranscript, JSON.stringify({
     type: "assistant",
     message: { content: "Done. The benign hook contract smoke completed." },
@@ -526,6 +546,22 @@ try {
     cwd: tempRoot,
   });
   check("PromptGuard emits Codex block decision", isCodexBlock(promptBlock), `status=${promptBlock.status ?? "null"} stdout=${String(promptBlock.stdout || "").trim()}`);
+
+  const loadContext = runHook("LoadContext.hook.ts", {
+    session_id: "hook-contract-load-context",
+    hook_event_name: "SessionStart",
+    source: "startup",
+    cwd: tempRoot,
+    transcript_path: tempTranscript,
+  });
+  const loadContextAdditional = hookAdditionalContext(loadContext);
+  check(
+    "LoadContext emits Codex additionalContext",
+    loadContext.status === 0 &&
+      loadContextAdditional.includes("PAI Dynamic Context") &&
+      loadContextAdditional.includes("Codex dynamic context parity"),
+    `status=${loadContext.status ?? "null"} additional=${loadContextAdditional.slice(0, 160)}`
+  );
 
   const toolBlock = runHook("SecurityPipeline.hook.ts", {
     session_id: "hook-contract-security",

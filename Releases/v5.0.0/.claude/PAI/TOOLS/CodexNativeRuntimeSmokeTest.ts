@@ -47,6 +47,7 @@ const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
+const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
@@ -158,6 +159,15 @@ check(
     !rebuildArchSummary.includes('"PAI_ARCHITECTURE_SUMMARY.md"') &&
     !rebuildArchSummary.includes('"Tools/ArchitectureSummaryGenerator.ts"'),
   "hooks/handlers/RebuildArchSummary.ts",
+);
+
+check(
+  "OpenCode plugin bounds hook adapter dispatch",
+  opencodePlugin.includes("DEFAULT_HOOK_TIMEOUT_MS") &&
+    opencodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS") &&
+    opencodePlugin.includes("--timeout-ms") &&
+    opencodePlugin.includes("timeout: timeout + 5_000"),
+  "plugins/pai-opencode.ts",
 );
 
 check(

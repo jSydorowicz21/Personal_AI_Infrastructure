@@ -133,12 +133,24 @@ function copyDirectoryContents(source: string, destination: string): void {
 }
 
 function copyInstalledSourceFixture(source: string, destination: string): void {
-  const skipSegments = new Set([".git", ".tmp", "node_modules", "plugins", "MEMORY", "USER"]);
+  const skipSegments = new Set([".git", ".tmp", "node_modules", "MEMORY", "USER"]);
   cpSync(source, destination, {
     recursive: true,
     force: true,
     filter: (path) => !path.split(/[\\/]+/).some((segment) => skipSegments.has(segment)),
   });
+}
+
+function manifestSources(): Set<string> {
+  const manifestPath = join(releaseRoot, "hotfix-manifest.json");
+  try {
+    const parsed = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    return new Set((Array.isArray(parsed.entries) ? parsed.entries : [])
+      .map((entry: Record<string, unknown>) => String(entry.source || ""))
+      .filter(Boolean));
+  } catch {
+    return new Set();
+  }
 }
 
 const keep = process.argv.includes("--keep");
@@ -160,6 +172,7 @@ const sentinels = {
   paiTool: "OLD_PAI_TOOL_SENTINEL",
   repeatHook: "OLD_REPEAT_HOOK_SENTINEL",
   promptGuardHook: "OLD_PROMPT_GUARD_HOOK_SENTINEL",
+  opencodePlugin: "OLD_OPENCODE_PLUGIN_SENTINEL",
   config: "PROTECTED_CONFIG_SENTINEL",
   auth: "PROTECTED_AUTH_SENTINEL",
   user: "PROTECTED_USER_SENTINEL",
@@ -186,6 +199,7 @@ mkdirSync(join(installRoot, "PAI"), { recursive: true });
 symlinkSync(linkedToolsTarget, join(installRoot, "PAI", "TOOLS"), process.platform === "win32" ? "junction" : "dir");
 write(join(installRoot, "hooks", "RepeatDetection.hook.ts"), sentinels.repeatHook);
 write(join(installRoot, "hooks", "PromptGuard.hook.ts"), sentinels.promptGuardHook);
+write(join(installRoot, "plugins", "pai-opencode.ts"), sentinels.opencodePlugin);
 write(join(installRoot, "PAI", "ALGORITHM", "LATEST"), "6.3.0");
 write(join(installRoot, "PAI", "ALGORITHM", "v6.3.0.md"), "# old algorithm placeholder");
 write(join(installRoot, "config.toml"), sentinels.config);
@@ -244,6 +258,7 @@ const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
 const linkedToolsStats = existsSync(join(installRoot, "PAI", "TOOLS")) ? lstatSync(join(installRoot, "PAI", "TOOLS")) : null;
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
+const updatedOpenCodePlugin = read(join(installRoot, "plugins", "pai-opencode.ts"));
 const updatedHooksJson = read(join(installRoot, "hooks.json"));
 const hookDataDirs = codexHookDataDirs(updatedHooksJson).map(normalizePathText);
 const expectedHookDataSuffix = normalizePathText(join("home", ".pai"));
@@ -274,18 +289,26 @@ const profileTexts = [
   oneDriveWindowsPowerShellAllHostsProfileText,
   oneDriveWindowsPowerShellProfileText,
 ];
+const sources = manifestSources();
+const requiredManifestSources = [
+  "PAI/TOOLS/InstallerCodexSmokeTest.ts",
+  "plugins/pai-opencode.ts",
+];
 
 const beforeRollbackChecks: Check[] = [
+  check("hotfix manifest covers current parity files", requiredManifestSources.every((source) => sources.has(source)), JSON.stringify(requiredManifestSources.filter((source) => !sources.has(source)))),
   check("hotfix update exits cleanly", update.status === 0, `status=${update.status ?? "null"} ${update.stderr.split(/\r?\n/).slice(-4).join(" | ")}`),
   check("backup root created", backupRoot.length > 0, backupRoot || "missing"),
   check("AGENTS.md backup captured old content", read(join(backupRoot, "AGENTS.md")) === sentinels.agents, join(backupRoot, "AGENTS.md")),
   check("pai.ts backup captured old content", read(join(backupRoot, "PAI", "TOOLS", "pai.ts")) === sentinels.paiTool, join(backupRoot, "PAI", "TOOLS", "pai.ts")),
   check("RepeatDetection backup captured old content", read(join(backupRoot, "hooks", "RepeatDetection.hook.ts")) === sentinels.repeatHook, join(backupRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard backup captured old content", read(join(backupRoot, "hooks", "PromptGuard.hook.ts")) === sentinels.promptGuardHook, join(backupRoot, "hooks", "PromptGuard.hook.ts")),
+  check("OpenCode plugin backup captured old content", read(join(backupRoot, "plugins", "pai-opencode.ts")) === sentinels.opencodePlugin, join(backupRoot, "plugins", "pai-opencode.ts")),
   check("pai.ts updated from release", updatedPaiTool.includes("Run PAI runtime diagnostics"), join(installRoot, "PAI", "TOOLS", "pai.ts")),
   check("hotfix preserves linked PAI/TOOLS directory", Boolean(linkedToolsStats?.isSymbolicLink()) && read(join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")) === "LINKED_EXTRA_TOOL_SENTINEL", join(installRoot, "PAI", "TOOLS")),
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
+  check("OpenCode plugin updated from release", updatedOpenCodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS"), join(installRoot, "plugins", "pai-opencode.ts")),
   check("MemoryDelete smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")),
   check("Framework command smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "FrameworkCommandResolutionSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "FrameworkCommandResolutionSmokeTest.ts")),
   check("Framework launch smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "FrameworkLaunchCwdSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "FrameworkLaunchCwdSmokeTest.ts")),
@@ -315,6 +338,7 @@ const rollbackChecks: Check[] = [
   check("rollback restores pai.ts", read(join(installRoot, "PAI", "TOOLS", "pai.ts")) === sentinels.paiTool, join(installRoot, "PAI", "TOOLS", "pai.ts")),
   check("rollback restores RepeatDetection", read(join(installRoot, "hooks", "RepeatDetection.hook.ts")) === sentinels.repeatHook, join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("rollback restores PromptGuard", read(join(installRoot, "hooks", "PromptGuard.hook.ts")) === sentinels.promptGuardHook, join(installRoot, "hooks", "PromptGuard.hook.ts")),
+  check("rollback restores OpenCode plugin", read(join(installRoot, "plugins", "pai-opencode.ts")) === sentinels.opencodePlugin, join(installRoot, "plugins", "pai-opencode.ts")),
 ];
 
 const checks = [...beforeRollbackChecks, ...rollbackChecks];

@@ -7,7 +7,7 @@
  * framework gets native config while sharing the same PAI data shape.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -44,6 +44,51 @@ function parseJsonOutput(value: unknown): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+function hasOwn(value: Record<string, any>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function checkOpenCodeConfigParses(root: string): Check[] {
+  const sourceConfig = join(root, "opencode.json");
+  const launchHome = join(dirname(root), "opencode-cli-home");
+  const launchConfig = join(launchHome, ".config", "opencode");
+  mkdirSync(launchConfig, { recursive: true });
+  copyFileSync(sourceConfig, join(launchConfig, "opencode.json"));
+
+  const env = {
+    ...process.env,
+    HOME: launchHome,
+    USERPROFILE: launchHome,
+    OPENCODE_CONFIG_DIR: launchConfig,
+  } as Record<string, string>;
+  const version = spawnSync("opencode", ["--version"], {
+    cwd: launchConfig,
+    env,
+    encoding: "utf-8",
+    timeout: 10_000,
+  });
+  if (version.error) {
+    return [{
+      name: "opencode CLI available for config parse",
+      passed: true,
+      detail: `skipped: ${version.error.message}`,
+    }];
+  }
+
+  const result = spawnSync("opencode", ["debug", "config", "--pure"], {
+    cwd: launchConfig,
+    env,
+    encoding: "utf-8",
+    timeout: 30_000,
+  });
+  const combined = `${outputText(result.stdout)}\n${outputText(result.stderr)}`;
+  return [{
+    name: "opencode debug config parses generated config",
+    passed: result.status === 0 && !combined.includes("Unrecognized keys"),
+    detail: `status=${result.status ?? "null"} ${combined.trim().slice(0, 160)}`,
+  }];
 }
 
 function decodeEncodedCommand(command: string): string {
@@ -168,6 +213,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     PAI_DATA_DIR: data,
     PAI_FRAMEWORK: "opencode",
     PAI_FRAMEWORK_DIR: root,
+    PAI_OPENCODE_HOOK_TIMEOUT_MS: "5000",
     KITTY_LISTEN_ON: "unix:/tmp/pai-opencode-smoke-kitty",
     KITTY_WINDOW_ID: "smoke-window",
   };
@@ -234,6 +280,42 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     timeout: 20_000,
   });
 
+  const linkedHome = join(dirname(data), "opencode-linked-home");
+  const linkedData = join(dirname(data), "opencode-linked-data");
+  const linkedDefaultRoot = join(linkedHome, ".config", "opencode");
+  const linkedImportRoot = join(dirname(data), "opencode-linked-import-root");
+  const linkedPluginDir = join(linkedImportRoot, "plugins");
+  mkdirSync(linkedData, { recursive: true });
+  mkdirSync(join(linkedDefaultRoot, "PAI"), { recursive: true });
+  mkdirSync(join(linkedDefaultRoot, "plugins"), { recursive: true });
+  mkdirSync(linkedPluginDir, { recursive: true });
+  writeFileSync(join(linkedDefaultRoot, "opencode.json"), JSON.stringify({ "$schema": "https://opencode.ai/config.json" }), "utf-8");
+  copyFileSync(pluginPath, join(linkedPluginDir, "pai-opencode.ts"));
+  const linkedEnv = {
+    ...process.env,
+    HOME: linkedHome,
+    USERPROFILE: linkedHome,
+    PAI_DATA_DIR: linkedData,
+    PAI_FRAMEWORK: "opencode",
+  } as Record<string, string>;
+  for (const key of ["OPENCODE_CONFIG_DIR", "PAI_DIR", "PAI_FRAMEWORK_DIR", "PAI_SETTINGS_PATH"]) {
+    delete linkedEnv[key];
+  }
+  const linkedScript = `
+    const mod = await import(${JSON.stringify(join(linkedPluginDir, "pai-opencode.ts"))});
+    const hooks = await mod.PAIOpenCodePlugin();
+    const output = {};
+    await hooks["shell.env"]({ sessionId: "linked-root", cwd: ${JSON.stringify(root)} }, output);
+    console.log(JSON.stringify(output.env || {}));
+  `;
+  const linkedResult = spawnSync(process.execPath, ["-e", linkedScript], {
+    cwd: linkedImportRoot,
+    env: linkedEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  const linkedResolved = parseJsonOutput(linkedResult.stdout);
+
   const transcriptFiles = findJsonlFiles(join(data, "TRANSCRIPTS", "opencode"));
   const staleTranscriptFiles = findJsonlFiles(join(staleEnvData, "TRANSCRIPTS", "opencode"));
   const transcriptText = transcriptFiles.map((file) => readFileSync(file, "utf-8")).join("\n");
@@ -264,6 +346,11 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       name: "opencode shell env uses active framework PAI_DIR",
       passed: existsSync(shellEnvMarkerPath) && readJson(shellEnvMarkerPath).PAI_DIR === join(root, "PAI"),
       detail: existsSync(shellEnvMarkerPath) ? readJson(shellEnvMarkerPath).PAI_DIR : shellEnvMarkerPath,
+    },
+    {
+      name: "opencode plugin prefers config root over import target",
+      passed: linkedResult.status === 0 && linkedResolved.PAI_DIR === join(linkedDefaultRoot, "PAI"),
+      detail: `status=${linkedResult.status ?? "null"} PAI_DIR=${linkedResolved.PAI_DIR || ""}`,
     },
     {
       name: "opencode session start persists Kitty env",
@@ -726,10 +813,21 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     if (existsSync(join(root, "opencode.json"))) {
       const configJson = readJson(join(root, "opencode.json"));
       checks.push({
-        name: "opencode config carries PAI_DATA_DIR",
-        passed: configJson.env?.PAI_DATA_DIR === data,
-        detail: `PAI_DATA_DIR=${configJson.env?.PAI_DATA_DIR || ""}`,
+        name: "opencode config omits unsupported env key",
+        passed: !hasOwn(configJson, "env"),
+        detail: hasOwn(configJson, "env") ? "contains env" : "schema-clean",
       });
+      checks.push({
+        name: "opencode config omits unsupported pai key",
+        passed: !hasOwn(configJson, "pai"),
+        detail: hasOwn(configJson, "pai") ? "contains pai" : "schema-clean",
+      });
+      checks.push({
+        name: "opencode config keeps AGENTS instructions",
+        passed: Array.isArray(configJson.instructions) && configJson.instructions.includes("AGENTS.md"),
+        detail: JSON.stringify(configJson.instructions || []),
+      });
+      checks.push(...checkOpenCodeConfigParses(root));
     }
     checks.push(...checkOpenCodeTranscript(root, data));
   }

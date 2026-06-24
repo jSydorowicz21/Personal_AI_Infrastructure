@@ -362,45 +362,35 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
 }
 
 export function generateOpenCodeConfigJson(config: PAIConfig): Record<string, any> {
+  void config;
   return {
     "$schema": "https://opencode.ai/config.json",
     instructions: ["AGENTS.md"],
-    env: {
-      PAI_DIR: `${config.paiDir}/PAI`,
-      PAI_FRAMEWORK: config.framework,
-      PAI_FRAMEWORK_DIR: config.paiDir,
-      PAI_SETTINGS_PATH: `${config.paiDir}/settings.json`,
-      PAI_CONFIG_DIR: config.configDir,
-      ...(config.dataDir ? { PAI_DATA_DIR: config.dataDir } : {}),
-      ...(config.projectsDir ? { PROJECTS_DIR: config.projectsDir } : {}),
-    },
-    pai: {
-      repoUrl: "https://github.com/danielmiessler/PAI",
-      version: PAI_VERSION,
-      algorithmVersion: ALGORITHM_VERSION,
-      framework: config.framework,
-    },
   };
 }
 
+function stripUnsupportedOpenCodeKeys(config: Record<string, any>): Record<string, any> {
+  const clean: Record<string, any> = {};
+  if (!config || typeof config !== "object") return clean;
+  for (const [key, value] of Object.entries(config)) {
+    if (key === "env" || key === "pai") continue;
+    clean[key] = value;
+  }
+  return clean;
+}
+
 export function mergeOpenCodeConfigJson(existing: Record<string, any>, generated: Record<string, any>): Record<string, any> {
+  const cleanExisting = stripUnsupportedOpenCodeKeys(existing);
+  const cleanGenerated = stripUnsupportedOpenCodeKeys(generated);
   return {
-    ...existing,
-    ...generated,
-    instructions: generated.instructions,
-    env: {
-      ...(existing.env && typeof existing.env === "object" ? existing.env : {}),
-      ...(generated.env && typeof generated.env === "object" ? generated.env : {}),
-    },
-    ...(existing.mcp || generated.mcp ? {
+    ...cleanExisting,
+    ...cleanGenerated,
+    instructions: cleanGenerated.instructions || cleanExisting.instructions || ["AGENTS.md"],
+    ...(cleanExisting.mcp || cleanGenerated.mcp ? {
       mcp: {
-        ...(existing.mcp && typeof existing.mcp === "object" ? existing.mcp : {}),
-        ...(generated.mcp && typeof generated.mcp === "object" ? generated.mcp : {}),
+        ...(cleanExisting.mcp && typeof cleanExisting.mcp === "object" ? cleanExisting.mcp : {}),
+        ...(cleanGenerated.mcp && typeof cleanGenerated.mcp === "object" ? cleanGenerated.mcp : {}),
       },
     } : {}),
-    pai: {
-      ...(existing.pai && typeof existing.pai === "object" ? existing.pai : {}),
-      ...(generated.pai && typeof generated.pai === "object" ? generated.pai : {}),
-    },
   };
 }

@@ -11,10 +11,10 @@ import { join, resolve } from "path";
 import { spawnSync } from "child_process";
 
 type JsonObject = Record<string, any>;
-type FrameworkState = { active?: string; root?: string; dataDir?: string };
+type FrameworkState = { active?: string; framework?: string; root?: string; dataDir?: string };
 
 const FRAMEWORK = "opencode";
-const ROOT = resolve(import.meta.dir, "..");
+const IMPORT_ROOT = resolve(import.meta.dir, "..");
 const HOME = process.env.HOME || process.env.USERPROFILE || homedir();
 
 function readJson(path: string): JsonObject | null {
@@ -31,9 +31,23 @@ function frameworkStateAt(dataDir: string): FrameworkState | null {
   return parsed && typeof parsed === "object" ? parsed as FrameworkState : null;
 }
 
+function normalizeFramework(value: unknown): string {
+  return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
 function existingEnvPath(key: string): string {
   const value = process.env[key];
   return value && existsSync(value) ? value : "";
+}
+
+function resolveOpenCodeRoot(): string {
+  const envRoot = existingEnvPath("OPENCODE_CONFIG_DIR");
+  if (envRoot) return envRoot;
+  const defaultRoot = join(HOME, ".config", "opencode");
+  if (existsSync(join(defaultRoot, "opencode.json")) || existsSync(join(defaultRoot, "plugins"))) {
+    return defaultRoot;
+  }
+  return IMPORT_ROOT;
 }
 
 function resolveDataDir(): string {
@@ -48,13 +62,15 @@ function resolveDataDir(): string {
   return defaultData;
 }
 
+const ROOT = resolveOpenCodeRoot();
 const DATA_DIR = resolveDataDir();
 const STATE = frameworkStateAt(DATA_DIR);
-const FRAMEWORK_ROOT = STATE?.root && existsSync(STATE.root) ? STATE.root : ROOT;
-const STATE_ROOT_USABLE = Boolean(STATE?.root && existsSync(STATE.root));
-const PAI_DIR = STATE_ROOT_USABLE ? join(FRAMEWORK_ROOT, "PAI") : existingEnvPath("PAI_DIR") || join(FRAMEWORK_ROOT, "PAI");
+const STATE_IS_OPENCODE = normalizeFramework(STATE?.active || STATE?.framework) === FRAMEWORK;
+const STATE_ROOT_USABLE = Boolean(STATE_IS_OPENCODE && STATE?.root && existsSync(STATE.root));
+const FRAMEWORK_ROOT = STATE_ROOT_USABLE ? STATE!.root! : ROOT;
+const PAI_DIR = join(FRAMEWORK_ROOT, "PAI");
 const CONFIG_DIR = existingEnvPath("PAI_CONFIG_DIR") || join(HOME, ".config", "PAI");
-const SETTINGS_PATH = STATE_ROOT_USABLE ? join(FRAMEWORK_ROOT, "settings.json") : existingEnvPath("PAI_SETTINGS_PATH") || join(FRAMEWORK_ROOT, "settings.json");
+const SETTINGS_PATH = join(FRAMEWORK_ROOT, "settings.json");
 const ADAPTER = join(ROOT, "hooks", "FrameworkHookAdapter.ts");
 
 const PRE_TOOL_HOOKS = new Set(["bash", "shell", "write", "edit", "read", "apply_patch"]);
@@ -62,6 +78,7 @@ const CONTENT_TOOLS = new Set(["webfetch", "websearch"]);
 const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
 const QUESTION_TOOLS = new Set(["askuserquestion", "request_user_input", "ask_user_question"]);
 const AGENT_TOOLS = new Set(["agent", "task"]);
+const DEFAULT_HOOK_TIMEOUT_MS = 15_000;
 const seenTranscriptRecords = new Set<string>();
 const loadedSessionContext = new Set<string>();
 const injectedSessionContext = new Set<string>();
@@ -108,6 +125,11 @@ function mapToolName(tool: unknown): string {
     default:
       return String(tool || "Unknown");
   }
+}
+
+function hookTimeoutMs(): number {
+  const raw = Number(process.env.PAI_OPENCODE_HOOK_TIMEOUT_MS || process.env.PAI_HOOK_CHILD_TIMEOUT_MS || "");
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOOK_TIMEOUT_MS;
 }
 
 function sessionId(input: JsonObject): string {
@@ -194,11 +216,21 @@ function runHook(hookFile: string, payload: JsonObject): { code: number; stdout:
     return { code: 0, stdout: "", stderr: `PAI adapter not found: ${ADAPTER}` };
   }
 
-  const result = spawnSync(process.execPath, [ADAPTER, "--framework", FRAMEWORK, "--target", hookFile], {
+  const timeout = hookTimeoutMs();
+  const result = spawnSync(process.execPath, [
+    ADAPTER,
+    "--framework",
+    FRAMEWORK,
+    "--target",
+    hookFile,
+    "--timeout-ms",
+    String(timeout),
+  ], {
     cwd: ROOT,
     env: hookEnv(),
     input: JSON.stringify(payload),
     encoding: "utf-8",
+    timeout: timeout + 5_000,
   });
 
   return {

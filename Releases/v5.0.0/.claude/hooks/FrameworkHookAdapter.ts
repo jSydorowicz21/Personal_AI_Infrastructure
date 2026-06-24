@@ -237,6 +237,16 @@ function captureStdout(stdout: string): CapturedOutput {
   return captured;
 }
 
+function systemReminderContexts(lines: string[]): string[] {
+  const text = lines.join("\n");
+  const contexts: string[] = [];
+  for (const match of text.matchAll(/<system-reminder>([\s\S]*?)<\/system-reminder>/g)) {
+    const context = match[1]?.trim();
+    if (context) contexts.push(context);
+  }
+  return contexts;
+}
+
 function mergeCapturedJson(merged: MergedHookOutput, entries: JsonObject[]): "continue" | "stop" {
   for (const entry of entries) {
     if (typeof entry.decision === "string") {
@@ -359,6 +369,10 @@ async function main() {
 
     if (child.stderr) process.stderr.write(child.stderr);
     const captured = captureStdout(child.stdout || "");
+    for (const context of systemReminderContexts(captured.text)) {
+      merged.additionalContext.push(context);
+      merged.hookEventName = merged.hookEventName || fallbackHookEventName;
+    }
     for (const line of captured.text) process.stderr.write(`${line}\n`);
     const mergeAction = mergeCapturedJson(merged, captured.json);
 

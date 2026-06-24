@@ -61,6 +61,14 @@
       "target": "PAI/TOOLS/CodexHookContractSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/InstallerCodexSmokeTest.ts",
+      "target": "PAI/TOOLS/InstallerCodexSmokeTest.ts"
+    },
+    {
+      "source": "plugins/pai-opencode.ts",
+      "target": "plugins/pai-opencode.ts"
+    },
+    {
       "source": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "target": "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"
     },

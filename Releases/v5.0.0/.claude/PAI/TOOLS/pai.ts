@@ -860,7 +860,6 @@ function buildOpenCodeConfig(root: string, id: FrameworkId, mcpConfig?: Record<s
   const config: Record<string, any> = {
     "$schema": "https://opencode.ai/config.json",
     instructions: ["AGENTS.md"],
-    env: frameworkEnv(root, id),
   };
 
   const servers = mcpConfig?.mcpServers || {};
