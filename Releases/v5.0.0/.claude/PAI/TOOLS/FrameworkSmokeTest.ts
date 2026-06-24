@@ -21,6 +21,7 @@ type Check = {
 };
 
 const keep = process.argv.includes("--keep");
+const dynamic = process.argv.includes("--dynamic") || process.env.PAI_FRAMEWORK_SMOKE_DYNAMIC === "1";
 const paiTool = join(import.meta.dir, "pai.ts");
 
 function selectedFrameworks(): Framework[] {
@@ -90,12 +91,20 @@ function hasOwn(value: Record<string, any>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
-function checkOpenCodeConfigParses(root: string): Check[] {
+function checkOpenCodeConfigParses(root: string, allowDynamic: boolean): Check[] {
   const sourceConfig = join(root, "opencode.json");
   const launchHome = join(dirname(root), "opencode-cli-home");
   const launchConfig = join(launchHome, ".config", "opencode");
   mkdirSync(launchConfig, { recursive: true });
   copyFileSync(sourceConfig, join(launchConfig, "opencode.json"));
+
+  if (!allowDynamic) {
+    return [{
+      name: "opencode debug config parses generated config",
+      passed: true,
+      detail: "skipped in AV-safe static mode; pass --dynamic or PAI_FRAMEWORK_SMOKE_DYNAMIC=1",
+    }];
+  }
 
   const env = {
     ...process.env,
@@ -310,6 +319,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     env: testEnv,
     encoding: "utf-8",
     timeout: 60_000,
+    windowsHide: true,
   });
 
   const staleHome = join(dirname(data), "opencode-stale-home");
@@ -333,6 +343,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     env: staleEnv,
     encoding: "utf-8",
     timeout: 60_000,
+    windowsHide: true,
   });
 
   const linkedHome = join(dirname(data), "opencode-linked-home");
@@ -368,6 +379,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     env: linkedEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const linkedResolved = parseJsonOutput(linkedResult.stdout);
 
@@ -379,12 +391,14 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     env: testEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const activity = spawnSync(process.execPath, [join(import.meta.dir, "ActivityParser.ts"), "--today"], {
     cwd: root,
     env: testEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   return [
     {
@@ -524,6 +538,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
 
   const resolved = parseJsonOutput(result.stdout);
@@ -545,6 +560,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: staleEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const staleResolved = parseJsonOutput(staleResult.stdout);
 
@@ -565,6 +581,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: staleDataEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const staleDataResolved = parseJsonOutput(staleDataResult.stdout);
 
@@ -579,6 +596,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: emptyExistingDataEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const emptyExistingDataResolved = parseJsonOutput(emptyExistingDataResult.stdout);
 
@@ -598,6 +616,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: staleExistingDataEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const staleExistingDataResolved = parseJsonOutput(staleExistingDataResult.stdout);
 
@@ -615,6 +634,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: staleExistingDataNoFrameworkEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const staleExistingDataNoFrameworkResolved = parseJsonOutput(staleExistingDataNoFrameworkResult.stdout);
 
@@ -636,6 +656,7 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
     env: explicitEnv,
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   const explicitResolved = parseJsonOutput(explicitResult.stdout);
 
@@ -793,6 +814,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     env,
     encoding: "utf-8",
     timeout: 30_000,
+    windowsHide: true,
   });
 
   const checks: Check[] = [
@@ -961,7 +983,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         passed: Array.isArray(configJson.instructions) && configJson.instructions.includes("AGENTS.md"),
         detail: JSON.stringify(configJson.instructions || []),
       });
-      checks.push(...checkOpenCodeConfigParses(root));
+      checks.push(...checkOpenCodeConfigParses(root, dynamic));
     }
     checks.push(...checkOpenCodeTranscript(root, data));
   }
@@ -1008,6 +1030,7 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 30_000,
+    windowsHide: true,
   });
 
   const staleAlgorithmDir = join(root, "PAI", "ALGORITHM");
@@ -1034,6 +1057,7 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 30_000,
+    windowsHide: true,
   });
 
   const sourceLatest = readFileSync(join(import.meta.dir, "..", "ALGORITHM", "LATEST"), "utf-8");
@@ -1104,6 +1128,7 @@ function checkCustomProviderHomeCreation(base: string): Check[] {
     env,
     encoding: "utf-8",
     timeout: 30_000,
+    windowsHide: true,
   });
   const statePath = join(data, "framework.json");
   const state = existsSync(statePath) ? readJson(statePath) : {};
@@ -1136,6 +1161,9 @@ function printResult(label: string, checks: Check[]) {
 
 const base = uniqueRoot();
 const frameworks = selectedFrameworks();
+if (!dynamic && frameworks.includes("opencode")) {
+  console.log("INFO OpenCode framework smoke is running in AV-safe static mode; pass --dynamic or PAI_FRAMEWORK_SMOKE_DYNAMIC=1 to run real opencode CLI config parsing.");
+}
 const isolatedResults = frameworks.map((framework) => runSwitch(framework, join(base, `${framework}-case`)));
 const sequenceBase = join(base, "switch-sequence");
 const sequenceData = join(sequenceBase, "pai-data");

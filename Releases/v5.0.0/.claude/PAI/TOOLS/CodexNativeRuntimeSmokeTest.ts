@@ -78,6 +78,7 @@ const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildA
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
 const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
+const frameworkSmoke = read(join(paiRoot, "TOOLS", "FrameworkSmokeTest.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
@@ -486,6 +487,16 @@ check(
   branchValidation.includes('"PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"') &&
     !branchValidation.includes('"PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 }'),
   "PAI/TOOLS/CodexBranchValidation.ts",
+);
+
+check(
+  "Framework smoke keeps OpenCode CLI parsing opt-in",
+  frameworkSmoke.includes('const dynamic = process.argv.includes("--dynamic")') &&
+    frameworkSmoke.includes("PAI_FRAMEWORK_SMOKE_DYNAMIC") &&
+    frameworkSmoke.includes("skipped in AV-safe static mode") &&
+    frameworkSmoke.includes("checkOpenCodeConfigParses(root, dynamic)") &&
+    (frameworkSmoke.match(/windowsHide:\s*true/g)?.length ?? 0) >= 15,
+  "PAI/TOOLS/FrameworkSmokeTest.ts",
 );
 
 check(
