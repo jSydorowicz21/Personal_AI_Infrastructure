@@ -25,8 +25,8 @@
  * Token budget: ~2K tokens (~0.2% of 1M context — negligible vs contextual value)
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import type { Dirent } from 'fs';
 import { join } from 'path';
 import { getPaiDir, getSettingsPath, memoryPath, userPath } from './lib/paths';
 
@@ -109,6 +109,42 @@ function resolveRestorePath(relPath: string): string {
   return join(getPaiDir(), relPath);
 }
 
+function findRecentArtifact(rootDir: string, filename: string, withinMs: number): string {
+  const cutoff = Date.now() - withinMs;
+  let bestPath = '';
+  let bestMtime = 0;
+
+  function visit(dir: string): void {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath);
+        continue;
+      }
+      if (!entry.isFile() || entry.name !== filename) continue;
+      try {
+        const stats = statSync(fullPath);
+        if (stats.mtimeMs >= cutoff && stats.mtimeMs > bestMtime) {
+          bestPath = fullPath;
+          bestMtime = stats.mtimeMs;
+        }
+      } catch {
+        // Best effort only.
+      }
+    }
+  }
+
+  visit(rootDir);
+  return bestPath;
+}
+
 function main() {
   const settings = loadSettings();
   const parts: string[] = [];
@@ -167,12 +203,8 @@ function main() {
   // We look for ISA.md first (v4.1+ canonical) and fall back to PRD.md (legacy).
   try {
     const workDir = memoryPath('WORK');
-    const probe = (filename: string): string =>
-      execSync(
-        `fd -t f -n "${filename}" --changed-within 60min "${workDir}" 2>/dev/null | head -1`,
-        { encoding: 'utf-8', timeout: 3000 }
-      ).trim();
-    const latestIsa = probe('ISA.md') || probe('PRD.md');
+    const latestIsa = findRecentArtifact(workDir, 'ISA.md', 60 * 60 * 1000) ||
+      findRecentArtifact(workDir, 'PRD.md', 60 * 60 * 1000);
     if (latestIsa) {
       const isaContent = safeRead(latestIsa, 30);
       if (isaContent) {
@@ -181,7 +213,7 @@ function main() {
       }
     }
   } catch {
-    // Silent — fd not available or no recent artifacts
+    // Silent — no recent artifacts
   }
 
   // --- Output ---

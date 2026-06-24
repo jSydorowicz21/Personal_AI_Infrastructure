@@ -65,6 +65,7 @@ const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
+const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
@@ -272,6 +273,17 @@ check(
     !isaUtils.includes("tail -200") &&
     !isaUtils.includes("require('child_process')"),
   "hooks/lib/isa-utils.ts",
+);
+
+check(
+  "RestoreContext locates recent ISA without shell exec",
+  restoreContext.includes("function findRecentArtifact") &&
+    restoreContext.includes("readdirSync(dir, { withFileTypes: true })") &&
+    restoreContext.includes("findRecentArtifact(workDir, 'ISA.md'") &&
+    !restoreContext.includes("execSync") &&
+    !restoreContext.includes("fd -t f") &&
+    !restoreContext.includes("head -1"),
+  "hooks/RestoreContext.hook.ts",
 );
 
 check(

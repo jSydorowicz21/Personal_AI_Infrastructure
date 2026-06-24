@@ -820,6 +820,8 @@ try {
     const tabSetterSource = existsSync(tabSetterPath) ? readFileSync(tabSetterPath, "utf-8") : "";
     const isaUtilsPath = join(frameworkRoot, "hooks", "lib", "isa-utils.ts");
     const isaUtilsSource = existsSync(isaUtilsPath) ? readFileSync(isaUtilsPath, "utf-8") : "";
+    const restoreContextPath = join(frameworkRoot, "hooks", "RestoreContext.hook.ts");
+    const restoreContextSource = existsSync(restoreContextPath) ? readFileSync(restoreContextPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -905,6 +907,16 @@ try {
         !isaUtilsSource.includes("tail -200") &&
         !isaUtilsSource.includes("require('child_process')"),
       isaUtilsPath,
+    );
+    check(
+      "RestoreContext recent ISA lookup avoids shell exec",
+      restoreContextSource.includes("function findRecentArtifact") &&
+        restoreContextSource.includes("readdirSync(dir, { withFileTypes: true })") &&
+        restoreContextSource.includes("findRecentArtifact(workDir, 'ISA.md'") &&
+        !restoreContextSource.includes("execSync") &&
+        !restoreContextSource.includes("fd -t f") &&
+        !restoreContextSource.includes("head -1"),
+      restoreContextPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",
