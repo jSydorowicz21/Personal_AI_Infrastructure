@@ -14,7 +14,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { paiPath, userPath } from './lib/paths';
 
 const TELOS_DIR = userPath('TELOS');
@@ -42,7 +42,14 @@ if (filePath.includes('/Backups/')) process.exit(0);
 if (filePath.endsWith('updates.md')) process.exit(0);
 
 try {
-  execSync(`bun run ${GENERATOR}`, { timeout: 5000, stdio: 'pipe' });
+  const result = spawnSync(process.execPath, [GENERATOR], {
+    timeout: 5000,
+    stdio: 'pipe',
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    throw new Error(`generator exited ${result.status ?? 'null'}: ${String(result.stderr || '').trim().slice(0, 300)}`);
+  }
   console.error('📋 TELOS summary auto-regenerated after source file change');
 } catch (err) {
   console.error(`⚠️ TELOS summary regeneration failed: ${err}`);

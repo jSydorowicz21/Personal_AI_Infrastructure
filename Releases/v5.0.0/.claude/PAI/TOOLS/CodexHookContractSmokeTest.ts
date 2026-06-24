@@ -776,6 +776,28 @@ try {
     `status=${satisfactionRating.status ?? "null"} ratings=${ratingsText.trim().slice(-240)}`,
   );
 
+  const telosDir = join(tempData, "USER", "TELOS");
+  mkdirSync(telosDir, { recursive: true });
+  const missionPath = join(telosDir, "MISSION.md");
+  writeFileSync(missionPath, "- **M0**: Prove hook path parity works\n", "utf-8");
+  writeFileSync(join(telosDir, "GOALS.md"), "- **G9**: Keep Codex native runtime reliable.\n", "utf-8");
+  const telosSummary = runHook("TelosSummarySync.hook.ts", {
+    session_id: "hook-contract-telos-summary",
+    hook_event_name: "PostToolUse",
+    tool_name: "Write",
+    tool_input: { file_path: missionPath },
+    cwd: tempRoot,
+  });
+  const telosSummaryPath = join(telosDir, "PRINCIPAL_TELOS.md");
+  const telosSummaryText = existsSync(telosSummaryPath) ? readFileSync(telosSummaryPath, "utf-8") : "";
+  check(
+    "TelosSummarySync regenerates summary from temp PAI_DATA_DIR",
+    telosSummary.status === 0 &&
+      telosSummaryText.includes("Auto-generated from TELOS source files") &&
+      telosSummaryText.includes("Prove hook path parity works"),
+    `status=${telosSummary.status ?? "null"} stderr=${String(telosSummary.stderr || "").trim().slice(-300)} summary=${telosSummaryText.slice(0, 160)}`,
+  );
+
   const adapterTimeout = runAdapterTimeoutProbe();
   check(
     "FrameworkHookAdapter reports child timeout",
@@ -792,6 +814,8 @@ try {
     const promptGuardSource = existsSync(promptGuardPath) ? readFileSync(promptGuardPath, "utf-8") : "";
     const satisfactionPath = join(frameworkRoot, "hooks", "SatisfactionCapture.hook.ts");
     const satisfactionSource = existsSync(satisfactionPath) ? readFileSync(satisfactionPath, "utf-8") : "";
+    const telosSummaryPath = join(frameworkRoot, "hooks", "TelosSummarySync.hook.ts");
+    const telosSummarySource = existsSync(telosSummaryPath) ? readFileSync(telosSummaryPath, "utf-8") : "";
 
     check(
       "FrameworkHookAdapter hides child hook windows",
@@ -850,6 +874,13 @@ try {
       "PromptGuard has recursive inference guard",
       promptGuardSource.includes("PAI_INFERENCE_CHILD") && promptGuardSource.includes("PAI_DISABLE_RECURSIVE_HOOKS"),
       promptGuardPath,
+    );
+    check(
+      "TelosSummarySync regenerates without shell exec",
+      telosSummarySource.includes("spawnSync(process.execPath, [GENERATOR]") &&
+        telosSummarySource.includes("windowsHide: true") &&
+        !telosSummarySource.includes("execSync"),
+      telosSummaryPath,
     );
     check(
       "SatisfactionCapture can record explicit ratings",

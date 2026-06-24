@@ -62,6 +62,7 @@ const bannerSources = [
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
+const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
@@ -239,6 +240,14 @@ check(
     rtkHook.includes("windows_unresolvable_rtk_rewrite") &&
     !rtkHook.includes("fast_bypass"),
   "hooks/RtkPreToolUse.hook.js",
+);
+
+check(
+  "Telos summary hook avoids shell exec on regeneration",
+  telosSummaryHook.includes("spawnSync(process.execPath, [GENERATOR]") &&
+    telosSummaryHook.includes("windowsHide: true") &&
+    !telosSummaryHook.includes("execSync"),
+  "hooks/TelosSummarySync.hook.ts",
 );
 
 check(
