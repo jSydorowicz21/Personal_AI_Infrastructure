@@ -212,6 +212,16 @@ check(
 );
 
 check(
+  "Branch validation keeps deep probes opt-in locally",
+  branchValidation.includes('type ValidationMode = "safe" | "deep"') &&
+    branchValidation.includes('process.env.GITHUB_ACTIONS === "true"') &&
+    branchValidation.includes("safe local mode; pass --deep") &&
+    branchValidation.includes('if (validationMode === "deep")') &&
+    branchValidation.includes("Deep validation probes skipped"),
+  "PAI/TOOLS/CodexBranchValidation.ts",
+);
+
+check(
   "OpenCode plugin bounds hook adapter dispatch",
   opencodePlugin.includes("DEFAULT_HOOK_TIMEOUT_MS") &&
     opencodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS") &&

@@ -17,14 +17,29 @@ type Check = {
   detail: string;
 };
 
+type ValidationMode = "safe" | "deep";
+
 const releaseRoot = resolve(import.meta.dir, "..", "..");
 const repoRoot = resolve(releaseRoot, "..", "..", "..");
 const tempRoot = mkdtempSync(join(tmpdir(), "pai-codex-branch-ci-"));
+const validationMode = validationModeFromArgs(process.argv.slice(2));
 const checks: Check[] = [];
 
 function check(name: string, passed: boolean, detail: string): void {
   checks.push({ name, passed, detail });
   console.log(`${passed ? "PASS" : "FAIL"} ${name} - ${detail}`);
+}
+
+function validationModeFromArgs(args: string[]): ValidationMode {
+  if (
+    args.includes("--deep") ||
+    args.includes("--full") ||
+    process.env.PAI_BRANCH_VALIDATION_DEEP === "1" ||
+    process.env.GITHUB_ACTIONS === "true"
+  ) {
+    return "deep";
+  }
+  return "safe";
 }
 
 function run(name: string, command: string, args: string[], options: { cwd?: string; env?: Record<string, string>; timeout?: number } = {}): void {
@@ -228,22 +243,21 @@ function main(): void {
     ]);
 
     validateJson();
+    check(
+      "Validation mode",
+      true,
+      validationMode === "deep"
+        ? "deep probes enabled by --deep/CI"
+        : "safe local mode; pass --deep for child/session/install probes",
+    );
 
     run("Codex security smoke", "bun", ["PAI/TOOLS/CodexPaiSecuritySmokeTest.ts"]);
-    run("Hook shared-path smoke", "bun", ["PAI/TOOLS/HookSharedPathSmokeTest.ts"]);
     run("Startup self-check smoke", "bun", ["PAI/TOOLS/StartupSelfCheckSmokeTest.ts"], {
       env: {
         PAI_BRANCH_CI: "1",
         PAI_FRAMEWORK_DIR: releaseRoot,
         PAI_DIR: join(releaseRoot, "PAI"),
         PAI_DATA_DIR: join(tempRoot, "pai-data"),
-      },
-    });
-    run("Repeat detection smoke", "bun", ["PAI/TOOLS/RepeatDetectionSmokeTest.ts"], {
-      env: {
-        PAI_FRAMEWORK_DIR: releaseRoot,
-        PAI_DIR: join(releaseRoot, "PAI"),
-        PAI_DATA_DIR: join(tempRoot, "pai-data-repeat"),
       },
     });
     run("Codex hook contract smoke", "bun", ["PAI/TOOLS/CodexHookContractSmokeTest.ts"], {
@@ -255,24 +269,36 @@ function main(): void {
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
-    run("Codex framework-agent execution smoke", "bun", ["PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts"]);
-    run("OpenCode framework-agent execution smoke", "bun", ["PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);
-    run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 });
-    run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
-    run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
-    run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);
-    run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
-    run("Junction-safe update smoke", "bun", ["PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts"]);
-    run("SessionEnd lifecycle smoke", "bun", ["PAI/TOOLS/SessionEndLifecycleSmokeTest.ts"]);
-    run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
-    run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);
-
-    validateHotfixDryRun();
     validateReadmeUrls();
     validateDoctorDiscoverability();
+
+    if (validationMode === "deep") {
+      run("Hook shared-path smoke", "bun", ["PAI/TOOLS/HookSharedPathSmokeTest.ts"]);
+      run("Repeat detection smoke", "bun", ["PAI/TOOLS/RepeatDetectionSmokeTest.ts"], {
+        env: {
+          PAI_FRAMEWORK_DIR: releaseRoot,
+          PAI_DIR: join(releaseRoot, "PAI"),
+          PAI_DATA_DIR: join(tempRoot, "pai-data-repeat"),
+        },
+      });
+      run("Codex framework-agent execution smoke", "bun", ["PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts"]);
+      run("OpenCode framework-agent execution smoke", "bun", ["PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"]);
+      run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 });
+      run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
+      run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
+      run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);
+      run("Hotfix update/rollback smoke", "bun", ["PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts"]);
+      run("Junction-safe update smoke", "bun", ["PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts"]);
+      run("SessionEnd lifecycle smoke", "bun", ["PAI/TOOLS/SessionEndLifecycleSmokeTest.ts"]);
+      run("Codex fresh-install smoke", "bun", ["PAI/TOOLS/CodexFreshInstallSmokeTest.ts"]);
+      run("Codex installer smoke", "bun", ["PAI/TOOLS/InstallerCodexSmokeTest.ts"]);
+      validateHotfixDryRun();
+    } else {
+      check("Deep validation probes skipped", true, "local safe mode; pass --deep or run in GitHub Actions");
+    }
 
     const failed = checks.filter((item) => !item.passed);
     if (failed.length > 0) {
