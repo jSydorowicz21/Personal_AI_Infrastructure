@@ -256,6 +256,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       const proc = spawn(codexPath, args, {
         env,
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       });
 
       proc.stdin.write(combinedPrompt);
@@ -361,6 +362,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       const proc = spawn(opencodePath, args, {
         env,
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       });
 
       proc.stdin.write(combinedPrompt);
@@ -444,6 +446,7 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
     const proc = spawn('claude', args, {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     });
 
     // Write prompt via stdin to avoid ARG_MAX limits on large inputs

@@ -7,8 +7,8 @@
  */
 
 import { spawnSync } from "child_process";
-import { existsSync } from "fs";
-import { basename, extname, join, resolve } from "path";
+import { appendFileSync, existsSync, mkdirSync } from "fs";
+import { basename, dirname, extname, join, resolve } from "path";
 import { homedir } from "os";
 import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "./lib/framework-hook-contract";
 import { isSubagentSession } from "./lib/session";
@@ -17,6 +17,30 @@ type JsonObject = Record<string, any>;
 type CapturedOutput = {
   json: JsonObject[];
   text: string[];
+};
+type HookRunLogEntry = {
+  type: "hook-run-start" | "hook-run-end";
+  runId: string;
+  adapterPid: number;
+  framework: string;
+  event: string;
+  timestamp: string;
+  hookEventName: string;
+  sessionId: string;
+  target: string;
+  timeoutMs: number;
+  startEpochMs: number;
+  endEpochMs?: number;
+  durationMs?: number;
+  status?: number;
+  signal?: string;
+  error?: string;
+  stdoutLength?: number;
+  stderrLength?: number;
+  stderrPreview?: string;
+  statusReason?: string;
+  payload: JsonObject;
+  skipReason?: string;
 };
 type MergedHookOutput = {
   decision?: JsonObject;
@@ -34,6 +58,123 @@ function childBlockReason(targetPath: string, stderr: string): string {
     .filter(Boolean)
     .join("\n");
   return cleaned || `[PAI SECURITY] ${basename(targetPath)} blocked this tool call.`;
+}
+
+function shouldLogHookRuns(): boolean {
+  return process.env.PAI_HOOK_DEBUG === "1" || process.env.PAI_HOOK_RUN_LOG === "1";
+}
+
+function hookLogFile(dataDir: string): string {
+  return join(dataDir, "MEMORY", "OBSERVABILITY", "hook-runs.jsonl");
+}
+
+function preview(value: unknown, max = 300): string {
+  if (!value) return "";
+  if (typeof value === "string") return value.length <= max ? value : `${value.slice(0, max)}...`;
+  try {
+    const json = JSON.stringify(value);
+    return json.length <= max ? json : `${json.slice(0, max)}...`;
+  } catch {
+    return "";
+  }
+}
+
+function payloadSummary(input: JsonObject): JsonObject {
+  const rawToolInput = input.tool_input || input.toolInput || input.tool?.input;
+  const rawToolResult = input.tool_result || input.toolResult || input.tool_response || input.result;
+  return {
+    framework: input.framework,
+    session_id: input.session_id || "pai-framework-session",
+    hook_event_name: input.hook_event_name || input.event_name || input.event || "unknown",
+    cwd: input.cwd || input.workingDirectory,
+    tool_name: input.tool_name || input.toolName || input.tool?.name || "Unknown",
+    tool_input_preview: preview(rawToolInput, 400),
+    tool_result_preview: preview(rawToolResult, 400),
+    prompt_preview: preview(input.prompt, 240),
+  };
+}
+
+function writeHookRunLog(entry: HookRunLogEntry, dataDir: string): void {
+  if (!shouldLogHookRuns()) return;
+  try {
+    const path = hookLogFile(dataDir);
+    mkdirSync(dirname(path), { recursive: true });
+    appendFileSync(path, `${JSON.stringify(entry)}\n`, "utf-8");
+  } catch {
+    // Hook logging must never affect hook execution.
+  }
+}
+
+function runLogForTargetStart(runId: string, framework: string, input: JsonObject, target: string, timeout: number, index: number, total: number, dataDir: string, eventName: string): void {
+  writeHookRunLog({
+    type: "hook-run-start",
+    runId,
+    adapterPid: process.pid,
+    framework,
+    event: "start",
+    timestamp: new Date().toISOString(),
+    hookEventName: eventName,
+    sessionId: input.session_id || input.sessionId || input.session?.id || "pai-framework-session",
+    target: `${index + 1}/${total}:${basename(target)}`,
+    timeoutMs: timeout,
+    startEpochMs: Date.now(),
+    payload: payloadSummary(input),
+  }, dataDir);
+}
+
+function runLogForTargetEnd(runId: string, framework: string, input: JsonObject, target: string, result: {
+  status: number | null;
+  signal: NodeJS.Signals | undefined;
+  error?: Error;
+  stdout?: string;
+  stderr?: string;
+  startEpochMs: number;
+  timeoutMs: number;
+}, statusReason: string | undefined, index: number, total: number, dataDir: string, eventName: string): void {
+  const endEpoch = Date.now();
+  const stderrText = result.stderr || "";
+  writeHookRunLog({
+    type: "hook-run-end",
+    runId,
+    adapterPid: process.pid,
+    framework,
+    event: statusReason || "completed",
+    timestamp: new Date(endEpoch).toISOString(),
+    hookEventName: eventName,
+    sessionId: input.session_id || input.sessionId || input.session?.id || "pai-framework-session",
+    target: `${index + 1}/${total}:${basename(target)}`,
+    timeoutMs: result.timeoutMs,
+    startEpochMs: result.startEpochMs,
+    endEpochMs: endEpoch,
+    durationMs: endEpoch - result.startEpochMs,
+    status: result.status ?? -1,
+    signal: result.signal,
+    error: result.error ? result.error.message : undefined,
+    stdoutLength: result.stdout?.length || 0,
+    stderrLength: stderrText.length,
+    stderrPreview: preview(stderrText, 300),
+    statusReason,
+    payload: payloadSummary(input),
+  }, dataDir);
+}
+
+function runLogForTargetSkip(runId: string, framework: string, input: JsonObject, target: string, reason: string, index: number, total: number, dataDir: string, eventName: string): void {
+  writeHookRunLog({
+    type: "hook-run-end",
+    runId,
+    adapterPid: process.pid,
+    framework,
+    event: "skip",
+    timestamp: new Date().toISOString(),
+    hookEventName: eventName,
+    sessionId: input.session_id || input.sessionId || input.session?.id || "pai-framework-session",
+    target: `${index + 1}/${total}:${basename(target)}`,
+    timeoutMs: timeoutMs(),
+    startEpochMs: Date.now(),
+    status: 0,
+    skipReason: reason,
+    payload: payloadSummary(input),
+  }, dataDir);
 }
 
 function exitAfterChildBlock(framework: string, targetPath: string, stderr: string, merged: MergedHookOutput, fallbackEventName: string): never {
@@ -364,24 +505,67 @@ async function main() {
   const normalized = JSON.stringify(normalizedInput);
   const fallbackHookEventName = eventName(input);
   const merged: MergedHookOutput = { additionalContext: [] };
-  for (const targetArg of targets) {
+  const runId = `pai-hook-run-${Date.now()}-${process.pid}-${Math.floor(Math.random() * 1_000_000)}`;
+  const eventForLog = fallbackHookEventName || (input.hook_event_name ? String(input.hook_event_name) : "unknown");
+  for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
+    const targetArg = targets[targetIndex];
     const targetPath = resolve(join(hooksDir, targetArg));
     if (!existsSync(targetPath)) {
       console.error(`[PAI FrameworkHookAdapter] Target hook not found: ${targetPath}`);
       process.exit(1);
     }
-    if (shouldSkipForNestedInference(targetPath)) continue;
+    if (shouldSkipForNestedInference(targetPath)) {
+      runLogForTargetSkip(
+        runId,
+        framework,
+        normalizedInput,
+        targetPath,
+        "nested-inference-skip",
+        targetIndex,
+        targets.length,
+        dataDir,
+        eventForLog
+      );
+      continue;
+    }
 
     const extension = extname(targetPath);
     const runner = extension === ".sh" ? (Bun.which("bash") || "") : process.execPath;
-    if (!runner) continue;
+    if (!runner) {
+      runLogForTargetSkip(
+        runId,
+        framework,
+        normalizedInput,
+        targetPath,
+        "runner-unavailable",
+        targetIndex,
+        targets.length,
+        dataDir,
+        eventForLog
+      );
+      continue;
+    }
     const childArgs = extension === ".sh" ? [targetPath] : [targetPath];
 
+    const targetTimeoutMs = timeoutMs();
+    runLogForTargetStart(
+      runId,
+      framework,
+      normalizedInput,
+      targetPath,
+      targetTimeoutMs,
+      targetIndex,
+      targets.length,
+      dataDir,
+      fallbackHookEventName || input.hook_event_name || "unknown"
+    );
+
+    const startEpochMs = Date.now();
     const child = spawnSync(runner, childArgs, {
       input: normalized,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
-      timeout: timeoutMs(),
+      timeout: targetTimeoutMs,
       windowsHide: true,
       env: {
         ...process.env,
@@ -395,36 +579,64 @@ async function main() {
         PAI_PROJECT_DIR: cwd(input),
       },
     });
+    const endLog = (statusReason?: string) => runLogForTargetEnd(
+      runId,
+      framework,
+      normalizedInput,
+      targetPath,
+      {
+        status: child.status,
+        signal: child.signal,
+        error: child.error,
+        stdout: child.stdout,
+        stderr: child.stderr,
+        startEpochMs,
+        timeoutMs: targetTimeoutMs,
+      },
+      statusReason,
+      targetIndex,
+      targets.length,
+      dataDir,
+      eventForLog
+    );
 
     if (child.stderr) process.stderr.write(child.stderr);
     const captured = captureStdout(child.stdout || "");
     for (const context of systemReminderContexts(captured.text)) {
       merged.additionalContext.push(context);
-      merged.hookEventName = merged.hookEventName || fallbackHookEventName;
+      merged.hookEventName = merged.hookEventName || eventForLog;
     }
     for (const line of captured.text) process.stderr.write(`${line}\n`);
     const mergeAction = mergeCapturedJson(merged, captured.json);
 
     if (child.error) {
+      endLog(`child-spawn-error:${child.error.message}`);
       emitMergedOutput(merged, fallbackHookEventName);
       console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} failed: ${child.error.message}`);
       process.exit(124);
     }
     if (child.signal) {
+      endLog(`child-signal:${child.signal}`);
       emitMergedOutput(merged, fallbackHookEventName);
       console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} terminated by signal ${child.signal}`);
       process.exit(124);
     }
     if (child.status === null) {
+      endLog("child-status-null");
       emitMergedOutput(merged, fallbackHookEventName);
       console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} exited without status`);
       process.exit(124);
     }
-    if (child.status === 2) exitAfterChildBlock(framework, targetPath, child.stderr || "", merged, fallbackHookEventName);
+    if (child.status === 2) {
+      endLog(`child-status-2-block:${childBlockReason(targetPath, child.stderr || "")}`);
+      exitAfterChildBlock(framework, targetPath, child.stderr || "", merged, fallbackHookEventName);
+    }
     if (child.status !== 0 || mergeAction === "stop") {
+      endLog(mergeAction === "stop" ? "merge-stop" : `child-status:${child.status}`);
       emitMergedOutput(merged, fallbackHookEventName);
       process.exit(child.status);
     }
+    endLog("completed");
   }
 
   emitMergedOutput(merged, fallbackHookEventName);

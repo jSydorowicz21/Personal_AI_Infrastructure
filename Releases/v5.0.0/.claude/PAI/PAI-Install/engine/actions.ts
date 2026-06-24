@@ -761,9 +761,9 @@ function powerShellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function setWindowsPaiUserEnvironment(root: string, dataDir: string, framework: FrameworkId): boolean {
-  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return true;
+type WindowsEnvUpdateStatus = "updated" | "skipped" | "failed";
 
+function setWindowsPaiUserEnvironment(root: string, dataDir: string, framework: FrameworkId): WindowsEnvUpdateStatus {
   const env = {
     PAI_DIR: join(root, "PAI"),
     PAI_FRAMEWORK_DIR: root,
@@ -772,6 +772,7 @@ function setWindowsPaiUserEnvironment(root: string, dataDir: string, framework: 
     PAI_CONFIG_DIR: resolveConfigDir(),
   };
   Object.assign(process.env, env);
+  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return "skipped";
 
   const target = process.env.PAI_USER_ENV_TARGET === "Process" ? "Process" : "User";
   const script = [
@@ -802,7 +803,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
     script,
   ], { stdio: "ignore", windowsHide: true });
 
-  return result.status === 0;
+  return result.status === 0 ? "updated" : "failed";
 }
 
 function paiShellCommand(profileKind: "posix" | "fish" | "powershell", dataDir: string, configDir: string, paiScript: string, framework: string): string {
@@ -2216,9 +2217,10 @@ export async function runConfiguration(
   await emit({ event: "message", content: `Shell aliases pai and k added to ${writtenProfiles.length} shell profile(s).` });
 
   if (process.platform === "win32") {
-    if (setWindowsPaiUserEnvironment(paiDir, dataDir, target.id)) {
+    const envStatus = setWindowsPaiUserEnvironment(paiDir, dataDir, target.id);
+    if (envStatus === "updated") {
       await emit({ event: "message", content: "Windows user environment updated for direct PAI/provider launches." });
-    } else {
+    } else if (envStatus === "failed") {
       await emit({ event: "message", content: "Could not update Windows user environment; shell profile aliases were still written." });
     }
   }

@@ -57,6 +57,7 @@ function runHook(target: string, payload: Record<string, any>) {
     input: JSON.stringify(payload),
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PAI_DIR: paiDir,

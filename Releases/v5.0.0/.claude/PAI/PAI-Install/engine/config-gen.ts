@@ -158,9 +158,8 @@ function hookTargetArg(hookFile: string | string[]): string {
   return Array.isArray(hookFile) ? hookFile.join(",") : hookFile;
 }
 
-function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
-  const adapter = `${config.paiDir}/hooks/FrameworkHookAdapter.ts`;
-  const env = [
+function hookEnv(config: PAIConfig): string[][] {
+  return [
     ["PAI_DIR", `${config.paiDir}/PAI`],
     ["PAI_DATA_DIR", config.dataDir || ""],
     ["PAI_FRAMEWORK", config.framework],
@@ -168,6 +167,11 @@ function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeou
     ["PAI_SETTINGS_PATH", `${config.paiDir}/settings.json`],
     ["PAI_CONFIG_DIR", config.configDir],
   ].filter(([, value]) => value);
+}
+
+function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
+  const adapter = `${config.paiDir}/hooks/FrameworkHookAdapter.ts`;
+  const env = hookEnv(config);
 
   return [
     ...env.map(([key, value]) => `${key}=${shellSingleQuote(value)}`),
@@ -184,6 +188,10 @@ function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeou
 
 function windowsCommandArg(value: string): string {
   return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function powerShellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function existingPath(value: string | undefined): string {
@@ -204,9 +212,16 @@ function windowsBunExe(): string {
 
 function hookCommandWindowsDirect(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
   const adapter = `${config.paiDir}\\hooks\\FrameworkHookAdapter.ts`;
+  const env = hookEnv(config);
   const target = hookTargetArg(hookFile);
   const timeoutMs = String(timeout * 1000);
   return [
+    ...env.map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`),
+    // Codex executes hook commands via PowerShell, which treats a leading
+    // quoted string as an expression, not a command. The call operator `&`
+    // forces invocation of the quoted bun.exe path. Without it PowerShell
+    // raises a ParserError and the hook exits 1 before bun ever runs.
+    "&",
     windowsCommandArg(windowsBunExe()),
     windowsCommandArg(adapter),
     "--framework",

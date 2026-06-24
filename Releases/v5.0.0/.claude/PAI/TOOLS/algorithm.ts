@@ -844,6 +844,7 @@ async function runParallelIteration(
       stdin: spec.input ? new Blob([spec.input]) : "ignore",
       stdout: "pipe",
       stderr: "pipe",
+      windowsHide: true,
     });
     return { assignment, proc };
   });
@@ -1446,6 +1447,7 @@ function runInteractive(isaPath: string): void {
     stdio: spec.input ? ["pipe", "inherit", "inherit"] : "inherit",
     cwd: dirname(absPath),
     env: spec.env,
+    windowsHide: true,
   });
   if (spec.input && child.stdin) {
     child.stdin.write(spec.input);
@@ -1518,6 +1520,7 @@ function runIdeate(
     stdio: spec.input ? ["pipe", "inherit", "inherit"] : "inherit",
     cwd: dirname(absPath),
     env: spec.env,
+    windowsHide: true,
   });
   if (spec.input && child.stdin) {
     child.stdin.write(spec.input);

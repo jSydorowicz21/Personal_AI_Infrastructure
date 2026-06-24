@@ -112,6 +112,7 @@ for (let attempt = 1; codexPath && attempt <= maxAttempts; attempt++) {
       input: prompt,
       encoding: "utf-8",
       timeout: 120_000,
+      windowsHide: true,
       env: {
         ...process.env,
         CODEX_HOME: frameworkRoot,

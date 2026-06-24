@@ -90,6 +90,16 @@ function collectHookCommandTexts(config: any): string[] {
   return texts;
 }
 
+function windowsDirectBunHookCommandsUseCallOperator(text: string): boolean {
+  const commands = text
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter((value) => /FrameworkHookAdapter\.ts/i.test(value) && /bun\.exe/i.test(value));
+  return commands.length > 0 && commands.every((value) =>
+    /^(?:\$env:[A-Z0-9_]+\s*=\s*'(?:[^']|'')*';\s*)*&\s+"[^"]*bun\.exe"/i.test(value)
+  );
+}
+
 function hasAgentsInstruction(value: unknown): boolean {
   return value === "AGENTS.md" || (Array.isArray(value) && value.includes("AGENTS.md"));
 }
@@ -270,6 +280,8 @@ function frameworkSpecificChecks(framework: FrameworkId): Check[] {
       ok("Codex config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
       ok("Codex hooks.json has runnable hook commands", collectHookCommandTexts(hooksConfig).length > 0 && hasAdapterInvocation, hooksJsonPath),
       ok("Codex hooks.json avoids legacy CodexHookRunner", !hookText.includes("CodexHookRunner.cmd"), hooksJsonPath),
+      ok("Codex hooks.json carries PAI_DATA_DIR", hookText.includes("PAI_DATA_DIR"), hooksJsonPath),
+      ok("Codex Windows hooks invoke quoted bun.exe", process.platform !== "win32" || windowsDirectBunHookCommandsUseCallOperator(hookText), hooksJsonPath),
       ok("Codex hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     );
   }

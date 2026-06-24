@@ -43,6 +43,7 @@ const tempData = join(tempRoot, "pai-data");
 const tempConfig = join(tempRoot, "config");
 const tempTranscript = join(tempRoot, "transcript.jsonl");
 const fakeBin = join(tempRoot, "bin");
+const fakeRewriteBin = join(tempRoot, "rtk-rewrite-bin");
 const missingRtkBin = join(tempRoot, "missing-rtk-bin");
 const rtkMissesPath = join(tempData, "MEMORY", "OBSERVABILITY", "rtk-hook-misses.jsonl");
 const adapterTimeoutHook = "FrameworkHookAdapterTimeoutSmoke.hook.ts";
@@ -82,6 +83,16 @@ function commandUsesVisibleWindows(command: string): boolean {
     || /\bCodexHookRunner\.cmd\b/i.test(expanded)
     || /\bbun\.cmd\b/i.test(expanded)
     || (/\bpowershell(?:\.exe)?\b/i.test(expanded) && !/-WindowStyle\s+Hidden/i.test(expanded));
+}
+
+function windowsDirectBunHookCommandsUseCallOperator(text: string): boolean {
+  const commands = text
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter((value) => /FrameworkHookAdapter\.ts/i.test(value) && /bun\.exe/i.test(value));
+  return commands.length > 0 && commands.every((value) =>
+    /^(?:\$env:[A-Z0-9_]+\s*=\s*'(?:[^']|'')*';\s*)*&\s+"[^"]*bun\.exe"/i.test(value)
+  );
 }
 
 function hookTargets(hook: any): string[] {
@@ -261,6 +272,7 @@ function runHook(target: string, payload: Record<string, any>, framework = "code
     input: JSON.stringify(payload),
     encoding: "utf-8",
     timeout: target === "PromptProcessing.hook.ts" ? 30_000 : 15_000,
+    windowsHide: true,
     maxBuffer: 10 * 1024 * 1024,
     env: {
       ...process.env,
@@ -313,6 +325,7 @@ function runAdapterTimeoutProbe() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     maxBuffer: 1024 * 1024,
     env: {
       ...process.env,
@@ -342,6 +355,48 @@ function writeSlowRtk(): void {
   chmodSync(wrapper, 0o755);
 }
 
+function writeFakeRtkRewrite(stdout: string, status = 0): void {
+  mkdirSync(fakeRewriteBin, { recursive: true });
+  const script = join(fakeRewriteBin, "rtk-rewrite.js");
+  writeFileSync(script, [
+    `process.stdout.write(${JSON.stringify(stdout)});`,
+    `process.stderr.write(${JSON.stringify("[rtk] /!\\\\ No hook installed -- benign smoke warning\\n")});`,
+    `process.exit(${JSON.stringify(status)});`,
+    "",
+  ].join("\n"));
+
+  if (process.platform === "win32") {
+    writeFileSync(join(fakeRewriteBin, "rtk.cmd"), `@echo off\r\n"${process.execPath}" "%~dp0rtk-rewrite.js" %*\r\n`);
+    return;
+  }
+
+  const wrapper = join(fakeRewriteBin, "rtk");
+  writeFileSync(wrapper, `#!/usr/bin/env sh\n"${process.execPath}" "$(dirname "$0")/rtk-rewrite.js" "$@"\n`);
+  chmodSync(wrapper, 0o755);
+}
+
+function runRtkPreToolUseWithFakeRewrite(command: string, stdout: string, status = 0) {
+  writeFakeRtkRewrite(stdout, status);
+  return spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
+    input: JSON.stringify({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command },
+      cwd: tempRoot,
+      session_id: "hook-contract-rtk-fake-rewrite",
+    }),
+    encoding: "utf-8",
+    timeout: 5_000,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      PATH: `${fakeRewriteBin}${delimiter}${process.env.PATH || ""}`,
+      PAI_DATA_DIR: tempData,
+      PAI_RTK_REWRITE_TIMEOUT_MS: "1000",
+    },
+  });
+}
+
 function runRtkPreToolUseWithSlowRtk() {
   const started = Date.now();
   const result = spawnSync(process.execPath, [join(frameworkRoot, "hooks", "RtkPreToolUse.hook.js")], {
@@ -354,6 +409,7 @@ function runRtkPreToolUseWithSlowRtk() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PATH: `${fakeBin}${delimiter}${process.env.PATH || ""}`,
@@ -376,6 +432,7 @@ function runRtkPreToolUseWithMissingRtk() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PATH: missingRtkBin,
@@ -396,6 +453,7 @@ function runRtkPreToolUseProxyBypass() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PAI_DATA_DIR: tempData,
@@ -414,6 +472,7 @@ function runRtkPreToolUseReadOnlyWithSlowRtk() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     env: {
       ...process.env,
       PATH: `${fakeBin}${delimiter}${process.env.PATH || ""}`,
@@ -435,6 +494,7 @@ function runNestedInferenceGuard() {
     }),
     encoding: "utf-8",
     timeout: 5_000,
+    windowsHide: true,
     maxBuffer: 1024 * 1024,
     env: {
       ...process.env,
@@ -516,6 +576,17 @@ try {
         ? "skipped without generated hooks.json"
       : generatedWindowsText,
   );
+  check(
+    "generated commandWindows invokes quoted bun.exe",
+    process.platform !== "win32"
+      || !generatedCommandWindows
+      || windowsDirectBunHookCommandsUseCallOperator(generatedWindowsText),
+    process.platform !== "win32"
+      ? "skipped on non-Windows"
+      : !generatedCommandWindows
+        ? "skipped without generated hooks.json"
+      : generatedWindowsText,
+  );
 
   const generatedCommand = commandFor("PreToolUse", "Bash|Shell");
   const decodedGeneratedCommand = generatedCommand ? decodeEncodedCommand(generatedCommand) : "";
@@ -525,6 +596,17 @@ try {
     process.platform !== "win32"
       || !generatedCommand
       || (generatedCommandText.includes("FrameworkHookAdapter.ts") && generatedCommandText.includes("--timeout-ms") && !generatedCommandText.includes("-EncodedCommand")),
+    process.platform !== "win32"
+      ? "skipped on non-Windows"
+      : !generatedCommand
+        ? "skipped without generated hooks.json"
+      : generatedCommandText,
+  );
+  check(
+    "generated generic command invokes quoted bun.exe",
+    process.platform !== "win32"
+      || !generatedCommand
+      || windowsDirectBunHookCommandsUseCallOperator(generatedCommandText),
     process.platform !== "win32"
       ? "skipped on non-Windows"
       : !generatedCommand
@@ -637,6 +719,26 @@ try {
     `status=${readOnlyAttempt.status ?? "null"} misses=${rtkMisses().trim().split(/\r?\n/).slice(-3).join(" | ")}`
   );
 
+  const safeNonzeroRewrite = runRtkPreToolUseWithFakeRewrite("git status --short", "rtk git status --short\n", 1);
+  check(
+    "RtkPreToolUse accepts safe nonzero rtk rewrite output",
+    safeNonzeroRewrite.status === 0 &&
+      String(safeNonzeroRewrite.stdout || "").includes('"command":"rtk git status --short"'),
+    `status=${safeNonzeroRewrite.status ?? "null"} stdout=${String(safeNonzeroRewrite.stdout || "").trim()}`
+  );
+
+  const unsafeRewrite = runRtkPreToolUseWithFakeRewrite('rg -n "foo" PAI', "rtk grep -n \\ foo\\ PAI\n", 1);
+  check(
+    "RtkPreToolUse rejects Windows-unsafe rtk rewrite output",
+    process.platform !== "win32" ||
+      (unsafeRewrite.status === 0 &&
+        !String(unsafeRewrite.stdout || "").includes("updatedInput") &&
+        rtkMisses().includes('"reason":"windows_unsafe_rtk_rewrite"')),
+    process.platform !== "win32"
+      ? "skipped on non-Windows"
+      : `status=${unsafeRewrite.status ?? "null"} stdout=${String(unsafeRewrite.stdout || "").trim()} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
+  );
+
   const nestedInference = runNestedInferenceGuard();
   check(
     "FrameworkHookAdapter skips recursive PromptProcessing",
@@ -710,8 +812,21 @@ try {
       rtkSourcePath,
     );
     check(
+      "RtkPreToolUse rejects Windows-unsafe rtk rewrites",
+      rtkSource.includes("isWindowsUnsafeRtkRewrite") && rtkSource.includes("windows_unsafe_rtk_rewrite"),
+      rtkSourcePath,
+    );
+    check(
       "PromptProcessing has recursive inference guard",
       promptProcessingSource.includes("PAI_INFERENCE_CHILD") && promptProcessingSource.includes("PAI_DISABLE_RECURSIVE_HOOKS"),
+      promptProcessingPath,
+    );
+    check(
+      "PromptProcessing finds provider session JSONL without external find",
+      promptProcessingSource.includes("findSessionJsonlInDir") &&
+        promptProcessingSource.includes("join(frameworkDir, 'sessions')") &&
+        promptProcessingSource.includes("data.transcript_path") &&
+        !promptProcessingSource.includes("Bun.spawnSync(['find'"),
       promptProcessingPath,
     );
     check(

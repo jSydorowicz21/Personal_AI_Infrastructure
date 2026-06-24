@@ -6,6 +6,7 @@ const { join } = require("node:path");
 const { homedir } = require("node:os");
 
 const DEFAULT_RTK_REWRITE_TIMEOUT_MS = 1500;
+const STDERR_DETAIL_LIMIT = 400;
 
 function rewriteTimeoutMs() {
   const raw = Number(process.env.PAI_RTK_REWRITE_TIMEOUT_MS || "");
@@ -51,6 +52,26 @@ function recordMiss(reason, command, detail = "") {
   }
 }
 
+function rewriteDetail(result) {
+  const stderr = String(result.stderr || "").replace(/\s+/g, " ").trim();
+  const parts = [
+    `status=${result.status ?? "null"}`,
+    result.signal ? `signal=${result.signal}` : "",
+    stderr ? `stderr=${stderr.slice(0, STDERR_DETAIL_LIMIT)}` : "",
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+function isWindowsUnsafeRtkRewrite(rewritten) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  // RTK can emit POSIX shell escaping such as `rtk grep -n \ foo\ path`.
+  // PowerShell passes those backslashes literally, making the rewritten command fail.
+  return /(^|\s)\\\s/.test(rewritten) || /\\["']/.test(rewritten);
+}
+
 function rewriteCommand(command) {
   const result = spawnSync("rtk", ["rewrite", command], {
     encoding: "utf8",
@@ -68,12 +89,17 @@ function rewriteCommand(command) {
 
   const rewritten = (result.stdout || "").trim();
   if (!rewritten || rewritten === command.trim()) {
-    recordMiss("not_rewritable", command);
+    recordMiss("not_rewritable", command, rewriteDetail(result));
     return null;
   }
 
   if (!rewritten.toLowerCase().startsWith("rtk ")) {
-    recordMiss("non_rtk_rewrite", command, rewritten);
+    recordMiss("non_rtk_rewrite", command, `${rewriteDetail(result)} rewritten=${rewritten}`);
+    return null;
+  }
+
+  if (isWindowsUnsafeRtkRewrite(rewritten)) {
+    recordMiss("windows_unsafe_rtk_rewrite", command, `${rewriteDetail(result)} rewritten=${rewritten}`);
     return null;
   }
 

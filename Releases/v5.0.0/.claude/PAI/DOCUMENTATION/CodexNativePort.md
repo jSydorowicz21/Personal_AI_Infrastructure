@@ -228,11 +228,15 @@ What changed:
 - Mapped Codex hook events to command hooks through `FrameworkHookAdapter.ts`.
 - Added command entries for compatible PAI hooks.
 - Added Windows hook commands via `commandWindows`.
+- Embedded active `PAI_DIR`, `PAI_DATA_DIR`, `PAI_FRAMEWORK`, `PAI_FRAMEWORK_DIR`, `PAI_SETTINGS_PATH`, and `PAI_CONFIG_DIR` directly in generated hook commands.
+- On Windows, invoke quoted Bun paths with PowerShell's `&` call operator instead of relying on a leading quoted string to execute.
 - Added startup self-check to the generated hook set.
 
 Why necessary:
 
 Claude's hook settings are not Codex's hook settings. PAI's hook implementation could be reused only if Codex was given a native `hooks.json` that runs adapters as command hooks.
+
+The explicit environment assignments make each hook self-contained. A Codex session launched from a stale terminal, child process, or provider wrapper should still resolve the active PAI subsystem and shared memory data root. The Windows call operator is required because PowerShell treats a leading quoted path as a string expression, not as a command invocation.
 
 ### Framework Hook Adapter
 
@@ -302,6 +306,7 @@ What changed:
 - Added startup self-check guidance that points users to `k doctor`.
 - Made repeat detection advisory in Codex instead of a hard "STOP" instruction.
 - Added RTK PreToolUse hook integration.
+- Made RTK rewrite acceptance Windows-aware: valid rewrites are still used, but POSIX-escaped rewrites that PowerShell would execute incorrectly are rejected and logged.
 - Added hook trigger and contract smoke tests.
 - Added a real Codex exec session proof that verifies hook log deltas from actual Codex hook invocation.
 
@@ -467,7 +472,9 @@ What changed:
 - Replaced GitHub worker direct Claude spawning with the shared framework-agent launcher.
 - Replaced Telegram and iMessage Claude Agent SDK sessions with active-framework `Inference.ts` calls.
 - Removed the Pulse `@anthropic-ai/claude-agent-sdk` dependency.
+- Made Pulse performance cost aggregation discover provider-native transcript roots and parse Codex `token_count` events as subscription token usage instead of defaulting unknown models to Claude/Sonnet pricing.
 - Made `k prompt` feed one-shot Codex prompts through `codex exec` stdin.
+- Hid Windows child windows for framework AI launchers (`Inference.ts`, Algorithm workers, `k prompt`, and `k` framework launches) so Codex parity checks and runtime paths do not flash `.cmd`/PowerShell windows.
 - Updated observability onboarding and static export to show `~/.pai/USER/...`.
 - Pinned Pulse Observability's Next tracing root and build id for deterministic static exports.
 - Kept `/interview` as the Claude onboarding command and added a Codex `prompts/interview.md` compatibility bridge for runtimes that expose custom prompts.
@@ -526,10 +533,10 @@ Files:
 What changed:
 
 - Added `k doctor` for live Codex runtime health.
-- Doctor checks active framework, Codex root, `AGENTS.md`, `RTK.md`, config, hooks, the installed `Interview` skill, MCP profiles, shared data, Pulse health, hook smoke tests, real session hook proof, hotfix rollback, and fresh install.
+- Doctor checks active framework, Codex root, `AGENTS.md`, `RTK.md`, config, hook command environment, Windows hook invocation shape, the installed `Interview` skill, MCP profiles, shared data, Pulse health, hook smoke tests, real session hook proof, hotfix rollback, and fresh install.
 - Fresh install smoke uses isolated `HOME`, `CODEX_HOME`, `PAI_DATA_DIR`, `PAI_CONFIG_DIR`, and shell profile paths.
 - Installer smoke verifies config preservation, hooks, agents, prompts, Pulse modules, backup creation, and Windows manager installation.
-- Branch validation runs build, JSON parsing, security, hooks, fresh install, installer smoke, hotfix dry-run, stale URL scan, and doctor docs discovery.
+- Branch validation runs build, JSON parsing, security, hooks, Codex-targeted framework parity, fresh install, installer smoke, hotfix dry-run, stale URL scan, and doctor docs discovery.
 - Native runtime smoke verifies Algorithm, Pulse cron AI, Pulse worker AI, chat routing, and Pulse static export do not regress to Claude-only paths.
 - GitHub Actions workflow runs Codex validation in CI.
 
@@ -699,25 +706,23 @@ These are the proof commands used during the port:
 ```bash
 bun PAI/TOOLS/CodexFreshInstallSmokeTest.ts
 bun PAI/TOOLS/InstallerCodexSmokeTest.ts
-bun PAI/TOOLS/FrameworkSmokeTest.ts
+bun PAI/TOOLS/FrameworkSmokeTest.ts --framework codex
 bun PAI/TOOLS/PaiSecurityAuditSmokeTest.ts
 bun PAI/TOOLS/CodexBranchValidation.ts
 bun ~/.codex/PAI/TOOLS/pai.ts doctor
 ```
 
-Current passing state for the Codex/Windows parity branch:
+Current local Windows safe validation state:
 
-- Windows `CodexBranchValidation.ts`: 17 checks passed.
-- WSL Ubuntu `CodexBranchValidation.ts`: 17 checks passed.
-- GitHub Actions `windows-latest` `CodexBranchValidation.ts`: passed.
-- GitHub Actions `ubuntu-latest` `CodexBranchValidation.ts`: passed.
-- GitHub Actions `macos-latest` `CodexBranchValidation.ts`: passed.
-- `FrameworkSmokeTest.ts`: isolated and shared-sequence switching passed for Claude, Codex, and OpenCode with shared `PAI_DATA_DIR`; the shared sequence seeds memory/user marker files and verifies each provider sees the same contents through its own `PAI/MEMORY` and `PAI/USER` paths.
+- Windows `CodexBranchValidation.ts`: 16 safe-mode checks passed, including Codex-targeted framework parity.
+- Deep mode keeps child/session/install probes opt-in for runs that intentionally exercise real provider sessions.
+- `FrameworkSmokeTest.ts --framework codex`: isolated and shared-sequence switching passed for Codex with shared `PAI_DATA_DIR`; the shared sequence seeds memory/user marker files and verifies Codex sees the same contents through its own `PAI/MEMORY` and `PAI/USER` paths.
 - `PaiSecurityAuditSmokeTest.ts`: hotfix manifest avoids protected state/config, all manifest sources exist, and managed TypeScript imports are covered.
-- Live Codex doctor: 25 critical checks passed, with optional token reminders only.
+- `PaiDoctorSmokeTest.ts`: doctor source guards passed for provider-native checks, AV-safe defaults, and opt-in deep probes.
+- `PerformanceCostAggregatorSmokeTest.ts`: synthetic Claude and Codex transcript aggregation passed; Codex rows preserve token totals, cached-token counts, framework metadata, and zero API dollar cost under subscription billing.
 - Pulse `/health`: HTTP 200.
 - Served Pulse assistant page: shows `$Interview` and `~/.pai/USER/DA/`.
 
 ## Cross-Platform Parity Proof
 
-The `PAI Codex Validation` workflow runs `CodexBranchValidation.ts` on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Run `27998703578` passed all three jobs on commit `e1eea9572a731744911252f02f37a88955de9c7f`, including the hotfix updater, framework parity smoke, fresh install smoke, installer smoke, security audit, native runtime smoke, and doctor discoverability gates.
+The `PAI Codex Validation` workflow runs `CodexBranchValidation.ts` on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Historical run `27998703578` passed all three jobs on commit `e1eea9572a731744911252f02f37a88955de9c7f`; refresh the workflow after hook-command or validation-entrypoint changes before treating cross-platform proof as current.

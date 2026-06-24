@@ -34,11 +34,15 @@ type DisplayMode = "nano" | "micro" | "mini" | "normal";
 function getTerminalWidth(): number {
   let width: number | null = null;
 
+  if (process.stdout.columns && process.stdout.columns > 0) {
+    width = process.stdout.columns;
+  }
+
   // Tier 1: Kitty IPC
   const kittyWindowId = process.env.KITTY_WINDOW_ID;
   if (kittyWindowId) {
     try {
-      const result = spawnSync("kitten", ["@", "ls"], { encoding: "utf-8" });
+      const result = spawnSync("kitten", ["@", "ls"], { encoding: "utf-8", timeout: 1000, windowsHide: true });
       if (result.stdout) {
         const data = JSON.parse(result.stdout);
         for (const osWindow of data) {
@@ -56,10 +60,12 @@ function getTerminalWidth(): number {
   }
 
   // Tier 2: Direct TTY query
-  if (!width || width <= 0) {
+  if (process.platform !== "win32" && (!width || width <= 0)) {
     try {
       const result = spawnSync("sh", ["-c", "stty size </dev/tty 2>/dev/null"], {
-        encoding: "utf-8"
+        encoding: "utf-8",
+        timeout: 1000,
+        windowsHide: true
       });
       if (result.stdout) {
         const cols = parseInt(result.stdout.trim().split(/\s+/)[1]);
@@ -69,9 +75,9 @@ function getTerminalWidth(): number {
   }
 
   // Tier 3: tput fallback
-  if (!width || width <= 0) {
+  if (process.platform !== "win32" && (!width || width <= 0)) {
     try {
-      const result = spawnSync("tput", ["cols"], { encoding: "utf-8" });
+      const result = spawnSync("tput", ["cols"], { encoding: "utf-8", timeout: 1000, windowsHide: true });
       if (result.stdout) {
         const cols = parseInt(result.stdout.trim());
         if (cols > 0) width = cols;

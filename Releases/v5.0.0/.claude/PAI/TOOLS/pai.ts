@@ -613,10 +613,6 @@ function activeMcpPath(root = CURRENT_INSTALL_ROOT): string {
   return join(root, ".mcp.json");
 }
 
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 function powerShellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
@@ -632,11 +628,12 @@ function frameworkEnv(root: string, id: FrameworkId): Record<string, string> {
   };
 }
 
-function setWindowsPaiUserEnvironment(root: string, id: FrameworkId): boolean {
-  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return true;
+type WindowsEnvUpdateStatus = "updated" | "skipped" | "failed";
 
+function setWindowsPaiUserEnvironment(root: string, id: FrameworkId): WindowsEnvUpdateStatus {
   const env = frameworkEnv(root, id);
   Object.assign(process.env, env);
+  if (process.platform !== "win32" || process.env.PAI_SKIP_USER_ENV_UPDATE === "1") return "skipped";
 
   const target = process.env.PAI_USER_ENV_TARGET === "Process" ? "Process" : "User";
   const script = [
@@ -671,66 +668,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
     stderr: "ignore",
   });
 
-  return result.exitCode === 0;
-}
-
-function codexHookCommand(root: string, hookFile: string, timeout = 10): string {
-  const env = frameworkEnv(root, "codex");
-  const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
-  return [
-    ...Object.entries(env).map(([key, value]) => `${key}=${shellSingleQuote(value)}`),
-    "bun",
-    shellSingleQuote(adapter),
-    "--framework",
-    "'codex'",
-    "--target",
-    shellSingleQuote(hookFile),
-    "--timeout-ms",
-    shellSingleQuote(String(timeout * 1000)),
-  ].join(" ");
-}
-
-function windowsCommandArg(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
-}
-
-function existingPath(value: string | undefined): string {
-  return value && existsSync(value) ? value : "";
-}
-
-function windowsBunExe(): string {
-  const home = process.env.HOME || process.env.USERPROFILE || "";
-  const candidates = [
-    existingPath(process.env.PAI_BUN_EXE),
-    existingPath(process.env.BUN_INSTALL ? join(process.env.BUN_INSTALL, "bin", "bun.exe") : ""),
-    existingPath(home ? join(home, ".bun", "bin", "bun.exe") : ""),
-    existingPath(process.env.APPDATA ? join(process.env.APPDATA, "npm", "node_modules", "bun", "bin", "bun.exe") : ""),
-    existingPath(process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "bun", "bin", "bun.exe") : ""),
-  ].filter(Boolean);
-  return candidates[0] || "bun.exe";
-}
-
-function codexHookCommandWindows(root: string, hookFile: string, timeout = 10): string {
-  const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
-  return [
-    windowsCommandArg(windowsBunExe()),
-    windowsCommandArg(adapter),
-    "--framework",
-    windowsCommandArg("codex"),
-    "--target",
-    windowsCommandArg(hookFile),
-    "--timeout-ms",
-    windowsCommandArg(String(timeout * 1000)),
-  ].join(" ");
-}
-
-function codexCommandHook(root: string, hookFile: string, timeout = 10): Record<string, any> {
-  return {
-    type: "command",
-    command: codexHookCommand(root, hookFile, timeout),
-    commandWindows: codexHookCommandWindows(root, hookFile, timeout),
-    timeout,
-  };
+  return result.exitCode === 0 ? "updated" : "failed";
 }
 
 function generateCodexHooks(root: string): Record<string, any> {
@@ -1056,9 +994,10 @@ function setActiveFramework(id: FrameworkId) {
   }, null, 2));
   writeFrameworkSwitchAudit(id, root, previousState);
   if (process.platform === "win32") {
-    if (setWindowsPaiUserEnvironment(root, id)) {
+    const envStatus = setWindowsPaiUserEnvironment(root, id);
+    if (envStatus === "updated") {
       log("Windows user environment updated for direct PAI/provider launches.", "✅");
-    } else {
+    } else if (envStatus === "failed") {
       log("Could not update Windows user environment; current shell launch still works.", "⚠️");
     }
   }
@@ -1130,7 +1069,7 @@ function notifyVoice(message: string) {
 
 function displayBanner() {
   if (existsSync(BANNER_SCRIPT)) {
-    spawnSync([process.execPath, BANNER_SCRIPT], { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+    spawnSync([process.execPath, BANNER_SCRIPT], { stdin: "inherit", stdout: "inherit", stderr: "inherit", windowsHide: true });
   }
 }
 
@@ -1146,6 +1085,7 @@ function getCurrentVersion(framework = getActiveFramework()): string | null {
       ...process.env,
       ...frameworkEnv(root, framework),
     },
+    windowsHide: true,
   });
   const output = `${result.stdout?.toString() || ""}\n${result.stderr?.toString() || ""}`;
   const match = output.match(/([0-9]+\.[0-9]+\.[0-9]+)/);
@@ -1206,9 +1146,7 @@ function getCurrentProfile(): string | null {
   try {
     const stats = lstatSync(ACTIVE_MCP);
     if (stats.isSymbolicLink()) {
-      const target = readFileSync(ACTIVE_MCP, "utf-8");
-      // For symlink, we need the real target name
-      const realpath = Bun.spawnSync(["readlink", ACTIVE_MCP]).stdout.toString().trim();
+      const realpath = realpathSync(ACTIVE_MCP);
       return basename(realpath).replace(".mcp.json", "");
     }
     return "custom";
@@ -1503,6 +1441,7 @@ async function cmdLaunch(options: { mcp?: string; resume?: boolean; dangerous?: 
     proc = spawn(launchArgs, {
       stdio: ["inherit", "inherit", "inherit"],
       env: launchEnv,
+      windowsHide: true,
     });
   } catch (err) {
     error(`Failed to launch ${frameworkName(activeFramework)} with command '${launchArgs.join(" ")}': ${err instanceof Error ? err.message : String(err)}`);
@@ -1740,6 +1679,7 @@ async function cmdPrompt(prompt: string) {
     stdout: "inherit",
     stderr: "inherit",
     env,
+    windowsHide: true,
   });
 
   const exitCode = await proc.exited;

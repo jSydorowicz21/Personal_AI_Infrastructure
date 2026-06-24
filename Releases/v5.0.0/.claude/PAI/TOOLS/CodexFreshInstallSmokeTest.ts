@@ -68,6 +68,16 @@ function codexHookCommandTexts(hooksJson: string): string[] {
   return values;
 }
 
+function windowsDirectBunHookCommandsUseCallOperator(text: string): boolean {
+  const commands = text
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter((value) => /FrameworkHookAdapter\.ts/i.test(value) && /bun\.exe/i.test(value));
+  return commands.length > 0 && commands.every((value) =>
+    /^(?:\$env:[A-Z0-9_]+\s*=\s*'(?:[^']|'')*';\s*)*&\s+"[^"]*bun\.exe"/i.test(value)
+  );
+}
+
 function codexHookConfigDirs(hooksJson: string): string[] {
   const values: string[] = [];
   for (const text of codexHookCommandTexts(hooksJson)) {
@@ -148,6 +158,7 @@ try {
     check("startup self-check hook generated", hookCommandText.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
     check("PromptProcessing timeout leaves adapter headroom", hooksJson.includes('"timeout": 40') && hookCommandText.includes("--timeout-ms") && hookCommandText.includes("35000"), join(codexHome, "hooks.json")),
     check("hooks use direct Bun adapter commands", process.platform !== "win32" || (hookCommandText.includes("bun.exe") && hookCommandText.includes("FrameworkHookAdapter.ts") && !hookCommandText.includes("-EncodedCommand") && !hookCommandText.includes("powershell.exe")), join(codexHome, "hooks.json")),
+    check("hooks use PowerShell call operator for quoted bun.exe", process.platform !== "win32" || windowsDirectBunHookCommandsUseCallOperator(hookCommandText), join(codexHome, "hooks.json")),
     check("hooks ignore stale PAI_CONFIG_DIR", !normalizePathText(hookCommandText).includes(staleConfigSegment), JSON.stringify(hookConfigDirs)),
     check("installer state ignores stale PAI_CONFIG_DIR", existsSync(expectedStatePath) && !existsSync(staleStatePath), expectedStatePath),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),

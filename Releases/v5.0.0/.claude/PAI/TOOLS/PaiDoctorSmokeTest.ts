@@ -52,7 +52,9 @@ check(
   "doctor has Codex-native checks",
   doctor.includes('framework === "codex"') &&
     doctor.includes("Codex config.toml has PAI root block") &&
-    doctor.includes("Codex hooks.json has runnable hook commands"),
+    doctor.includes("Codex hooks.json has runnable hook commands") &&
+    doctor.includes("Codex hooks.json carries PAI_DATA_DIR") &&
+    doctor.includes("Codex Windows hooks invoke quoted bun.exe"),
   "config.toml/hooks.json",
 );
 

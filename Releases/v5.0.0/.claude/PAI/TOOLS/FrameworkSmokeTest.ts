@@ -23,6 +23,26 @@ type Check = {
 const keep = process.argv.includes("--keep");
 const paiTool = join(import.meta.dir, "pai.ts");
 
+function selectedFrameworks(): Framework[] {
+  const argIndex = process.argv.indexOf("--framework");
+  const raw = process.argv.find((value) => value.startsWith("--framework="))?.slice("--framework=".length)
+    || (argIndex >= 0 ? process.argv[argIndex + 1] : "")
+    || process.env.PAI_FRAMEWORK_SMOKE_FRAMEWORKS
+    || "";
+  if (!raw) return ["claude", "codex", "opencode"];
+
+  const values = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const valid = new Set<Framework>(["claude", "codex", "opencode"]);
+  const frameworks = values.filter((value): value is Framework => valid.has(value as Framework));
+  if (frameworks.length !== values.length || frameworks.length === 0) {
+    throw new Error(`Invalid --framework value: ${raw}`);
+  }
+  return frameworks;
+}
+
 function uniqueRoot(): string {
   return join(tmpdir(), `pai-framework-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 }
@@ -144,6 +164,16 @@ function hookCommandText(hooksJson: string): string {
     visit(JSON.parse(hooksJson));
   } catch {}
   return values.join("\n");
+}
+
+function windowsDirectBunHookCommandsUseCallOperator(text: string): boolean {
+  const commands = text
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter((value) => /FrameworkHookAdapter\.ts/i.test(value) && /bun\.exe/i.test(value));
+  return commands.length > 0 && commands.every((value) =>
+    /^(?:\$env:[A-Z0-9_]+\s*=\s*'(?:[^']|'')*';\s*)*&\s+"[^"]*bun\.exe"/i.test(value)
+  );
 }
 
 function checkPath(name: string, path: string): Check {
@@ -751,6 +781,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
     PAI_FRAMEWORK_DIR: root,
+    PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
   if (framework === "claude") env.CLAUDE_HOME = root;
@@ -862,6 +893,11 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
           && !hooksText.includes("bun.cmd")),
         detail: "commandWindows direct Bun runner",
       });
+      checks.push({
+        name: "codex Windows hook commands use PowerShell call operator",
+        passed: process.platform !== "win32" || windowsDirectBunHookCommandsUseCallOperator(decodedHooksText),
+        detail: "quoted bun.exe paths must be invoked with &",
+      });
     }
     if (existsSync(join(root, "config.toml"))) {
       const configText = readFileSync(join(root, "config.toml"), "utf-8");
@@ -943,6 +979,7 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
     PAI_CONFIG_DIR: config,
     PAI_FRAMEWORK: framework,
     PAI_FRAMEWORK_DIR: root,
+    PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
   if (framework === "claude") env.CLAUDE_HOME = root;
@@ -1040,6 +1077,7 @@ function checkCustomProviderHomeCreation(base: string): Check[] {
     CODEX_HOME: root,
     PAI_DATA_DIR: data,
     PAI_CONFIG_DIR: config,
+    PAI_SKIP_USER_ENV_UPDATE: "1",
     PAI_USER_ENV_TARGET: "Process",
   } as Record<string, string>;
   for (const key of ["PAI_FRAMEWORK", "PAI_FRAMEWORK_DIR", "PAI_DIR"]) delete env[key];
@@ -1080,7 +1118,7 @@ function printResult(label: string, checks: Check[]) {
 }
 
 const base = uniqueRoot();
-const frameworks: Framework[] = ["claude", "codex", "opencode"];
+const frameworks = selectedFrameworks();
 const isolatedResults = frameworks.map((framework) => runSwitch(framework, join(base, `${framework}-case`)));
 const sequenceBase = join(base, "switch-sequence");
 const sequenceData = join(sequenceBase, "pai-data");
@@ -1131,6 +1169,7 @@ failed += customHomeChecks.filter((check) => !check.passed).length;
 const sequenceDataDirs = new Set(sequenceResults.map((result) => result.data));
 const finalStatePath = join(sequenceData, "framework.json");
 const finalState = existsSync(finalStatePath) ? readJson(finalStatePath) : {};
+const expectedFinalFramework = frameworks[frameworks.length - 1];
 const sequenceChecks: Check[] = [
   {
     name: "shared switch sequence reuses one PAI_DATA_DIR",
@@ -1139,7 +1178,7 @@ const sequenceChecks: Check[] = [
   },
   {
     name: "shared switch sequence final active framework",
-    passed: finalState.active === "opencode" && finalState.dataDir === join(sequenceBase, "pai-data"),
+    passed: finalState.active === expectedFinalFramework && finalState.dataDir === join(sequenceBase, "pai-data"),
     detail: JSON.stringify({ active: finalState.active, dataDir: finalState.dataDir }),
   },
 ];

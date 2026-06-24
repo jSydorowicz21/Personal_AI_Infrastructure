@@ -142,6 +142,7 @@ export async function runFrameworkAgent(
     stdin: spec.input ? new Blob([spec.input]) : "ignore",
     stdout: "pipe",
     stderr: "pipe",
+    windowsHide: true,
   });
 
   const timer = opts.timeoutMs ? setTimeout(() => proc.kill("SIGTERM"), opts.timeoutMs) : null;

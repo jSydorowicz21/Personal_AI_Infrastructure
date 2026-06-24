@@ -87,8 +87,19 @@ export function getClaudeProjectDir(root = getActiveFrameworkRoot("claude")): st
   return join(root, "projects", slug);
 }
 
+export function getClaudeProjectDirs(root = getActiveFrameworkRoot("claude")): string[] {
+  const projectsRoot = join(root, "projects");
+  if (!existsSync(projectsRoot)) return [getClaudeProjectDir(root)];
+
+  const dirs = readdirSync(projectsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(projectsRoot, entry.name));
+
+  return dirs.length > 0 ? dirs : [getClaudeProjectDir(root)];
+}
+
 export function getFrameworkSessionRoots(framework = getActiveFramework(), root = getActiveFrameworkRoot(framework)): string[] {
-  if (framework === "claude") return [getClaudeProjectDir(root)];
+  if (framework === "claude") return getClaudeProjectDirs(root);
   if (framework === "codex") return [join(root, "sessions")];
 
   // PAI writes a normalized OpenCode transcript stream through its plugin.

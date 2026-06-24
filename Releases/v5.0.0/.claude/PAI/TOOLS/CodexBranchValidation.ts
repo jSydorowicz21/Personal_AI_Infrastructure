@@ -223,6 +223,7 @@ function main(): void {
       "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts",
       "PAI/TOOLS/SessionEndLifecycleSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "PAI/TOOLS/PerformanceCostAggregatorSmokeTest.ts",
       "PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts",
       "PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts",
       "PAI/TOOLS/TranscriptParserSmokeTest.ts",
@@ -269,8 +270,10 @@ function main(): void {
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
+    run("Performance cost aggregator smoke", "bun", ["PAI/TOOLS/PerformanceCostAggregatorSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
+    run("Codex framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"], { timeout: 120_000 });
     run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);
     validateReadmeUrls();
     validateDoctorDiscoverability();
@@ -286,7 +289,7 @@ function main(): void {
       });
       run("Codex framework-agent execution smoke", "bun", ["PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts"]);
       run("OpenCode framework-agent execution smoke", "bun", ["PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts"]);
-      run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 });
+      run("Codex framework parity smoke deep", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"], { timeout: 120_000 });
       run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
       run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);
       run("Memory delete smoke", "bun", ["PAI/TOOLS/MemoryDeleteSmokeTest.ts"]);

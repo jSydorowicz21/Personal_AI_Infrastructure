@@ -24,8 +24,9 @@
  * - Inference path: bounded transcript tail + one fast classifier call
  */
 
-import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmdirSync, renameSync, statSync, openSync, readSync, closeSync } from 'fs';
-import { join, dirname } from 'path';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmdirSync, renameSync, statSync, openSync, readSync, closeSync, readdirSync } from 'fs';
+import type { Dirent } from 'fs';
+import { join, dirname, basename } from 'path';
 
 import { inference } from '../PAI/TOOLS/Inference';
 import { getIdentity, getPrincipal } from './lib/identity';
@@ -629,7 +630,7 @@ function disambiguateLabel(sessionId: string, label: string, names: SessionNames
   return `${label} #${shortHash}`;
 }
 
-function storeName(sessionId: string, label: string, source: string): void {
+function storeName(sessionId: string, label: string, source: string, transcriptPath?: string): void {
   const locked = acquireLock();
   if (!locked) console.error('[PromptProcessing] Lock timeout — writing anyway');
   let finalLabel = label;
@@ -647,28 +648,71 @@ function storeName(sessionId: string, label: string, source: string): void {
   const cacheContent = `cached_session_id='${sessionId}'\ncached_session_label='${finalLabel}'\n`;
   writeFileSync(memoryPath('STATE', 'session-name-cache.sh'), cacheContent, 'utf-8');
   updateSessionNameInWorkJson(sessionId, finalLabel);
-  syncNameToJsonl(sessionId, finalLabel);
+  syncNameToJsonl(sessionId, finalLabel, transcriptPath);
   console.error(`[PromptProcessing] Named session: "${finalLabel}" (${source})`);
 }
 
-/** Find Claude Code's session JSONL path for a given session ID. */
-function findSessionJsonl(sessionId: string): string | null {
+function isSessionJsonlPath(path: string, sessionId: string): boolean {
+  const name = basename(path);
+  return name === `${sessionId}.jsonl` || (name.endsWith('.jsonl') && name.includes(sessionId));
+}
+
+function findSessionJsonlInDir(root: string, sessionId: string, maxDepth = 6): string | null {
+  const stack: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
+  const seen = new Set<string>();
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || seen.has(current.dir)) continue;
+    seen.add(current.dir);
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(current.dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const fullPath = join(current.dir, entry.name);
+      if (entry.isFile() && isSessionJsonlPath(fullPath, sessionId)) return fullPath;
+      if (entry.isDirectory() && current.depth < maxDepth) {
+        stack.push({ dir: fullPath, depth: current.depth + 1 });
+      }
+    }
+  }
+  return null;
+}
+
+function sessionJsonlSearchRoots(transcriptPath?: string): string[] {
+  const roots: string[] = [];
+  const add = (path: string | null | undefined) => {
+    if (path && existsSync(path) && !roots.includes(path)) roots.push(path);
+  };
+  if (transcriptPath && existsSync(transcriptPath)) add(dirname(transcriptPath));
+  const frameworkDir = getFrameworkDir();
+  add(join(frameworkDir, 'projects'));
+  add(join(frameworkDir, 'Projects'));
+  add(join(frameworkDir, 'sessions'));
+  add(join(frameworkDir, 'Sessions'));
+  return roots;
+}
+
+/** Find the active framework's session JSONL path for a given session ID. */
+function findSessionJsonl(sessionId: string, transcriptPath?: string): string | null {
   try {
-    const frameworkDir = getFrameworkDir();
-    for (const dir of [join(frameworkDir, 'projects'), join(frameworkDir, 'Projects')]) {
-      if (!existsSync(dir)) continue;
-      const r = Bun.spawnSync(['find', dir, '-maxdepth', '2', '-name', `${sessionId}.jsonl`],
-        { stdout: 'pipe', stderr: 'pipe', timeout: 2000 });
-      const p = r.stdout.toString().trim().split('\n')[0];
+    if (transcriptPath && existsSync(transcriptPath) && transcriptPath.endsWith('.jsonl')) {
+      // Codex transcript filenames include rollout metadata before the session ID.
+      return transcriptPath;
+    }
+    for (const dir of sessionJsonlSearchRoots(transcriptPath)) {
+      const p = findSessionJsonlInDir(dir, sessionId);
       if (p && existsSync(p)) return p;
     }
   } catch {}
   return null;
 }
 
-/** Read the last custom-title from Claude Code's session JSONL (for /rename sync). */
-function getCustomTitle(sessionId: string): string | null {
-  const jsonlPath = findSessionJsonl(sessionId);
+/** Read the last custom-title from the active framework's session JSONL (for /rename sync). */
+function getCustomTitle(sessionId: string, transcriptPath?: string): string | null {
+  const jsonlPath = findSessionJsonl(sessionId, transcriptPath);
   if (!jsonlPath) return null;
   try {
     let last: string | null = null;
@@ -684,9 +728,9 @@ function getCustomTitle(sessionId: string): string | null {
   return null;
 }
 
-/** Sync session name to Claude Code's JSONL so /sessions list matches. */
-function syncNameToJsonl(sessionId: string, title: string): void {
-  const jsonlPath = findSessionJsonl(sessionId);
+/** Sync session name to the framework JSONL so native session lists match. */
+function syncNameToJsonl(sessionId: string, title: string, transcriptPath?: string): void {
+  const jsonlPath = findSessionJsonl(sessionId, transcriptPath);
   if (!jsonlPath) return;
   try {
     appendFileSync(jsonlPath, JSON.stringify({ type: 'custom-title', customTitle: title, sessionId }) + '\n', 'utf-8');
@@ -892,9 +936,9 @@ async function main() {
       // (praise words, system text, length < MIN_PROMPT_LENGTH).
       upsertSession(sessionId, pendingFallbackName || '', sanitizedPrompt.slice(0, 120), sessionMode, detectedCurrentMode);
     } else {
-      const customTitle = getCustomTitle(sessionId);
+      const customTitle = getCustomTitle(sessionId, data.transcript_path);
       if (customTitle && existingNames[sessionId] !== customTitle) {
-        storeName(sessionId, customTitle, 'custom-title');
+        storeName(sessionId, customTitle, 'custom-title', data.transcript_path);
       }
       const sessionMode = isNativeMode(prompt) ? 'native' : 'starting';
       upsertSession(sessionId, existingNames[sessionId] || '', '', sessionMode, detectedCurrentMode);
@@ -1025,7 +1069,7 @@ async function main() {
             const label = nameWords.map(w => titleCase(w)).join(' ');
             const hasProfanity = nameWords.some(w => PROFANITY_WORDS.has(w.toLowerCase()));
             if (label && nameWords.length >= 5 && nameWords.every(w => w.length >= 2) && !hasProfanity && isValidSessionName(label)) {
-              storeName(sessionId, label, 'inference-fast');
+              storeName(sessionId, label, 'inference-fast', data.transcript_path);
               inferenceNameStored = true;
             } else if (label) {
               console.error(`[PromptProcessing] Rejected invalid session name: "${label}"`);
@@ -1034,7 +1078,7 @@ async function main() {
         }
         // If inference didn't produce a name, fall back to deterministic
         if (isFirstPrompt && !inferenceNameStored && pendingFallbackName) {
-          storeName(sessionId, pendingFallbackName, 'deterministic-fallback');
+          storeName(sessionId, pendingFallbackName, 'deterministic-fallback', data.transcript_path);
         }
 
         // ── Emit MODE/TIER additionalContext for harness floor ──
@@ -1064,7 +1108,7 @@ async function main() {
         console.error(`[PromptProcessing] Inference failed: ${result.error}`);
         // Inference failed — store deterministic fallback name
         if (isFirstPrompt && pendingFallbackName) {
-          storeName(sessionId, pendingFallbackName, 'deterministic-fallback');
+          storeName(sessionId, pendingFallbackName, 'deterministic-fallback', data.transcript_path);
         }
         const fallbackTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
         setTabState({ title: `⚙️ ${prefix}${fallbackTitle}`, state: 'working', sessionId });
@@ -1084,7 +1128,7 @@ async function main() {
       console.error(`[PromptProcessing] Inference error: ${err}`);
       // Inference errored — store deterministic fallback name
       if (isFirstPrompt && pendingFallbackName) {
-        storeName(sessionId, pendingFallbackName, 'deterministic-fallback');
+        storeName(sessionId, pendingFallbackName, 'deterministic-fallback', data.transcript_path);
       }
       const fallbackTitle = deterministicTitle && isValidWorkingTitle(deterministicTitle) ? deterministicTitle : getWorkingFallback();
       setTabState({ title: `⚙️ ${prefix}${fallbackTitle}`, state: 'working', sessionId });

@@ -50,8 +50,20 @@ const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
+const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
+const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
+const bannerSources = [
+  "Banner.ts",
+  "BannerNeofetch.ts",
+  "BannerMatrix.ts",
+  "BannerRetro.ts",
+  "NeofetchBanner.ts",
+].map((file) => read(join(paiRoot, "TOOLS", file))).join("\n");
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
+const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
+const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
+const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
@@ -98,6 +110,15 @@ check(
     promptProcessing.includes("readFileTail(transcriptPath, classifierContextBytes())") &&
     promptProcessing.includes("getRecentContext(data.transcript_path, classifierContextTurns(), !isFirstPrompt)") &&
     !promptProcessing.includes("const content = readFileSync(transcriptPath, 'utf-8');"),
+  "hooks/PromptProcessing.hook.ts",
+);
+
+check(
+  "PromptProcessing resolves provider-native session transcripts",
+  promptProcessing.includes("findSessionJsonlInDir") &&
+    promptProcessing.includes("join(frameworkDir, 'sessions')") &&
+    promptProcessing.includes("data.transcript_path") &&
+    !promptProcessing.includes("Bun.spawnSync(['find'"),
   "hooks/PromptProcessing.hook.ts",
 );
 
@@ -162,6 +183,13 @@ check(
 );
 
 check(
+  "PAI CLI MCP profile detection avoids readlink child process",
+  paiCli.includes("realpathSync(ACTIVE_MCP)") &&
+    !paiCli.includes('Bun.spawnSync(["readlink"'),
+  "PAI/TOOLS/pai.ts",
+);
+
+check(
   "Codex hook generation avoids encoded PowerShell",
   configGen.includes("function windowsBunExe") &&
     configGen.includes("FrameworkHookAdapter.ts") &&
@@ -185,6 +213,40 @@ check(
 );
 
 check(
+  "Framework AI launchers hide child windows on Windows",
+  frameworkAgent.includes("windowsHide: true") &&
+    inferenceTool.match(/windowsHide:\s*true/g)?.length >= 3 &&
+    algorithm.includes("windowsHide: true") &&
+    paiCli.includes("windowsHide: true"),
+  "PAI/TOOLS/Inference.ts, algorithm.ts, pai.ts, and lib/framework-agent.ts",
+);
+
+check(
+  "PAI banner startup avoids Windows-visible POSIX probes",
+  paiCli.includes("spawnSync([process.execPath, BANNER_SCRIPT]") &&
+    paiCli.includes("windowsHide: true") &&
+    bannerSources.includes("process.stdout.columns") &&
+    (bannerSources.match(/process\.platform !== "win32" && \(!width \|\| width <= 0\)/g)?.length ?? 0) >= 10 &&
+    (bannerSources.match(/windowsHide:\s*true/g)?.length ?? 0) >= 11,
+  "PAI/TOOLS/Banner*.ts and pai.ts",
+);
+
+check(
+  "RTK hook rejects Windows-unsafe rewrites without fast bypass",
+  rtkHook.includes("isWindowsUnsafeRtkRewrite") &&
+    rtkHook.includes("windows_unsafe_rtk_rewrite") &&
+    !rtkHook.includes("fast_bypass"),
+  "hooks/RtkPreToolUse.hook.js",
+);
+
+check(
+  "Codex hook proof utilities keep child windows hidden",
+  codexHookTriggerSmoke.includes("windowsHide: true") &&
+    codexRealSessionHookProof.includes("windowsHide: true"),
+  "PAI/TOOLS/CodexHookTriggerSmokeTest.ts and CodexRealSessionHookProof.ts",
+);
+
+check(
   "Pulse Windows launcher avoids visible shim windows",
   pulseManage.includes("npm\\node_modules\\bun") &&
     pulseManage.includes("bin\\bun.exe") &&
@@ -201,6 +263,26 @@ check(
     transcriptParser.includes("entry.payload?.type === 'function_call'") &&
     transcriptParser.includes("requestuserinput"),
   "PAI/TOOLS/TranscriptParser.ts",
+);
+
+check(
+  "Shared transcript roots discover provider-native session trees",
+  transcriptRoots.includes("getClaudeProjectDirs") &&
+    transcriptRoots.includes('return getClaudeProjectDirs(root)') &&
+    transcriptRoots.includes('join(root, "sessions")') &&
+    transcriptRoots.includes('join(getPaiDataDir(), "TRANSCRIPTS", "opencode")'),
+  "PAI/TOOLS/lib/transcripts.ts",
+);
+
+check(
+  "Pulse cost aggregator parses Codex token_count events",
+  costAggregator.includes("getFrameworkSessionRoots") &&
+    costAggregator.includes("payload?.type !== \"token_count\"") &&
+    costAggregator.includes("total_token_usage") &&
+    costAggregator.includes("codex-subscription") &&
+    costAggregator.includes('billingSource = "subscription"') &&
+    !costAggregator.includes('join(FRAMEWORK_DIR, "projects")'),
+  "PAI/PULSE/Performance/cost-aggregator.ts",
 );
 
 check(
@@ -267,6 +349,13 @@ check(
     branchValidation.includes("safe local mode; pass --deep") &&
     branchValidation.includes('if (validationMode === "deep")') &&
     branchValidation.includes("Deep validation probes skipped"),
+  "PAI/TOOLS/CodexBranchValidation.ts",
+);
+
+check(
+  "Branch validation uses Codex-targeted framework smoke",
+  branchValidation.includes('"PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"') &&
+    !branchValidation.includes('"PAI/TOOLS/FrameworkSmokeTest.ts"], { timeout: 240_000 }'),
   "PAI/TOOLS/CodexBranchValidation.ts",
 );
 
