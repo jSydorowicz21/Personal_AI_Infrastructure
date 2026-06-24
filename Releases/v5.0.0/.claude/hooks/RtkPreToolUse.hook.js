@@ -72,6 +72,29 @@ function isWindowsUnsafeRtkRewrite(rewritten) {
   return /(^|\s)\\\s/.test(rewritten) || /\\["']/.test(rewritten);
 }
 
+function getWindowsRtkTarget(rewritten) {
+  const match = rewritten.trim().match(/^rtk(?:\.exe)?\s+([^\s|&;]+)/i);
+  return match ? match[1] : null;
+}
+
+function isWindowsUnresolvableRtkRewrite(rewritten) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const target = getWindowsRtkTarget(rewritten);
+  if (!target || target.includes("/") || target.includes("\\")) {
+    return false;
+  }
+
+  const probe = spawnSync("where.exe", [target], {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 500,
+  });
+  return probe.status !== 0;
+}
+
 function rewriteCommand(command) {
   const result = spawnSync("rtk", ["rewrite", command], {
     encoding: "utf8",
@@ -100,6 +123,11 @@ function rewriteCommand(command) {
 
   if (isWindowsUnsafeRtkRewrite(rewritten)) {
     recordMiss("windows_unsafe_rtk_rewrite", command, `${rewriteDetail(result)} rewritten=${rewritten}`);
+    return null;
+  }
+
+  if (isWindowsUnresolvableRtkRewrite(rewritten)) {
+    recordMiss("windows_unresolvable_rtk_rewrite", command, `${rewriteDetail(result)} rewritten=${rewritten}`);
     return null;
   }
 

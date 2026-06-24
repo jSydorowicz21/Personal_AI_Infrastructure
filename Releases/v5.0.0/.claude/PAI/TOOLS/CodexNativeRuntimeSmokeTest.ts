@@ -235,6 +235,8 @@ check(
   "RTK hook rejects Windows-unsafe rewrites without fast bypass",
   rtkHook.includes("isWindowsUnsafeRtkRewrite") &&
     rtkHook.includes("windows_unsafe_rtk_rewrite") &&
+    rtkHook.includes("isWindowsUnresolvableRtkRewrite") &&
+    rtkHook.includes("windows_unresolvable_rtk_rewrite") &&
     !rtkHook.includes("fast_bypass"),
   "hooks/RtkPreToolUse.hook.js",
 );

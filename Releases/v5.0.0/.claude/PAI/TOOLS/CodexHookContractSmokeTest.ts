@@ -739,6 +739,18 @@ try {
       : `status=${unsafeRewrite.status ?? "null"} stdout=${String(unsafeRewrite.stdout || "").trim()} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
   );
 
+  const unresolvableRewrite = runRtkPreToolUseWithFakeRewrite('rg --files | rg "PromptProcessing"', "rtk grep -n PromptProcessing Releases\n", 1);
+  check(
+    "RtkPreToolUse rejects Windows-unresolvable rtk rewrite output",
+    process.platform !== "win32" ||
+      (unresolvableRewrite.status === 0 &&
+        !String(unresolvableRewrite.stdout || "").includes("updatedInput") &&
+        rtkMisses().includes('"reason":"windows_unresolvable_rtk_rewrite"')),
+    process.platform !== "win32"
+      ? "skipped on non-Windows"
+      : `status=${unresolvableRewrite.status ?? "null"} stdout=${String(unresolvableRewrite.stdout || "").trim()} misses=${rtkMisses().trim().split(/\r?\n/).slice(-2).join(" | ")}`
+  );
+
   const nestedInference = runNestedInferenceGuard();
   check(
     "FrameworkHookAdapter skips recursive PromptProcessing",
@@ -814,6 +826,11 @@ try {
     check(
       "RtkPreToolUse rejects Windows-unsafe rtk rewrites",
       rtkSource.includes("isWindowsUnsafeRtkRewrite") && rtkSource.includes("windows_unsafe_rtk_rewrite"),
+      rtkSourcePath,
+    );
+    check(
+      "RtkPreToolUse rejects Windows-unresolvable rtk rewrites",
+      rtkSource.includes("isWindowsUnresolvableRtkRewrite") && rtkSource.includes("windows_unresolvable_rtk_rewrite"),
       rtkSourcePath,
     );
     check(
