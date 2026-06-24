@@ -307,7 +307,7 @@ const beforeRollbackChecks: Check[] = [
   check("hooks.json regenerated with PromptProcessing", updatedHooksJson.includes("PromptProcessing.hook.ts"), join(installRoot, "hooks.json")),
   check("PromptProcessing timeout leaves adapter headroom", promptProcessingTimeoutHasHeadroom(updatedHooksJson), join(installRoot, "hooks.json")),
   check("hooks.json regenerated with ISA sync hooks", updatedHooksJson.includes("ISASync.hook.ts") && updatedHooksJson.includes("CheckpointPerISC.hook.ts"), join(installRoot, "hooks.json")),
-  check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
+  check("hooks.json Windows commands avoid encoded PowerShell", process.platform !== "win32" || (!updatedHooksJson.includes("-EncodedCommand") && !updatedHooksJson.includes("powershell.exe") && updatedHooksJson.includes("bun.exe")), join(installRoot, "hooks.json")),
   check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
   check("updater refreshes PAI environment variables", process.platform !== "win32" || update.stdout.includes("Updated PAI environment variables at Process scope"), "process-scope user env test"),
   check("hotfix repairs PowerShell all-host profile", process.platform !== "win32" || (powerShellAllHostsProfileText.includes("Initialize-PAIEnvironment") && powerShellAllHostsProfileText.includes("PAI_DIR")), powerShellAllHostsProfile),

@@ -621,10 +621,6 @@ function powerShellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function powerShellEncodedCommand(script: string): string {
-  return Buffer.from(script, "utf16le").toString("base64");
-}
-
 function frameworkEnv(root: string, id: FrameworkId): Record<string, string> {
   return {
     PAI_DIR: join(root, "PAI"),
@@ -678,7 +674,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
   return result.exitCode === 0;
 }
 
-function codexHookCommand(root: string, hookFile: string): string {
+function codexHookCommand(root: string, hookFile: string, timeout = 10): string {
   const env = frameworkEnv(root, "codex");
   const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
   return [
@@ -689,46 +685,50 @@ function codexHookCommand(root: string, hookFile: string): string {
     "'codex'",
     "--target",
     shellSingleQuote(hookFile),
+    "--timeout-ms",
+    shellSingleQuote(String(timeout * 1000)),
   ].join(" ");
 }
 
-function codexHookCommandWindows(root: string, hookFile: string): string {
-  const env = frameworkEnv(root, "codex");
+function windowsCommandArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function existingPath(value: string | undefined): string {
+  return value && existsSync(value) ? value : "";
+}
+
+function windowsBunExe(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const candidates = [
+    existingPath(process.env.PAI_BUN_EXE),
+    existingPath(process.env.BUN_INSTALL ? join(process.env.BUN_INSTALL, "bin", "bun.exe") : ""),
+    existingPath(home ? join(home, ".bun", "bin", "bun.exe") : ""),
+    existingPath(process.env.APPDATA ? join(process.env.APPDATA, "npm", "node_modules", "bun", "bin", "bun.exe") : ""),
+    existingPath(process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "bun", "bin", "bun.exe") : ""),
+  ].filter(Boolean);
+  return candidates[0] || "bun.exe";
+}
+
+function codexHookCommandWindows(root: string, hookFile: string, timeout = 10): string {
   const adapter = join(root, "hooks", "FrameworkHookAdapter.ts");
-  const envAssignments = Object.entries(env)
-    .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
-    .join(" ");
-  const runnerPrefix = [
-    "$ProgressPreference='SilentlyContinue';",
-    "$bunCandidates=@();",
-    "if ($env:PAI_BUN_EXE) { $bunCandidates += $env:PAI_BUN_EXE }",
-    "if ($env:BUN_INSTALL) { $bunCandidates += (Join-Path $env:BUN_INSTALL 'bin\\bun.exe') }",
-    "$bunCandidates += (Join-Path $HOME '.bun\\bin\\bun.exe');",
-    "if ($env:APPDATA) { $bunCandidates += (Join-Path $env:APPDATA 'npm\\node_modules\\bun\\bin\\bun.exe') }",
-    "if ($env:LOCALAPPDATA) { $bunCandidates += (Join-Path $env:LOCALAPPDATA 'bun\\bin\\bun.exe') }",
-    "$bun=$bunCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1;",
-    "if (-not $bun) { $cmd=Get-Command bun.exe -CommandType Application -ErrorAction SilentlyContinue; if ($cmd) { $bun=$cmd.Source } }",
-    "if (-not $bun) { throw 'bun.exe not found' }",
-  ].join(" ");
-  const script = `${runnerPrefix} ${envAssignments} & $bun ${powerShellSingleQuote(adapter)} --framework 'codex' --target ${powerShellSingleQuote(hookFile)}`;
   return [
-    "powershell.exe",
-    "-NoProfile",
-    "-NonInteractive",
-    "-WindowStyle",
-    "Hidden",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-EncodedCommand",
-    powerShellEncodedCommand(script),
+    windowsCommandArg(windowsBunExe()),
+    windowsCommandArg(adapter),
+    "--framework",
+    windowsCommandArg("codex"),
+    "--target",
+    windowsCommandArg(hookFile),
+    "--timeout-ms",
+    windowsCommandArg(String(timeout * 1000)),
   ].join(" ");
 }
 
 function codexCommandHook(root: string, hookFile: string, timeout = 10): Record<string, any> {
   return {
     type: "command",
-    command: codexHookCommand(root, hookFile),
-    commandWindows: codexHookCommandWindows(root, hookFile),
+    command: codexHookCommand(root, hookFile, timeout),
+    commandWindows: codexHookCommandWindows(root, hookFile, timeout),
     timeout,
   };
 }

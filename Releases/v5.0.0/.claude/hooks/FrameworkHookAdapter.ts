@@ -9,6 +9,7 @@
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
 import { basename, extname, join, resolve } from "path";
+import { homedir } from "os";
 import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "./lib/framework-hook-contract";
 import { isSubagentSession } from "./lib/session";
 
@@ -64,6 +65,23 @@ function targetArgs(): string[] {
 function timeoutMs(): number {
   const raw = Number(argValue("--timeout-ms") || process.env.PAI_HOOK_CHILD_TIMEOUT_MS || "");
   return Number.isFinite(raw) && raw > 0 ? raw : 15_000;
+}
+
+function homeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || homedir();
+}
+
+function existingEnvPath(name: string): string {
+  const value = process.env[name] || "";
+  return value && existsSync(value) ? value : "";
+}
+
+function fallbackDataDir(): string {
+  return existingEnvPath("PAI_DATA_DIR") || join(homeDir(), ".pai");
+}
+
+function fallbackConfigDir(): string {
+  return existingEnvPath("PAI_CONFIG_DIR") || join(homeDir(), ".config", "PAI");
 }
 
 const RECURSION_GUARDED_HOOKS = new Set([
@@ -326,6 +344,11 @@ async function main() {
 
   const framework = argValue("--framework") || process.env.PAI_FRAMEWORK || "codex";
   const hooksDir = import.meta.dir;
+  const frameworkDir = resolve(join(hooksDir, ".."));
+  const paiDir = existingEnvPath("PAI_DIR") || join(frameworkDir, "PAI");
+  const dataDir = fallbackDataDir();
+  const settingsPath = existingEnvPath("PAI_SETTINGS_PATH") || join(frameworkDir, "settings.json");
+  const configDir = fallbackConfigDir();
 
   let input: JsonObject = {};
   const raw = await Bun.stdin.text();
@@ -362,7 +385,12 @@ async function main() {
       windowsHide: true,
       env: {
         ...process.env,
+        PAI_DIR: paiDir,
+        PAI_DATA_DIR: dataDir,
         PAI_FRAMEWORK: framework,
+        PAI_FRAMEWORK_DIR: frameworkDir,
+        PAI_SETTINGS_PATH: settingsPath,
+        PAI_CONFIG_DIR: configDir,
         PAI_IS_SUBAGENT: isSubagentSession(input) ? "1" : process.env.PAI_IS_SUBAGENT || "",
         PAI_PROJECT_DIR: cwd(input),
       },

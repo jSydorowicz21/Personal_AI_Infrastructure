@@ -853,13 +853,14 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
         detail: "PostToolUse write hooks",
       });
       checks.push({
-        name: "codex Windows hook commands use encoded PowerShell",
-        passed: hooksText.includes("-EncodedCommand")
-          && hooksText.includes("-WindowStyle Hidden")
-          && !hooksText.includes("-Command")
+        name: "codex Windows hook commands avoid encoded PowerShell",
+        passed: process.platform !== "win32" || (!hooksText.includes("-EncodedCommand")
+          && !hooksText.includes("powershell.exe")
+          && decodedHooksText.includes("bun.exe")
+          && decodedHooksText.includes("FrameworkHookAdapter.ts")
           && !hooksText.includes("cmd.exe /d /s /c")
-          && !hooksText.includes("bun.cmd"),
-        detail: "commandWindows hidden encoded runner",
+          && !hooksText.includes("bun.cmd")),
+        detail: "commandWindows direct Bun runner",
       });
     }
     if (existsSync(join(root, "config.toml"))) {

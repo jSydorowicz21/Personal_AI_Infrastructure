@@ -137,6 +137,10 @@ function sessionId(input: JsonObject): string {
   return input.sessionID || input.sessionId || input.session?.id || "opencode-session";
 }
 
+function workingDirectory(input: JsonObject): string {
+  return input.cwd || input.directory || input.worktree || input.session?.cwd || ROOT;
+}
+
 function safeSessionName(id: string): string {
   return id.replace(/[^A-Za-z0-9_.-]+/g, "-").slice(0, 120) || "opencode-session";
 }
@@ -171,7 +175,7 @@ function appendTranscript(input: JsonObject, record: JsonObject): void {
       timestamp: new Date().toISOString(),
       framework: FRAMEWORK,
       sessionId: sessionId(input),
-      cwd: input.cwd || input.directory || input.worktree || ROOT,
+      cwd: workingDirectory(input),
       ...record,
     };
     const key = stableKey(normalized);
@@ -232,6 +236,7 @@ function runHook(hookFile: string, payload: JsonObject): { code: number; stdout:
     input: JSON.stringify(payload),
     encoding: "utf-8",
     timeout: timeout + 5_000,
+    windowsHide: true,
   });
 
   return {
@@ -260,6 +265,8 @@ function toolPayload(eventName: string, input: JsonObject, output: JsonObject): 
     framework: FRAMEWORK,
     session_id: sessionId(input),
     hook_event_name: eventName,
+    cwd: workingDirectory(input),
+    transcript_path: transcriptPath(input),
     tool_name: mapToolName(input.tool),
     tool_input: output.args || input.args || {},
     tool_result: output.output || output.result || output.metadata || "",
@@ -272,7 +279,8 @@ function sessionPayload(input: JsonObject): JsonObject {
     session_id: sessionId(input),
     hook_event_name: "SessionStart",
     source: input.source || "startup",
-    cwd: input.cwd || input.directory || input.worktree || ROOT,
+    cwd: workingDirectory(input),
+    transcript_path: transcriptPath(input),
   };
 }
 
@@ -447,31 +455,19 @@ export const PAIOpenCodePlugin = async () => {
         role: "user",
         content: [{ type: "text", text: prompt }],
       });
-      enforce("PromptGuard.hook.ts", {
+      const promptPayload = {
         framework: FRAMEWORK,
         session_id: sessionId(input),
         hook_event_name: "UserPromptSubmit",
+        cwd: workingDirectory(input),
+        transcript_path: transcriptPath(input),
         prompt,
-      });
-      enforce("RepeatDetection.hook.ts", {
-        framework: FRAMEWORK,
-        session_id: sessionId(input),
-        hook_event_name: "UserPromptSubmit",
-        prompt,
-      });
-      const promptProcessing = runHook("PromptProcessing.hook.ts", {
-        framework: FRAMEWORK,
-        session_id: sessionId(input),
-        hook_event_name: "UserPromptSubmit",
-        prompt,
-      });
+      };
+      enforce("PromptGuard.hook.ts", promptPayload);
+      enforce("RepeatDetection.hook.ts", promptPayload);
+      const promptProcessing = runHook("PromptProcessing.hook.ts", promptPayload);
       prependPromptContext(output, prompt, hookAdditionalContext(promptProcessing.stdout));
-      observe("SatisfactionCapture.hook.ts", {
-        framework: FRAMEWORK,
-        session_id: sessionId(input),
-        hook_event_name: "UserPromptSubmit",
-        prompt,
-      });
+      observe("SatisfactionCapture.hook.ts", promptPayload);
       injectSessionContext(input, output, prompt);
     },
 
@@ -535,6 +531,8 @@ export const PAIOpenCodePlugin = async () => {
         framework: FRAMEWORK,
         session_id: sessionId(event),
         hook_event_name: "Stop",
+        cwd: workingDirectory(event),
+        transcript_path: transcriptPath(event),
       };
       observe("LastResponseCache.hook.ts", payload);
       observe("ResponseTabReset.hook.ts", payload);

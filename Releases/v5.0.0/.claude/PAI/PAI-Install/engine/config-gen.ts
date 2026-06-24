@@ -8,6 +8,8 @@
 
 import type { PAIConfig } from "./types";
 import { DEFAULT_VOICES, PAI_VERSION, ALGORITHM_VERSION } from "./types";
+import { existsSync } from "fs";
+import { join } from "path";
 
 /**
  * Generate a minimal fallback settings.json from installer-collected data.
@@ -148,29 +150,6 @@ function shellSingleQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function powerShellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function powerShellEncodedCommand(script: string): string {
-  return Buffer.from(script, "utf16le").toString("base64");
-}
-
-function powerShellHookRunnerPrefix(): string {
-  return [
-    "$ProgressPreference='SilentlyContinue';",
-    "$bunCandidates=@();",
-    "if ($env:PAI_BUN_EXE) { $bunCandidates += $env:PAI_BUN_EXE }",
-    "if ($env:BUN_INSTALL) { $bunCandidates += (Join-Path $env:BUN_INSTALL 'bin\\bun.exe') }",
-    "$bunCandidates += (Join-Path $HOME '.bun\\bin\\bun.exe');",
-    "if ($env:APPDATA) { $bunCandidates += (Join-Path $env:APPDATA 'npm\\node_modules\\bun\\bin\\bun.exe') }",
-    "if ($env:LOCALAPPDATA) { $bunCandidates += (Join-Path $env:LOCALAPPDATA 'bun\\bin\\bun.exe') }",
-    "$bun=$bunCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1;",
-    "if (-not $bun) { $cmd=Get-Command bun.exe -CommandType Application -ErrorAction SilentlyContinue; if ($cmd) { $bun=$cmd.Source } }",
-    "if (-not $bun) { throw 'bun.exe not found' }",
-  ].join(" ");
-}
-
 function outerHookTimeout(timeout: number): number {
   return timeout + 5;
 }
@@ -203,44 +182,50 @@ function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeou
   ].join(" ");
 }
 
-function hookCommandPowerShell(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
+function windowsCommandArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function existingPath(value: string | undefined): string {
+  return value && existsSync(value) ? value : "";
+}
+
+function windowsBunExe(): string {
+  const home = process.env.HOME || process.env.USERPROFILE || "";
+  const candidates = [
+    existingPath(process.env.PAI_BUN_EXE),
+    existingPath(process.env.BUN_INSTALL ? join(process.env.BUN_INSTALL, "bin", "bun.exe") : ""),
+    existingPath(home ? join(home, ".bun", "bin", "bun.exe") : ""),
+    existingPath(process.env.APPDATA ? join(process.env.APPDATA, "npm", "node_modules", "bun", "bin", "bun.exe") : ""),
+    existingPath(process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "bun", "bin", "bun.exe") : ""),
+  ].filter(Boolean);
+  return candidates[0] || "bun.exe";
+}
+
+function hookCommandWindowsDirect(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
   const adapter = `${config.paiDir}\\hooks\\FrameworkHookAdapter.ts`;
   const target = hookTargetArg(hookFile);
   const timeoutMs = String(timeout * 1000);
-  const env = [
-    ["PAI_DIR", `${config.paiDir}\\PAI`],
-    ["PAI_DATA_DIR", config.dataDir || ""],
-    ["PAI_FRAMEWORK", config.framework],
-    ["PAI_FRAMEWORK_DIR", config.paiDir],
-    ["PAI_SETTINGS_PATH", `${config.paiDir}\\settings.json`],
-    ["PAI_CONFIG_DIR", config.configDir],
-  ].filter(([, value]) => value);
-
-  const envAssignments = env
-    .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
-    .join(" ");
-  const powerShellScript = `${powerShellHookRunnerPrefix()} ${envAssignments} & $bun ${powerShellSingleQuote(adapter)} --framework ${powerShellSingleQuote(config.framework)} --target ${powerShellSingleQuote(target)} --timeout-ms ${powerShellSingleQuote(timeoutMs)}`;
   return [
-    "powershell.exe",
-    "-NoProfile",
-    "-NonInteractive",
-    "-WindowStyle",
-    "Hidden",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-EncodedCommand",
-    powerShellEncodedCommand(powerShellScript),
+    windowsCommandArg(windowsBunExe()),
+    windowsCommandArg(adapter),
+    "--framework",
+    windowsCommandArg(config.framework),
+    "--target",
+    windowsCommandArg(target),
+    "--timeout-ms",
+    windowsCommandArg(timeoutMs),
   ].join(" ");
 }
 
 function hookCommand(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
   return process.platform === "win32"
-    ? hookCommandPowerShell(config, hookFile, timeout)
+    ? hookCommandWindowsDirect(config, hookFile, timeout)
     : hookCommandPosix(config, hookFile, timeout);
 }
 
 function hookCommandWindows(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
-  return hookCommandPowerShell(config, hookFile, timeout);
+  return hookCommandWindowsDirect(config, hookFile, timeout);
 }
 
 function commandHook(config: PAIConfig, hookFile: string | string[], timeout = 10): Record<string, any> {

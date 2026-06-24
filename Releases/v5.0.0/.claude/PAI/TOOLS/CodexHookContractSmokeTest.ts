@@ -451,56 +451,6 @@ function runNestedInferenceGuard() {
   return { result, elapsedMs: Date.now() - started };
 }
 
-function runGeneratedCommandWindows(commandWindows: string) {
-  if (!commandWindows || process.platform !== "win32") return undefined;
-  const encoded = commandWindows.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i)?.[1];
-  const args = encoded
-    ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
-    : ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", commandWindows];
-  return spawnSync("powershell.exe", args, {
-    input: JSON.stringify({
-      hook_event_name: "PreToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "echo pai-hook-runner-smoke" },
-      cwd: tempRoot,
-      session_id: "hook-contract-generated-windows",
-    }),
-    encoding: "utf-8",
-    timeout: 40_000,
-    maxBuffer: 1024 * 1024,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      HOME: tempRoot,
-    },
-  });
-}
-
-function runGeneratedCommand(command: string) {
-  if (!command || process.platform !== "win32") return undefined;
-  const encoded = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i)?.[1];
-  const args = encoded
-    ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded]
-    : ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", command];
-  return spawnSync("powershell.exe", args, {
-    input: JSON.stringify({
-      hook_event_name: "PreToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "echo pai-hook-generic-command-smoke" },
-      cwd: tempRoot,
-      session_id: "hook-contract-generated-command",
-    }),
-    encoding: "utf-8",
-    timeout: 40_000,
-    maxBuffer: 1024 * 1024,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      HOME: tempRoot,
-    },
-  });
-}
-
 function rtkMisses(): string {
   return existsSync(rtkMissesPath) ? readFileSync(rtkMissesPath, "utf-8") : "";
 }
@@ -554,30 +504,32 @@ try {
       : generatedCommandWindows,
   );
   const decodedGeneratedWindows = generatedCommandWindows ? decodeEncodedCommand(generatedCommandWindows) : "";
+  const generatedWindowsText = [generatedCommandWindows, decodedGeneratedWindows].filter(Boolean).join("\n");
   check(
     "generated commandWindows runner is structurally executable",
     process.platform !== "win32"
       || !generatedCommandWindows
-      || (decodedGeneratedWindows.includes("FrameworkHookAdapter.ts") && decodedGeneratedWindows.includes("& $bun")),
+      || (generatedWindowsText.includes("FrameworkHookAdapter.ts") && generatedWindowsText.includes("--timeout-ms") && !generatedWindowsText.includes("-EncodedCommand")),
     process.platform !== "win32"
       ? "skipped on non-Windows"
       : !generatedCommandWindows
         ? "skipped without generated hooks.json"
-      : decodedGeneratedWindows,
+      : generatedWindowsText,
   );
 
   const generatedCommand = commandFor("PreToolUse", "Bash|Shell");
   const decodedGeneratedCommand = generatedCommand ? decodeEncodedCommand(generatedCommand) : "";
+  const generatedCommandText = [generatedCommand, decodedGeneratedCommand].filter(Boolean).join("\n");
   check(
     "generated generic command is structurally executable",
     process.platform !== "win32"
       || !generatedCommand
-      || (decodedGeneratedCommand.includes("FrameworkHookAdapter.ts") && decodedGeneratedCommand.includes("& $bun")),
+      || (generatedCommandText.includes("FrameworkHookAdapter.ts") && generatedCommandText.includes("--timeout-ms") && !generatedCommandText.includes("-EncodedCommand")),
     process.platform !== "win32"
       ? "skipped on non-Windows"
       : !generatedCommand
         ? "skipped without generated hooks.json"
-      : decodedGeneratedCommand,
+      : generatedCommandText,
   );
 
   for (const item of cases) {

@@ -120,6 +120,7 @@ enabled = true
   const decodedHooks = decodePowerShellCommands(hooks);
   assert("Codex PromptProcessing hook", hooks.includes("PromptProcessing.hook.ts"));
   assert("Codex PromptProcessing timeout headroom", hooks.includes('"timeout": 40') && decodedHooks.includes("--timeout-ms") && decodedHooks.includes("35000"));
+  assert("Codex hooks avoid encoded PowerShell", process.platform !== "win32" || (!hooks.includes("-EncodedCommand") && !hooks.includes("powershell.exe") && decodedHooks.includes("bun.exe") && decodedHooks.includes("FrameworkHookAdapter.ts")));
   assert("Codex satisfaction capture hook", hooks.includes("SatisfactionCapture.hook.ts"));
   assert("Codex satisfaction capture timeout", hooks.includes('"timeout": 10') && decodedHooks.includes("SatisfactionCapture.hook.ts") && decodedHooks.includes("5000"));
   assert("Codex RTK rewrite hook", hooks.includes("RtkPreToolUse.hook.js"));

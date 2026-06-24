@@ -47,9 +47,11 @@ function walkTextFiles(dir: string, acc: string[] = []): string[] {
 const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"));
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
+const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
+const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
@@ -160,6 +162,29 @@ check(
 );
 
 check(
+  "Codex hook generation avoids encoded PowerShell",
+  configGen.includes("function windowsBunExe") &&
+    configGen.includes("FrameworkHookAdapter.ts") &&
+    configGen.includes("windowsCommandArg(windowsBunExe())") &&
+    !configGen.includes("-EncodedCommand") &&
+    !configGen.includes("powershell.exe") &&
+    !configGen.includes("hookCommandPowerShell") &&
+    !paiCli.includes("powerShellEncodedCommand") &&
+    !paiCli.includes("-EncodedCommand"),
+  "PAI/PAI-Install/engine/config-gen.ts and PAI/TOOLS/pai.ts",
+);
+
+check(
+  "Framework hook adapter derives PAI env fallback",
+  hookAdapter.includes("const frameworkDir = resolve(join(hooksDir, \"..\"))") &&
+    hookAdapter.includes("PAI_DIR: paiDir") &&
+    hookAdapter.includes("PAI_DATA_DIR: dataDir") &&
+    hookAdapter.includes("PAI_FRAMEWORK_DIR: frameworkDir") &&
+    hookAdapter.includes("PAI_CONFIG_DIR: configDir"),
+  "hooks/FrameworkHookAdapter.ts",
+);
+
+check(
   "Pulse Windows launcher avoids visible shim windows",
   pulseManage.includes("npm\\node_modules\\bun") &&
     pulseManage.includes("bin\\bun.exe") &&
@@ -250,7 +275,19 @@ check(
   opencodePlugin.includes("DEFAULT_HOOK_TIMEOUT_MS") &&
     opencodePlugin.includes("PAI_OPENCODE_HOOK_TIMEOUT_MS") &&
     opencodePlugin.includes("--timeout-ms") &&
-    opencodePlugin.includes("timeout: timeout + 5_000"),
+    opencodePlugin.includes("timeout: timeout + 5_000") &&
+    opencodePlugin.includes("windowsHide: true"),
+  "plugins/pai-opencode.ts",
+);
+
+check(
+  "OpenCode prompt hooks receive transcript context",
+  opencodePlugin.includes("function workingDirectory(input: JsonObject)") &&
+    opencodePlugin.includes("transcript_path: transcriptPath(input)") &&
+    opencodePlugin.includes("const promptPayload = {") &&
+    opencodePlugin.includes('runHook("PromptProcessing.hook.ts", promptPayload)') &&
+    opencodePlugin.includes('observe("SatisfactionCapture.hook.ts", promptPayload)') &&
+    opencodePlugin.includes("transcript_path: transcriptPath(event)"),
   "plugins/pai-opencode.ts",
 );
 
