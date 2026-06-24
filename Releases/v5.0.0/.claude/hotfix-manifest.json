@@ -45,6 +45,10 @@
       "target": "PAI/TOOLS/TranscriptParser.ts"
     },
     {
+      "source": "PAI/TOOLS/TranscriptParserSmokeTest.ts",
+      "target": "PAI/TOOLS/TranscriptParserSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },

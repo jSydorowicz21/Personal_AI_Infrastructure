@@ -43,6 +43,7 @@ const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"))
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
+const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
@@ -116,6 +117,15 @@ check(
     paiCli.includes('new Blob([prompt])') &&
     !paiCli.includes('["claude", "-p", prompt]'),
   "PAI/TOOLS/pai.ts",
+);
+
+check(
+  "Stop transcript parser understands Codex response_item events",
+  transcriptParser.includes("entry?.type === 'response_item'") &&
+    transcriptParser.includes("entry.payload?.type === 'message'") &&
+    transcriptParser.includes("entry.payload?.type === 'function_call'") &&
+    transcriptParser.includes("requestuserinput"),
+  "PAI/TOOLS/TranscriptParser.ts",
 );
 
 check(

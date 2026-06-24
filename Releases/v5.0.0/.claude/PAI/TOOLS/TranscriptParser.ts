@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
- * TranscriptParser.ts - Claude transcript parsing utilities
+ * TranscriptParser.ts - provider transcript parsing utilities
  *
- * Shared library for extracting content from Claude Code transcript files.
+ * Shared library for extracting content from Claude, Codex, and OpenCode transcript files.
  * Used by Stop hooks for voice, tab state, and response capture.
  *
  * CLI Usage:
@@ -55,12 +55,17 @@ export interface ParsedTranscript {
   responseState: ResponseState;
 }
 
+interface TranscriptMessage {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
 // ============================================================================
 // Core Parsing Functions
 // ============================================================================
 
 /**
- * Safely convert Claude content (string or array of blocks) to plain text.
+ * Safely convert provider content (string or array of blocks) to plain text.
  */
 export function contentToText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -68,14 +73,92 @@ export function contentToText(content: unknown): string {
     return content
       .map(c => {
         if (typeof c === 'string') return c;
-        if (c?.text) return c.text;
-        if (c?.content) return contentToText(c.content);
+        const block = c as any;
+        if (block?.text) return block.text;
+        if (block?.content) return contentToText(block.content);
         return '';
       })
       .join(' ')
       .trim();
   }
   return '';
+}
+
+function textMessageFromEntry(entry: any): TranscriptMessage | null {
+  if (entry?.type === 'assistant' || entry?.type === 'user' || entry?.type === 'human') {
+    const text = contentToText(entry.message?.content);
+    if (!text) return null;
+    return {
+      role: entry.type === 'assistant' ? 'assistant' : 'user',
+      text,
+    };
+  }
+
+  if (entry?.type === 'response_item' && entry.payload?.type === 'message') {
+    const role = entry.payload.role;
+    if (role !== 'assistant' && role !== 'user') return null;
+    const text = contentToText(entry.payload.content);
+    if (!text) return null;
+    return { role, text };
+  }
+
+  if (entry?.type === 'message' && (entry.role === 'assistant' || entry.role === 'user')) {
+    const text = contentToText(entry.content) || (typeof entry.text === 'string' ? entry.text : '');
+    if (!text) return null;
+    return { role: entry.role, text };
+  }
+
+  return null;
+}
+
+function isRealUserPrompt(entry: any): boolean {
+  if (entry?.type === 'response_item' && entry.payload?.type === 'message') {
+    return entry.payload.role === 'user' && Boolean(contentToText(entry.payload.content).trim());
+  }
+
+  if (entry?.type === 'message') {
+    const text = contentToText(entry.content) || (typeof entry.text === 'string' ? entry.text : '');
+    return entry.role === 'user' && Boolean(text.trim());
+  }
+
+  if (entry?.type !== 'human' && entry?.type !== 'user') return false;
+
+  const content = entry.message?.content;
+  if (typeof content === 'string') return Boolean(content.trim());
+  if (!Array.isArray(content)) return false;
+
+  // Claude Code uses type='user' for tool_result entries mid-response.
+  // A real user prompt has at least one text block.
+  return content.some((block: any) => block?.type === 'text' && block?.text?.trim());
+}
+
+function normalizedToolName(name: unknown): string {
+  return String(name || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function isQuestionToolName(name: unknown): boolean {
+  const normalized = normalizedToolName(name);
+  return normalized === 'askuserquestion' ||
+    normalized === 'requestuserinput' ||
+    normalized === 'askuserinput';
+}
+
+function isQuestionToolCall(entry: any): boolean {
+  if (entry?.type === 'assistant' && Array.isArray(entry.message?.content)) {
+    return entry.message.content.some((block: any) =>
+      block?.type === 'tool_use' && isQuestionToolName(block?.name),
+    );
+  }
+
+  if (entry?.type === 'response_item' && entry.payload?.type === 'function_call') {
+    return isQuestionToolName(entry.payload.name);
+  }
+
+  if (entry?.type === 'tool_call') {
+    return isQuestionToolName(entry.name || entry.tool);
+  }
+
+  return false;
 }
 
 /**
@@ -90,11 +173,9 @@ export function parseLastAssistantMessage(transcriptContent: string): string {
     if (line.trim()) {
       try {
         const entry = JSON.parse(line) as any;
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const text = contentToText(entry.message.content);
-          if (text) {
-            lastAssistantMessage = text;
-          }
+        const message = textMessageFromEntry(entry);
+        if (message?.role === 'assistant') {
+          lastAssistantMessage = message.text;
         }
       } catch {
         // Skip invalid JSON lines
@@ -118,26 +199,13 @@ export function collectCurrentResponseText(transcriptContent: string): string {
   const lines = transcriptContent.trim().split('\n');
 
   // Find the index of the last REAL user prompt.
-  // Claude Code transcript uses type='user' for both actual user prompts AND
-  // tool_result entries (which are mid-response). Real user prompts have at
-  // least one {type:'text'} content block. Tool results only have {type:'tool_result'}.
   let lastHumanIndex = -1;
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim()) {
       try {
         const entry = JSON.parse(lines[i]) as any;
-        if (entry.type === 'human' || entry.type === 'user') {
-          const content = entry.message?.content;
-          // String content = real user message
-          if (typeof content === 'string') {
-            lastHumanIndex = i;
-          } else if (Array.isArray(content)) {
-            // Check for text blocks — indicates a real user prompt
-            const hasText = content.some((b: any) => b?.type === 'text' && b?.text?.trim());
-            if (hasText) {
-              lastHumanIndex = i;
-            }
-          }
+        if (isRealUserPrompt(entry)) {
+          lastHumanIndex = i;
         }
       } catch {
         // Skip invalid JSON lines
@@ -151,11 +219,9 @@ export function collectCurrentResponseText(transcriptContent: string): string {
     if (lines[i].trim()) {
       try {
         const entry = JSON.parse(lines[i]) as any;
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const text = contentToText(entry.message.content);
-          if (text) {
-            textParts.push(text);
-          }
+        const message = textMessageFromEntry(entry);
+        if (message?.role === 'assistant') {
+          textParts.push(message.text);
         }
       } catch {
         // Skip invalid JSON lines
@@ -298,27 +364,29 @@ export function extractStructuredSections(text: string): StructuredResponse {
  */
 export function detectResponseState(lastMessage: string, transcriptContent: string): ResponseState {
   try {
-    // Check if the LAST assistant message used AskUserQuestion
     const lines = transcriptContent.trim().split('\n');
-    let lastAssistantEntry: any = null;
+    let lastHumanIndex = -1;
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
       try {
-        const entry = JSON.parse(line);
-        if (entry.type === 'assistant' && entry.message?.content) {
-          lastAssistantEntry = entry;
+        const entry = JSON.parse(lines[i]);
+        if (isRealUserPrompt(entry)) {
+          lastHumanIndex = i;
         }
       } catch {}
     }
 
-    if (lastAssistantEntry?.message?.content) {
-      const content = Array.isArray(lastAssistantEntry.message.content)
-        ? lastAssistantEntry.message.content
-        : [];
-      for (const block of content) {
-        if (block.type === 'tool_use' && block.name === 'AskUserQuestion') {
+    // Check the current turn for question tools. Claude embeds tool_use in an
+    // assistant entry; Codex emits request_user_input as a response_item
+    // function_call. A later user prompt resets the turn boundary.
+    for (let i = lastHumanIndex + 1; i < lines.length; i++) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        if (isQuestionToolCall(entry)) {
           return 'awaitingInput';
         }
+      } catch {
+        // Skip invalid JSON lines
       }
     }
   } catch (err) {

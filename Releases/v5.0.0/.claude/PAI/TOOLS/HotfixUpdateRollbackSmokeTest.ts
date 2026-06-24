@@ -41,13 +41,23 @@ function normalizePathText(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
 }
 
-function codexHookDataDirs(hooksJson: string): string[] {
+function decodePowerShellEncodedCommands(value: string): string[] {
+  const decoded: string[] = [];
+  for (const match of value.matchAll(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/gi)) {
+    try {
+      decoded.push(Buffer.from(match[1], "base64").toString("utf16le"));
+    } catch {
+      // Ignore malformed encoded command fragments.
+    }
+  }
+  return decoded;
+}
+
+function hookCommandTexts(hooksJson: string): string[] {
   const values: string[] = [];
   function visit(value: unknown): void {
     if (typeof value === "string") {
-      for (const match of value.matchAll(/(?:^|\s)PAI_DATA_DIR='([^']*)'/g)) {
-        values.push(match[1]);
-      }
+      values.push(value, ...decodePowerShellEncodedCommands(value));
       return;
     }
     if (Array.isArray(value)) {
@@ -62,6 +72,45 @@ function codexHookDataDirs(hooksJson: string): string[] {
     visit(JSON.parse(hooksJson));
   } catch {}
   return values;
+}
+
+function codexHookDataDirs(hooksJson: string): string[] {
+  const values: string[] = [];
+  for (const text of hookCommandTexts(hooksJson)) {
+    for (const match of text.matchAll(/(?:^|\s)PAI_DATA_DIR='([^']*)'/g)) {
+      values.push(match[1]);
+    }
+    for (const match of text.matchAll(/\$env:PAI_DATA_DIR='([^']*)'/g)) {
+      values.push(match[1]);
+    }
+    for (const match of text.matchAll(/CodexHookRunner\.cmd"?\s+\S+\s+\S+\s+\d+\s+([^\s"]+)/gi)) {
+      values.push(match[1]);
+    }
+  }
+  return [...new Set(values.filter(Boolean))];
+}
+
+function promptProcessingTimeoutHasHeadroom(hooksJson: string): boolean {
+  let hasOuterTimeout = false;
+  try {
+    const parsed = JSON.parse(hooksJson);
+    for (const group of Array.isArray(parsed.hooks?.UserPromptSubmit) ? parsed.hooks.UserPromptSubmit : []) {
+      for (const hook of Array.isArray(group.hooks) ? group.hooks : []) {
+        const text = `${hook.command || ""}\n${hook.commandWindows || ""}`;
+        if (text.includes("PromptProcessing.hook.ts") && hook.timeout === 40) {
+          hasOuterTimeout = true;
+        }
+      }
+    }
+  } catch {}
+
+  const hasChildTimeout = hookCommandTexts(hooksJson).some((text) =>
+    text.includes("PromptProcessing.hook.ts") &&
+    text.includes("35000") &&
+    (text.includes("--timeout-ms") || text.includes("CodexHookRunner.cmd")),
+  );
+
+  return hasOuterTimeout && hasChildTimeout;
 }
 
 function latestBackupRoot(home: string): string {
@@ -241,7 +290,7 @@ const beforeRollbackChecks: Check[] = [
   check("Framework command smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "FrameworkCommandResolutionSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "FrameworkCommandResolutionSmokeTest.ts")),
   check("Framework launch smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "FrameworkLaunchCwdSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "FrameworkLaunchCwdSmokeTest.ts")),
   check("hooks.json regenerated with PromptProcessing", updatedHooksJson.includes("PromptProcessing.hook.ts"), join(installRoot, "hooks.json")),
-  check("PromptProcessing timeout leaves adapter headroom", updatedHooksJson.includes('"timeout": 40') && updatedHooksJson.includes("--timeout-ms") && updatedHooksJson.includes("35000"), join(installRoot, "hooks.json")),
+  check("PromptProcessing timeout leaves adapter headroom", promptProcessingTimeoutHasHeadroom(updatedHooksJson), join(installRoot, "hooks.json")),
   check("hooks.json regenerated with ISA sync hooks", updatedHooksJson.includes("ISASync.hook.ts") && updatedHooksJson.includes("CheckpointPerISC.hook.ts"), join(installRoot, "hooks.json")),
   check("hooks.json Windows commands are encoded", updatedHooksJson.includes("-EncodedCommand"), join(installRoot, "hooks.json")),
   check("hooks.json ignores stale env PAI_DATA_DIR", hookDataDirs.length > 0 && hookDataDirs.every((value) => value.endsWith(expectedHookDataSuffix) && !value.includes(staleHookDataSegment)), JSON.stringify(hookDataDirs)),
