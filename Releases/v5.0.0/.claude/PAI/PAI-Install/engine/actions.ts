@@ -2084,6 +2084,14 @@ export async function runConfiguration(
     } catch {}
   }
 
+  const systemPromptPath = join(paiDir, "PAI", "PAI_SYSTEM_PROMPT.md");
+  if (existsSync(systemPromptPath)) {
+    try {
+      const content = frameworkInstructionContent(readFileSync(systemPromptPath, "utf-8"), target);
+      writeFileSync(systemPromptPath, content);
+    } catch {}
+  }
+
   if (target.id === "codex" || target.id === "opencode") {
     const sourceRtkPath = join(paiDir, "RTK.md");
     if (existsSync(sourceRtkPath)) {

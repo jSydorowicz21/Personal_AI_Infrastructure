@@ -929,6 +929,11 @@ function writeFrameworkFiles(id: FrameworkId, root: string) {
     }
   }
 
+  const systemPromptPath = join(root, "PAI", "PAI_SYSTEM_PROMPT.md");
+  if (existsSync(systemPromptPath)) {
+    writeFileSync(systemPromptPath, frameworkInstructionContent(readFileSync(systemPromptPath, "utf-8"), id));
+  }
+
   if (id === "codex") {
     writeCodexConfigToml(join(root, "config.toml"), root, mcpConfig);
     writeFileSync(join(root, "hooks.json"), JSON.stringify(generateCodexHooks(root), null, 2));

@@ -821,6 +821,23 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     });
   }
 
+  const systemPromptPath = join(root, "PAI", "PAI_SYSTEM_PROMPT.md");
+  if (existsSync(systemPromptPath)) {
+    const systemPromptText = readFileSync(systemPromptPath, "utf-8");
+    checks.push({
+      name: `${framework} system prompt references native instruction file`,
+      passed: framework === "claude"
+        ? systemPromptText.includes("CLAUDE.md")
+        : systemPromptText.includes("AGENTS.md") && !systemPromptText.includes("format from CLAUDE.md"),
+      detail: framework === "claude" ? "Claude uses CLAUDE.md" : "provider uses AGENTS.md",
+    });
+    checks.push({
+      name: `${framework} system prompt avoids fixed Claude home`,
+      passed: framework === "claude" || !systemPromptText.includes("~/.claude"),
+      detail: framework === "claude" ? "Claude native root allowed" : "framework home path rewrite",
+    });
+  }
+
   if (framework === "claude") {
     checks.push(checkPath("claude CLAUDE.md", join(root, "CLAUDE.md")));
     checks.push(checkPath("claude hooks directory", join(root, "hooks")));

@@ -212,6 +212,15 @@ check(
 );
 
 check(
+  "Framework switch adapts provider system prompt",
+  paiCli.includes('const systemPromptPath = join(root, "PAI", "PAI_SYSTEM_PROMPT.md")') &&
+    paiCli.includes('writeFileSync(systemPromptPath, frameworkInstructionContent(readFileSync(systemPromptPath, "utf-8"), id))') &&
+    installActions.includes('const systemPromptPath = join(paiDir, "PAI", "PAI_SYSTEM_PROMPT.md")') &&
+    installActions.includes('frameworkInstructionContent(readFileSync(systemPromptPath, "utf-8"), target)'),
+  "PAI/TOOLS/pai.ts and PAI/PAI-Install/engine/actions.ts",
+);
+
+check(
   "Installer avoids shell-string exec on Windows-sensitive paths",
   !installActions.includes("execSync") &&
     !installDetect.includes("execSync") &&
