@@ -55,6 +55,7 @@ try {
     env: smokeEnv(data, home),
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
 
   if (result.status !== 0) {
@@ -84,6 +85,7 @@ try {
     env: smokeEnv(data, home),
     encoding: "utf-8",
     timeout: 20_000,
+    windowsHide: true,
   });
   assert("outside MEMORY path rejected", outside.status !== 0, outside.stdout + outside.stderr);
 } catch (err) {

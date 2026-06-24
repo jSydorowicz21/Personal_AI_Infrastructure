@@ -132,6 +132,7 @@ function trackedSecretAudit(): void {
     cwd: repoRoot,
     encoding: "utf-8",
     timeout: 10_000,
+    windowsHide: true,
   });
   const files = (result.stdout || "").split(/\r?\n/).filter(Boolean);
   const forbidden = files.filter((path) => {

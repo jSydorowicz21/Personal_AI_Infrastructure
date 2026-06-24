@@ -232,6 +232,7 @@ const update = spawnSync(updateCommand, updateArgs, {
   encoding: "utf-8",
   timeout: 180_000,
   maxBuffer: 20 * 1024 * 1024,
+  windowsHide: true,
   env: {
     ...process.env,
     HOME: home,
@@ -455,6 +456,7 @@ const ocUpdate = spawnSync(updateCommand, ocUpdateArgs, {
   encoding: "utf-8",
   timeout: 180_000,
   maxBuffer: 20 * 1024 * 1024,
+  windowsHide: true,
   env: {
     ...process.env,
     HOME: ocHome,

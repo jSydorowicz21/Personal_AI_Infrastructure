@@ -85,6 +85,11 @@ const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemInteg
 const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const frameworkSmoke = read(join(paiRoot, "TOOLS", "FrameworkSmokeTest.ts"));
+const frameworkCommandResolutionSmoke = read(join(paiRoot, "TOOLS", "FrameworkCommandResolutionSmokeTest.ts"));
+const hotfixUpdateRollbackSmoke = read(join(paiRoot, "TOOLS", "HotfixUpdateRollbackSmokeTest.ts"));
+const junctionSafeUpdateSmoke = read(join(paiRoot, "TOOLS", "JunctionSafeUpdateSmokeTest.ts"));
+const memoryDeleteSmoke = read(join(paiRoot, "TOOLS", "MemoryDeleteSmokeTest.ts"));
+const paiSecurityAuditSmoke = read(join(paiRoot, "TOOLS", "PaiSecurityAuditSmokeTest.ts"));
 const checkpointTool = read(join(paiRoot, "TOOLS", "Checkpoint.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
@@ -538,6 +543,16 @@ check(
     branchValidation.includes("windowsHide: true") &&
     !branchValidation.includes("const resolvedCommand = Bun.which(command) || command;"),
   "PAI/TOOLS/CodexBranchValidation.ts",
+);
+
+check(
+  "Safe validation smokes hide Windows child processes",
+  frameworkCommandResolutionSmoke.includes("windowsHide: true") &&
+    hotfixUpdateRollbackSmoke.match(/windowsHide:\s*true/g)?.length >= 2 &&
+    junctionSafeUpdateSmoke.includes("windowsHide: true") &&
+    memoryDeleteSmoke.match(/windowsHide:\s*true/g)?.length >= 2 &&
+    paiSecurityAuditSmoke.includes("windowsHide: true"),
+  "FrameworkCommandResolution, HotfixUpdateRollback, JunctionSafeUpdate, MemoryDelete, PaiSecurityAudit",
 );
 
 check(

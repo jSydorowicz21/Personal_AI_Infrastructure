@@ -88,6 +88,7 @@ function runUpdater(args: { installRoot: string; sourceDir: string; manifestPath
     encoding: "utf-8",
     timeout: 180_000,
     maxBuffer: 20 * 1024 * 1024,
+    windowsHide: true,
     env: {
       ...process.env,
       HOME: args.home,

@@ -62,7 +62,7 @@ try {
 
   if (process.platform === "win32") {
     assert("Windows shim resolved through cmd.exe", args[0].toLowerCase().endsWith("cmd.exe"), args.join(" "));
-    const result = spawnSync(args[0], args.slice(1), { encoding: "utf-8", env });
+    const result = spawnSync(args[0], args.slice(1), { encoding: "utf-8", env, windowsHide: true });
     assert("Windows codex.cmd shim executes", result.status === 0, result.stderr || result.stdout);
     assert("Windows codex.cmd receives args", result.stdout.includes("codex-shim-ok --version"), result.stdout.trim());
   } else {
