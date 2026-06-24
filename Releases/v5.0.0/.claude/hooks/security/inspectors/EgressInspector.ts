@@ -33,12 +33,16 @@ const EGRESS_ALERTS: [RegExp, string][] = [
 
 const PIPE_TO_SHELL = /\|\s*(sh|bash|zsh)\b/i;
 
+function isShellTool(toolName: string): boolean {
+  return ['Bash', 'Shell', 'exec'].includes(toolName);
+}
+
 class EgressInspector implements Inspector {
   name = 'EgressInspector';
   priority = 90;
 
   inspect(ctx: InspectionContext): InspectionResult {
-    if (ctx.toolName !== 'Bash') return ALLOW;
+    if (!isShellTool(ctx.toolName)) return ALLOW;
 
     const command =
       typeof ctx.toolInput === 'string'

@@ -28,6 +28,39 @@ function print(checks: Check[]) {
   }
 }
 
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
+function hookCommandText(hooksJson: string): string {
+  const values: string[] = [];
+  function visit(value: unknown): void {
+    if (typeof value === "string") {
+      values.push(value);
+      const decoded = decodeEncodedCommand(value);
+      if (decoded) values.push(decoded);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  }
+  try {
+    visit(JSON.parse(hooksJson));
+  } catch {}
+  return values.join("\n");
+}
+
 const keep = process.argv.includes("--keep");
 const frameworkRoot = process.env.PAI_FRAMEWORK_DIR || process.env.CODEX_HOME || join(process.env.HOME || "", ".codex");
 const paiDir = process.env.PAI_DIR || join(frameworkRoot, "PAI");
@@ -67,13 +100,14 @@ const run = spawnSync(process.execPath, [hookPath], {
 
 const output = `${run.stdout || ""}${run.stderr || ""}`;
 const hooksJson = existsSync(hooksJsonPath) ? readFileSync(hooksJsonPath, "utf-8") : "";
+const hooksText = hookCommandText(hooksJson);
 const configGen = existsSync(configGenPath) ? readFileSync(configGenPath, "utf-8") : "";
 const paiTool = existsSync(paiToolPath) ? readFileSync(paiToolPath, "utf-8") : "";
 const branchCi = process.env.PAI_BRANCH_CI === "1";
 
 const checks: Check[] = [
   check("StartupSelfCheck hook exists", existsSync(hookPath), hookPath),
-  check("live hooks.json registers StartupSelfCheck", hooksJson.includes("StartupSelfCheck.hook.ts") || branchCi, branchCi ? "branch CI verifies generated hooks via installer smokes" : hooksJsonPath),
+  check("live hooks.json registers StartupSelfCheck", hooksText.includes("StartupSelfCheck.hook.ts") || branchCi, branchCi ? "branch CI verifies generated hooks via installer smokes" : hooksJsonPath),
   check("installer hook generator registers StartupSelfCheck", configGen.includes("StartupSelfCheck.hook.ts"), configGenPath),
   check("pai tool reuses canonical hook generator", paiTool.includes("generateCodexHooksJson"), paiToolPath),
   check("self-check exits cleanly", run.status === 0, `status=${run.status ?? "null"}`),

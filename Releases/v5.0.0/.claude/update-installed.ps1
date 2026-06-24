@@ -151,6 +151,49 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
   Success "Updated PAI environment variables at ${target} scope."
 }
 
+function Write-FrameworkSwitchAudit([string]$DataDir, [string]$Framework, [string]$InstallRoot, $PreviousState) {
+  try {
+    $auditDir = Join-Path $DataDir "MEMORY\OBSERVABILITY"
+    New-Item -ItemType Directory -Force -Path $auditDir | Out-Null
+    $entry = [ordered]@{
+      timestamp = (Get-Date).ToUniversalTime().ToString("o")
+      source = "update-installed.ps1"
+      active = $Framework
+      root = $InstallRoot
+      dataDir = $DataDir
+      previousActive = if ($PreviousState -and $PreviousState.active) { [string]$PreviousState.active } else { $null }
+      previousRoot = if ($PreviousState -and $PreviousState.root) { [string]$PreviousState.root } else { $null }
+      cwd = (Get-Location).Path
+      argv = $MyInvocation.Line
+    }
+    Add-Content -LiteralPath (Join-Path $auditDir "framework-switches.jsonl") -Value (($entry | ConvertTo-Json -Compress) + "`n")
+  } catch {
+    Warn "Could not write framework switch audit: $($_.Exception.Message)"
+  }
+}
+
+function Write-PaiFrameworkState([string]$InstallRoot, [string]$Framework) {
+  $dataDir = Resolve-PaiDataDir
+  $statePath = Join-Path $dataDir "framework.json"
+  $previous = Read-FrameworkStateAt $dataDir
+  $frameworkName = switch ($Framework) {
+    "codex" { "Codex" }
+    "opencode" { "OpenCode" }
+    default { "Claude Code" }
+  }
+  $state = [ordered]@{
+    active = $Framework
+    frameworkName = $frameworkName
+    root = $InstallRoot
+    dataDir = $dataDir
+    updatedAt = (Get-Date).ToUniversalTime().ToString("o")
+  }
+  New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+  Set-Content -LiteralPath $statePath -Value (($state | ConvertTo-Json -Depth 4) + "`n") -NoNewline
+  Write-FrameworkSwitchAudit $dataDir $Framework $InstallRoot $previous
+  Success "Synchronized active framework state at $statePath."
+}
+
 function Normalize-Framework([string]$Value) {
   $v = ($Value | ForEach-Object { "$_".Trim().ToLowerInvariant() }) -replace "[\s_-]+", ""
   switch ($v) {
@@ -249,9 +292,27 @@ function Copy-DirectoryContents([string]$Source, [string]$Destination) {
   if (-not (Test-Path -LiteralPath $Destination)) {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
   }
+  $destinationFull = [System.IO.Path]::GetFullPath($Destination).TrimEnd("\", "/")
   foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
     $target = Join-Path $Destination $item.Name
-    Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse -Force
+    $itemFull = [System.IO.Path]::GetFullPath($item.FullName)
+    if ($destinationFull.StartsWith($itemFull.TrimEnd("\", "/") + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+      Warn "Skipped recursive copy source nested under destination: $($item.FullName)"
+      continue
+    }
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+      Warn "Skipped reparse point while copying: $($item.FullName)"
+      continue
+    }
+    if ($item.PSIsContainer) {
+      Copy-DirectoryContents $item.FullName $target
+    } else {
+      try {
+        Copy-Item -LiteralPath $item.FullName -Destination $target -Force
+      } catch {
+        Warn "Could not update locked file ${target}: $($_.Exception.Message)"
+      }
+    }
   }
 }
 
@@ -277,27 +338,10 @@ function Remove-ExistingPathSafely([string]$Path) {
   Remove-Item -LiteralPath $Path -Recurse -Force
 }
 
-function Ensure-NoReparseAncestor([string]$Path, [string]$StopRoot) {
-  $stop = [System.IO.Path]::GetFullPath($StopRoot).TrimEnd("\", "/")
-  $current = Split-Path -Parent ([System.IO.Path]::GetFullPath($Path))
-  $toBreak = @()
-  while ($current -and $current.Length -ge $stop.Length) {
-    if ([string]::Equals($current.TrimEnd("\", "/"), $stop, [System.StringComparison]::OrdinalIgnoreCase)) { break }
-    if (Test-Path -LiteralPath $current) {
-      $item = Get-Item -LiteralPath $current -Force
-      if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-        $toBreak = @($current) + $toBreak
-      }
-    }
-    $parent = Split-Path -Parent $current
-    if ($parent -eq $current) { break }
-    $current = $parent
-  }
-
-  foreach ($linkPath in $toBreak) {
-    Remove-Item -LiteralPath $linkPath -Force
-    New-Item -ItemType Directory -Force -Path $linkPath | Out-Null
-  }
+function Test-IsReparsePoint([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return $false }
+  $item = Get-Item -LiteralPath $Path -Force
+  return (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
 }
 
 function Get-BackupRelativePath([string]$InstallRoot, [string]$Path) {
@@ -323,8 +367,13 @@ function Backup-Existing([string]$InstallRoot, [string]$Path, [string]$BackupRoo
   $backupPath = Join-Path $BackupRoot $relative
   $backupDir = Split-Path -Parent $backupPath
   if ($backupDir) { New-Item -ItemType Directory -Force -Path $backupDir | Out-Null }
-  Copy-Item -LiteralPath $Path -Destination $backupPath -Recurse -Force
-  return $backupPath
+  try {
+    Copy-Item -LiteralPath $Path -Destination $backupPath -Recurse -Force
+    return $backupPath
+  } catch {
+    Warn "Could not fully back up ${Path}: $($_.Exception.Message)"
+    return ""
+  }
 }
 
 function Get-EntryTarget($Entry, [string]$Framework) {
@@ -362,13 +411,12 @@ function Apply-Entry($Entry, [string]$ReleaseRoot, [string]$InstallRoot, [string
   }
 
   $backup = Backup-Existing $InstallRoot $target $BackupRoot
-  Ensure-NoReparseAncestor $target $InstallRoot
   $parent = Split-Path -Parent $target
   if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
 
   $sourceItem = Get-Item -LiteralPath $source -Force
   if ($sourceItem.PSIsContainer) {
-    if (Test-Path -LiteralPath $target) {
+    if ((Test-Path -LiteralPath $target) -and -not (Test-IsReparsePoint $target)) {
       Remove-ExistingPathSafely $target
     }
     Copy-DirectoryContents $source $target
@@ -615,6 +663,7 @@ try {
     if ($target.Framework -eq "codex") {
       Regenerate-CodexHooksJson $target.Root $backupRoot
     }
+    Write-PaiFrameworkState $target.Root $target.Framework
     Set-PaiUserEnvironment $target.Root $target.Framework
     Repair-PowerShellProfiles $target.Root $target.Framework $backupRoot
     Verify-Install $target.Root $target.Framework

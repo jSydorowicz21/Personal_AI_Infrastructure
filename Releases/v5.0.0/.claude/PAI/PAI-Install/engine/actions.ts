@@ -11,7 +11,7 @@ import { join, basename, dirname } from "path";
 import type { InstallState, EngineEventHandler, DetectionResult, ExistingUserContentDetection, StepId, FrameworkId, FrameworkTarget } from "./types";
 import { PAI_VERSION, ALGORITHM_VERSION, DEFAULT_VOICES } from "./types";
 import { detectSystem, detectExistingUserContent, scanApiKeys, validateElevenLabsKey } from "./detect";
-import { generateCodexConfigToml, generateCodexHooksJson, generateOpenCodeConfigJson, generateSettingsJson, mergeCodexConfigToml } from "./config-gen";
+import { generateCodexConfigToml, generateCodexHooksJson, generateOpenCodeConfigJson, generateSettingsJson, mergeCodexConfigToml, mergeOpenCodeConfigJson } from "./config-gen";
 import { defaultFramework, frameworkChoices, frameworkCliInstallCommands, getFrameworkTarget, getPaiDataDir } from "./frameworks";
 
 type ChoiceOption = {
@@ -1940,7 +1940,11 @@ export async function runConfiguration(
     writeFileSync(join(paiDir, "hooks.json"), JSON.stringify(generateCodexHooksJson(nativeConfig), null, 2));
     await emit({ event: "message", content: "Codex config.toml and hooks.json generated." });
   } else if (target.id === "opencode") {
-    writeFileSync(join(paiDir, "opencode.json"), JSON.stringify(generateOpenCodeConfigJson({
+    const openCodeConfigPath = join(paiDir, "opencode.json");
+    const existingOpenCodeConfig = existsSync(openCodeConfigPath)
+      ? JSON.parse(readFileSync(openCodeConfigPath, "utf-8"))
+      : {};
+    const generatedOpenCodeConfig = generateOpenCodeConfigJson({
       ...config,
       framework: target.id,
       principalName: state.collected.principalName || "User",
@@ -1954,7 +1958,8 @@ export async function runConfiguration(
       paiDir,
       configDir,
       dataDir,
-    }), null, 2));
+    });
+    writeFileSync(openCodeConfigPath, JSON.stringify(mergeOpenCodeConfigJson(existingOpenCodeConfig, generatedOpenCodeConfig), null, 2));
     await emit({ event: "message", content: "OpenCode opencode.json generated." });
   }
 

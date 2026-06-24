@@ -3,6 +3,8 @@ import { join, resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 
 type FrameworkState = {
+  active?: string;
+  framework?: string;
   root?: string;
   dataDir?: string;
 };
@@ -45,6 +47,26 @@ function normalizeFramework(value: string | undefined): string {
   return (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 
+function frameworkStateId(state: FrameworkState | null): string {
+  return normalizeFramework(state?.active || state?.framework);
+}
+
+function canUseExplicitFrameworkRoot(state: FrameworkState | null, frameworkDir: string): boolean {
+  const expanded = expandHome(frameworkDir);
+  if (!existsSync(expanded)) return false;
+
+  const stateRoot = state?.root ? resolve(expandHome(state.root)) : "";
+  if (!stateRoot) return true;
+  if (resolve(expanded) === stateRoot) return true;
+
+  const explicitFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  const stateFramework = frameworkStateId(state);
+  if (!explicitFramework) return false;
+  if (stateFramework && explicitFramework === stateFramework) return false;
+
+  return true;
+}
+
 function activeFrameworkHomeEnv(): string {
   const framework = normalizeFramework(process.env.PAI_FRAMEWORK);
   if (framework === "codex" || framework === "openai" || framework === "openaicodex") return process.env.CODEX_HOME || "";
@@ -72,22 +94,34 @@ function hasStaleFrameworkEnv(): boolean {
 }
 
 export function getPaiDir(): string {
-  const frameworkRoot = readFrameworkState()?.root;
-  if (frameworkRoot) return join(expandHome(frameworkRoot), "PAI");
+  const state = readFrameworkState();
   if (process.env.PAI_DIR) {
     const envPaiDir = expandHome(process.env.PAI_DIR);
-    if (existsSync(envPaiDir)) return envPaiDir;
+    if (existsSync(envPaiDir) && canUseExplicitFrameworkRoot(state, resolve(envPaiDir, ".."))) return envPaiDir;
   }
+  if (process.env.PAI_FRAMEWORK_DIR) {
+    const envFrameworkDir = expandHome(process.env.PAI_FRAMEWORK_DIR);
+    const envPaiDir = join(envFrameworkDir, "PAI");
+    if (existsSync(envFrameworkDir) && existsSync(envPaiDir) && canUseExplicitFrameworkRoot(state, envFrameworkDir)) return envPaiDir;
+  }
+  const frameworkRoot = state?.root;
+  if (frameworkRoot) return join(expandHome(frameworkRoot), "PAI");
   return resolve(import.meta.dir, "..", "..");
 }
 
 export function getFrameworkDir(): string {
-  const frameworkRoot = readFrameworkState()?.root;
-  if (frameworkRoot) return expandHome(frameworkRoot);
+  const state = readFrameworkState();
   if (process.env.PAI_FRAMEWORK_DIR) {
     const envFrameworkDir = expandHome(process.env.PAI_FRAMEWORK_DIR);
-    if (existsSync(envFrameworkDir)) return envFrameworkDir;
+    if (existsSync(envFrameworkDir) && canUseExplicitFrameworkRoot(state, envFrameworkDir)) return envFrameworkDir;
   }
+  if (process.env.PAI_DIR) {
+    const envPaiDir = expandHome(process.env.PAI_DIR);
+    const envFrameworkDir = resolve(envPaiDir, "..");
+    if (existsSync(envPaiDir) && canUseExplicitFrameworkRoot(state, envFrameworkDir)) return envFrameworkDir;
+  }
+  const frameworkRoot = state?.root;
+  if (frameworkRoot) return expandHome(frameworkRoot);
   return resolve(getPaiDir(), "..");
 }
 
@@ -100,7 +134,11 @@ export function getPaiDataDir(): string {
     if (existsSync(envDataDir)) {
       const state = readFrameworkStateAt(envDataDir);
       if (!state && (!defaultStateUsable || !hasStaleFrameworkEnv())) return envDataDir;
-      if (state?.root && existsSync(expandHome(state.root))) return envDataDir;
+      if (state) {
+        if (state.root && existsSync(expandHome(state.root))) return envDataDir;
+        if (defaultStateUsable) return defaultDataDir;
+        return envDataDir;
+      }
     }
     if (!defaultStateUsable || !hasStaleFrameworkEnv()) return envDataDir;
   }

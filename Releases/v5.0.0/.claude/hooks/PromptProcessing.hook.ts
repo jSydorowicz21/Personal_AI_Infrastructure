@@ -814,6 +814,10 @@ function getRecentContext(transcriptPath: string, maxTurns: number = 6, includeA
 
 async function main() {
   try {
+    if (process.env.PAI_INFERENCE_CHILD === '1' || process.env.PAI_DISABLE_RECURSIVE_HOOKS === '1') {
+      process.exit(0);
+    }
+
     console.error('[PromptProcessing] Hook started');
     const input = await readStdinWithTimeout();
     const data: HookInput = JSON.parse(input);
@@ -936,8 +940,8 @@ async function main() {
         systemPrompt: buildContextPrompt(isFirstPrompt),
         userPrompt,
         expectJson: true,
-        timeout: 25000,
-        level: 'standard',
+        timeout: 20000,
+        level: 'fast',
       });
 
       if (result.success && result.parsed) {
@@ -989,7 +993,7 @@ async function main() {
             const label = nameWords.map(w => titleCase(w)).join(' ');
             const hasProfanity = nameWords.some(w => PROFANITY_WORDS.has(w.toLowerCase()));
             if (label && nameWords.length >= 5 && nameWords.every(w => w.length >= 2) && !hasProfanity && isValidSessionName(label)) {
-              storeName(sessionId, label, 'inference-haiku');
+              storeName(sessionId, label, 'inference-fast');
               inferenceNameStored = true;
             } else if (label) {
               console.error(`[PromptProcessing] Rejected invalid session name: "${label}"`);

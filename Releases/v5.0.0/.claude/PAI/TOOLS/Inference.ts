@@ -58,6 +58,9 @@
  */
 
 import { spawn } from "child_process";
+import { mkdirSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 import { memoryPath } from "./lib/paths";
 import { getActiveFramework } from "./lib/transcripts";
 
@@ -97,6 +100,62 @@ const CODEX_MODEL_ENV: Record<InferenceLevel, string> = {
   smart: "PAI_CODEX_MODEL_SMART",
 };
 
+const CODEX_REASONING_ENV: Record<InferenceLevel, string> = {
+  fast: "PAI_CODEX_REASONING_FAST",
+  standard: "PAI_CODEX_REASONING_STANDARD",
+  smart: "PAI_CODEX_REASONING_SMART",
+};
+
+const CODEX_REASONING_DEFAULT: Record<InferenceLevel, string> = {
+  fast: "low",
+  standard: "low",
+  smart: "high",
+};
+
+const CODEX_DEFAULT_MODEL = "gpt-5.5";
+const CODEX_DEFAULT_CLASSIFIER_MODEL = "gpt-5.3-codex-spark";
+
+function codexModelFor(level: InferenceLevel): string {
+  const levelSpecific = process.env[CODEX_MODEL_ENV[level]];
+  if (levelSpecific) return levelSpecific;
+
+  if (level !== "smart" && process.env.PAI_CODEX_MODEL_CLASSIFIER) {
+    return process.env.PAI_CODEX_MODEL_CLASSIFIER;
+  }
+
+  if (level !== "smart") {
+    return CODEX_DEFAULT_CLASSIFIER_MODEL;
+  }
+
+  return process.env.PAI_CODEX_MODEL || CODEX_DEFAULT_MODEL;
+}
+
+function codexReasoningFor(level: InferenceLevel): string {
+  const levelSpecific = process.env[CODEX_REASONING_ENV[level]];
+  if (levelSpecific) return levelSpecific;
+
+  if (level !== "smart" && process.env.PAI_CODEX_REASONING_CLASSIFIER) {
+    return process.env.PAI_CODEX_REASONING_CLASSIFIER;
+  }
+
+  if (level === "smart" && process.env.PAI_CODEX_REASONING_EFFORT) {
+    return process.env.PAI_CODEX_REASONING_EFFORT;
+  }
+
+  return CODEX_REASONING_DEFAULT[level];
+}
+
+function codexInferenceCwd(): string {
+  const configured = process.env.PAI_CODEX_INFERENCE_CWD?.trim();
+  const cwd = configured || join(tmpdir(), "pai-codex-inference");
+  try {
+    mkdirSync(cwd, { recursive: true });
+    return cwd;
+  } catch {
+    return process.cwd();
+  }
+}
+
 // Advisor-specific defaults (v3.23 VERIFY doctrine).
 const ADVISOR_TIMEOUT_MS = 120000;
 
@@ -115,6 +174,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
     // Unset CLAUDECODE so nested `claude` invocations don't trigger the
     // nested-session guard (hooks run inside Claude Code's environment).
     const env = { ...process.env };
+    env.PAI_INFERENCE_CHILD = "1";
+    env.PAI_DISABLE_RECURSIVE_HOOKS = "1";
     delete env.CLAUDECODE;
 
     // BILLING: Always use subscription. Anthropic's credential precedence chain
@@ -144,7 +205,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
         return;
       }
 
-      const codexModel = process.env[CODEX_MODEL_ENV[level]] || process.env.PAI_CODEX_MODEL;
+      const codexModel = codexModelFor(level);
+      const codexReasoning = codexReasoningFor(level);
       const combinedPrompt = [
         "System instructions:",
         options.systemPrompt || "(none)",
@@ -154,11 +216,18 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
       ].join("\n");
       const args = [
         "exec",
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--disable", "memories",
+        "--disable", "plugins",
         "--sandbox", "read-only",
         "--skip-git-repo-check",
         "--ephemeral",
-        "--cd", process.cwd(),
-        ...(codexModel ? ["--model", codexModel] : []),
+        "--cd", codexInferenceCwd(),
+        "--model", codexModel,
+        "-c", `model_reasoning_effort="${codexReasoning}"`,
+        "-c", `plan_mode_reasoning_effort="${codexReasoning}"`,
+        "-c", "project_doc_fallback_filenames=[]",
         ...(hasImages ? options.imagePaths!.flatMap((p) => ["--image", p]) : []),
         "-",
       ];

@@ -143,6 +143,18 @@ function extractSubsystems(): Array<{ name: string; description: string; docPath
     }
   };
 
+  const normalizeDocPath = (value: string, sectionRoot: string): string => {
+    let p = value.trim()
+      .replace(/^\$PAI_DIR(?=\/|\\|$)/, "PAI")
+      .replace(/^\$\{PAI_DIR\}(?=\/|\\|$)/, "PAI")
+      .replace(/^\$PAI_DATA_DIR(?=\/|\\|$)/, "PAI_DATA")
+      .replace(/^\$\{PAI_DATA_DIR\}(?=\/|\\|$)/, "PAI_DATA");
+    if (!p.startsWith("PAI/") && !p.startsWith("PAI_DATA/") && !p.startsWith("~") && !p.startsWith("/") && p.endsWith(".md")) {
+      p = sectionRoot + p;
+    }
+    return p.replace(/\\/g, "/");
+  };
+
   for (const line of content.split("\n")) {
     const h2 = line.match(/^##\s+(.+)$/);
     if (h2) {
@@ -168,14 +180,12 @@ function extractSubsystems(): Array<{ name: string; description: string; docPath
 
   return entries
     .map(e => {
-      let p = e.docPath;
-      if (!p.startsWith("PAI/") && !p.startsWith("~") && !p.startsWith("/") && p.endsWith(".md")) {
-        p = e.sectionRoot + p;
-      }
+      const p = normalizeDocPath(e.docPath, e.sectionRoot);
       return { name: e.name, description: e.description, docPath: p };
     })
     .filter(e =>
       e.docPath.includes("PAI/") &&
+      !e.docPath.startsWith("PAI_DATA/") &&
       !e.docPath.includes("USER/") &&
       !e.docPath.includes("DA_") &&
       e.docPath.endsWith(".md")

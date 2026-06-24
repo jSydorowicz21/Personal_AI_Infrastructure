@@ -52,6 +52,8 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 }
 
 function main(): void {
+  if (process.env.PAI_INFERENCE_CHILD === "1" || process.env.PAI_DISABLE_RECURSIVE_HOOKS === "1") return;
+
   let input: HookInput;
   try {
     input = JSON.parse(readFileSync(0, "utf-8"));

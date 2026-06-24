@@ -46,6 +46,39 @@ function parseJsonOutput(value: unknown): Record<string, string> {
   }
 }
 
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
+function hookCommandText(hooksJson: string): string {
+  const values: string[] = [];
+  function visit(value: unknown): void {
+    if (typeof value === "string") {
+      values.push(value);
+      const decoded = decodeEncodedCommand(value);
+      if (decoded) values.push(decoded);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  }
+  try {
+    visit(JSON.parse(hooksJson));
+  } catch {}
+  return values.join("\n");
+}
+
 function checkPath(name: string, path: string): Check {
   return {
     name,
@@ -122,6 +155,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const pluginPath = join(root, "plugins", "pai-opencode.ts");
   const repeatMarkerPath = join(data, "opencode-repeat-detection.txt");
   const contextMarkerPath = join(data, "opencode-context-injection.txt");
+  const shellEnvMarkerPath = join(data, "opencode-shell-env.json");
   const kittyEnvPath = join(data, "MEMORY", "STATE", "kitty-env.json");
   const kittySessionPath = join(data, "MEMORY", "STATE", "kitty-sessions", "smoke-opencode.json");
   const testEnv = {
@@ -144,6 +178,12 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     const mod = await import(${JSON.stringify(pluginPath)});
     const hooks = await mod.PAIOpenCodePlugin();
     const session = { sessionId: "smoke-opencode", cwd: ${JSON.stringify(root)} };
+    const shellEnvOutput = {};
+    await hooks["shell.env"](session, shellEnvOutput);
+    writeFileSync(${JSON.stringify(shellEnvMarkerPath)}, JSON.stringify(shellEnvOutput.env || {}), "utf-8");
+    if ((shellEnvOutput.env || {}).PAI_DIR !== ${JSON.stringify(join(root, "PAI"))}) {
+      throw new Error("OpenCode plugin used stale PAI_DIR: " + (shellEnvOutput.env || {}).PAI_DIR);
+    }
     await hooks.event({ event: { ...session, type: "session.created" } });
     const repeatedPrompt = "Please use OpenCode shared memory for this exact repeated smoke prompt.";
     const firstPromptOutput = { prompt: repeatedPrompt };
@@ -169,6 +209,8 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   const staleHome = join(dirname(data), "opencode-stale-home");
   const staleDefaultData = join(staleHome, ".pai");
   const staleEnvData = join(dirname(data), "deleted-opencode-data");
+  const staleValidRoot = join(dirname(data), "stale-valid-codex");
+  mkdirSync(join(staleValidRoot, "PAI"), { recursive: true });
   mkdirSync(staleDefaultData, { recursive: true });
   writeFileSync(join(staleDefaultData, "framework.json"), JSON.stringify({ active: "opencode", root, dataDir: data }), "utf-8");
   const staleEnv = {
@@ -176,8 +218,8 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
     HOME: staleHome,
     USERPROFILE: staleHome,
     PAI_DATA_DIR: staleEnvData,
-    PAI_DIR: join(dirname(data), "deleted-opencode-root", "PAI"),
-    PAI_FRAMEWORK_DIR: join(dirname(data), "deleted-opencode-root"),
+    PAI_DIR: join(staleValidRoot, "PAI"),
+    PAI_FRAMEWORK_DIR: staleValidRoot,
     PAI_CONFIG_DIR: join(dirname(data), "deleted-opencode-config"),
   };
   const staleResult = spawnSync(process.execPath, ["-e", script], {
@@ -212,6 +254,11 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
       name: "opencode plugin ignores stale env roots",
       passed: staleResult.status === 0 && staleTranscriptFiles.length === 0 && transcriptFiles.length > 0,
       detail: `status=${staleResult.status ?? "null"} stale_transcripts=${staleTranscriptFiles.length}`,
+    },
+    {
+      name: "opencode shell env uses active framework PAI_DIR",
+      passed: existsSync(shellEnvMarkerPath) && readJson(shellEnvMarkerPath).PAI_DIR === join(root, "PAI"),
+      detail: existsSync(shellEnvMarkerPath) ? readJson(shellEnvMarkerPath).PAI_DIR : shellEnvMarkerPath,
     },
     {
       name: "opencode session start persists Kitty env",
@@ -366,6 +413,44 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
   });
   const staleExistingDataResolved = parseJsonOutput(staleExistingDataResult.stdout);
 
+  const staleExistingDataNoFrameworkEnv = {
+    ...process.env,
+    HOME: home,
+    USERPROFILE: home,
+    PAI_DATA_DIR: staleExistingData,
+  } as Record<string, string>;
+  for (const key of ["PAI_DIR", "PAI_FRAMEWORK_DIR", "PAI_MEMORY_DIR", "PAI_USER_DIR", "PAI_SETTINGS_PATH"]) {
+    delete staleExistingDataNoFrameworkEnv[key];
+  }
+  const staleExistingDataNoFrameworkResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: staleExistingDataNoFrameworkEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  const staleExistingDataNoFrameworkResolved = parseJsonOutput(staleExistingDataNoFrameworkResult.stdout);
+
+  const state = readJson(join(data, "framework.json"));
+  const explicitFramework = state?.active === "codex" ? "opencode" : "codex";
+  const explicitRoot = join(root, "explicit-framework");
+  mkdirSync(join(explicitRoot, "PAI"), { recursive: true });
+  const explicitEnv = {
+    ...process.env,
+    HOME: join(root, "explicit-home"),
+    USERPROFILE: join(root, "explicit-home"),
+    PAI_FRAMEWORK: explicitFramework,
+    PAI_DATA_DIR: data,
+    PAI_DIR: join(explicitRoot, "PAI"),
+    PAI_FRAMEWORK_DIR: explicitRoot,
+  } as Record<string, string>;
+  const explicitResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: explicitEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+  });
+  const explicitResolved = parseJsonOutput(explicitResult.stdout);
+
   return [
     {
       name: "path fallback exits 0",
@@ -451,6 +536,26 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       name: "hooks path ignores invalid PAI_DATA_DIR framework state",
       passed: staleExistingDataResolved.hooksPaiDir === join(root, "PAI") && staleExistingDataResolved.hooksFrameworkDir === root,
       detail: JSON.stringify({ pai: staleExistingDataResolved.hooksPaiDir, root: staleExistingDataResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path ignores invalid PAI_DATA_DIR without stale env",
+      passed: staleExistingDataNoFrameworkResolved.toolsPaiDir === join(root, "PAI") && staleExistingDataNoFrameworkResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleExistingDataNoFrameworkResolved.toolsPaiDir, root: staleExistingDataNoFrameworkResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path ignores invalid PAI_DATA_DIR without stale env",
+      passed: staleExistingDataNoFrameworkResolved.hooksPaiDir === join(root, "PAI") && staleExistingDataNoFrameworkResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({ pai: staleExistingDataNoFrameworkResolved.hooksPaiDir, root: staleExistingDataNoFrameworkResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path explicit different-framework env overrides framework.json",
+      passed: explicitResolved.toolsPaiDir === join(explicitRoot, "PAI") && explicitResolved.toolsFrameworkDir === explicitRoot,
+      detail: JSON.stringify({ pai: explicitResolved.toolsPaiDir, root: explicitResolved.toolsFrameworkDir }),
+    },
+    {
+      name: "hooks path explicit different-framework env overrides framework.json",
+      passed: explicitResolved.hooksPaiDir === join(explicitRoot, "PAI") && explicitResolved.hooksFrameworkDir === explicitRoot,
+      detail: JSON.stringify({ pai: explicitResolved.hooksPaiDir, root: explicitResolved.hooksFrameworkDir }),
     },
   ];
 }
@@ -548,9 +653,10 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
     checks.push(...checkGeneratedAgents(root, framework));
     if (existsSync(join(root, "hooks.json"))) {
       const hooksText = readFileSync(join(root, "hooks.json"), "utf-8");
+      const decodedHooksText = hookCommandText(hooksText);
       checks.push({
         name: "codex hooks carry PAI_DATA_DIR",
-        passed: hooksText.includes("PAI_DATA_DIR"),
+        passed: decodedHooksText.includes("PAI_DATA_DIR"),
         detail: "hooks.json command env",
       });
       checks.push({
@@ -570,7 +676,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
       });
       checks.push({
         name: "codex PromptProcessing hook leaves adapter headroom",
-        passed: hooksText.includes('"timeout": 40') && hooksText.includes("--timeout-ms") && hooksText.includes("35000"),
+        passed: hooksText.includes('"timeout": 40') && decodedHooksText.includes("--timeout-ms") && decodedHooksText.includes("35000"),
         detail: "outer timeout exceeds child inference + notify fallback budget",
       });
       checks.push({
@@ -741,6 +847,47 @@ function checkManagedPaiRefresh(framework: Framework, base: string): Check[] {
   ];
 }
 
+function checkCustomProviderHomeCreation(base: string): Check[] {
+  const root = join(base, "custom-codex-home");
+  const data = join(base, "pai-data");
+  const config = join(base, "pai-config");
+  const env: Record<string, string> = {
+    ...process.env,
+    CODEX_HOME: root,
+    PAI_DATA_DIR: data,
+    PAI_CONFIG_DIR: config,
+    PAI_USER_ENV_TARGET: "Process",
+  } as Record<string, string>;
+  for (const key of ["PAI_FRAMEWORK", "PAI_FRAMEWORK_DIR", "PAI_DIR"]) delete env[key];
+
+  const result = spawnSync(process.execPath, [paiTool, "framework", "switch", "codex"], {
+    cwd: join(import.meta.dir, "..", ".."),
+    env,
+    encoding: "utf-8",
+    timeout: 30_000,
+  });
+  const statePath = join(data, "framework.json");
+  const state = existsSync(statePath) ? readJson(statePath) : {};
+
+  return [
+    {
+      name: "custom CODEX_HOME switch exits 0",
+      passed: result.status === 0,
+      detail: `status=${result.status ?? "null"} ${outputText(result.stderr).trim().slice(0, 120)}`,
+    },
+    {
+      name: "custom CODEX_HOME root created",
+      passed: existsSync(root),
+      detail: root,
+    },
+    {
+      name: "custom CODEX_HOME recorded in framework state",
+      passed: state.active === "codex" && state.root === root,
+      detail: JSON.stringify({ active: state.active, root: state.root }),
+    },
+  ];
+}
+
 function printResult(label: string, checks: Check[]) {
   console.log(`\n${label}`);
   for (const check of checks) {
@@ -766,6 +913,7 @@ const refreshResults = frameworks.map((framework) => ({
   framework,
   checks: checkManagedPaiRefresh(framework, join(base, `${framework}-refresh`)),
 }));
+const customHomeChecks = checkCustomProviderHomeCreation(join(base, "custom-provider-home"));
 let failed = 0;
 
 for (const [index, framework] of frameworks.entries()) {
@@ -792,6 +940,9 @@ for (const result of refreshResults) {
   printResult(`${result.framework} managed refresh`, result.checks);
   failed += result.checks.filter((check) => !check.passed).length;
 }
+
+printResult("custom provider home switch", customHomeChecks);
+failed += customHomeChecks.filter((check) => !check.passed).length;
 
 const sequenceDataDirs = new Set(sequenceResults.map((result) => result.data));
 const finalStatePath = join(sequenceData, "framework.json");

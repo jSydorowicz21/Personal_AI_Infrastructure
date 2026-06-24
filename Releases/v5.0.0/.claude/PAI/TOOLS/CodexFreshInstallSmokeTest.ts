@@ -35,13 +35,23 @@ function normalizePathText(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
 }
 
-function codexHookConfigDirs(hooksJson: string): string[] {
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
+function codexHookCommandTexts(hooksJson: string): string[] {
   const values: string[] = [];
   function visit(value: unknown): void {
     if (typeof value === "string") {
-      for (const match of value.matchAll(/(?:^|\s)PAI_CONFIG_DIR='([^']*)'/g)) {
-        values.push(match[1]);
-      }
+      values.push(value);
+      const decoded = decodeEncodedCommand(value);
+      if (decoded) values.push(decoded);
       return;
     }
     if (Array.isArray(value)) {
@@ -55,6 +65,16 @@ function codexHookConfigDirs(hooksJson: string): string[] {
   try {
     visit(JSON.parse(hooksJson));
   } catch {}
+  return values;
+}
+
+function codexHookConfigDirs(hooksJson: string): string[] {
+  const values: string[] = [];
+  for (const text of codexHookCommandTexts(hooksJson)) {
+    for (const match of text.matchAll(/(?:^|\s)(?:\$env:)?PAI_CONFIG_DIR='([^']*)'/g)) {
+      values.push(match[1]);
+    }
+  }
   return values;
 }
 
@@ -110,6 +130,7 @@ try {
   const profile = existsSync(shellProfile) ? readFileSync(shellProfile, "utf-8") : "";
   const frameworkState = existsSync(join(dataDir, "framework.json")) ? readJson(join(dataDir, "framework.json")) : {};
   const hookConfigDirs = codexHookConfigDirs(hooksJson).map(normalizePathText);
+  const hookCommandText = codexHookCommandTexts(hooksJson).join("\n");
   const expectedConfigDir = normalizePathText(configDir);
   const staleConfigSegment = normalizePathText(staleConfigDir);
   const expectedStatePath = join(configDir, "PAI-Install", "install-state.json");
@@ -121,9 +142,9 @@ try {
     check("RTK.md generated", existsSync(join(codexHome, "RTK.md")), join(codexHome, "RTK.md")),
     check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(codexHome, "config.toml")),
     check("config.toml supports AGENTS/RTK fallback", configToml.includes("AGENTS.md") && configToml.includes("RTK.md"), "project_doc_fallback_filenames"),
-    check("hooks.json generated", hooksJson.includes("FrameworkHookAdapter.ts"), join(codexHome, "hooks.json")),
-    check("startup self-check hook generated", hooksJson.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
-    check("PromptProcessing timeout leaves adapter headroom", hooksJson.includes('"timeout": 40') && hooksJson.includes("--timeout-ms") && hooksJson.includes("35000"), join(codexHome, "hooks.json")),
+    check("hooks.json generated", hookCommandText.includes("FrameworkHookAdapter.ts") || hookCommandText.includes("CodexHookRunner.cmd"), join(codexHome, "hooks.json")),
+    check("startup self-check hook generated", hookCommandText.includes("StartupSelfCheck.hook.ts"), join(codexHome, "hooks.json")),
+    check("PromptProcessing timeout leaves adapter headroom", hooksJson.includes('"timeout": 40') && hookCommandText.includes("--timeout-ms") && hookCommandText.includes("35000"), join(codexHome, "hooks.json")),
     check("hooks ignore stale PAI_CONFIG_DIR", hookConfigDirs.length > 0 && hookConfigDirs.every((value) => value === expectedConfigDir && !value.includes(staleConfigSegment)), JSON.stringify(hookConfigDirs)),
     check("installer state ignores stale PAI_CONFIG_DIR", existsSync(expectedStatePath) && !existsSync(staleStatePath), expectedStatePath),
     check("interview prompt generated", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath),

@@ -51,14 +51,17 @@ function resolveDataDir(): string {
 const DATA_DIR = resolveDataDir();
 const STATE = frameworkStateAt(DATA_DIR);
 const FRAMEWORK_ROOT = STATE?.root && existsSync(STATE.root) ? STATE.root : ROOT;
-const PAI_DIR = existingEnvPath("PAI_DIR") || join(FRAMEWORK_ROOT, "PAI");
+const STATE_ROOT_USABLE = Boolean(STATE?.root && existsSync(STATE.root));
+const PAI_DIR = STATE_ROOT_USABLE ? join(FRAMEWORK_ROOT, "PAI") : existingEnvPath("PAI_DIR") || join(FRAMEWORK_ROOT, "PAI");
 const CONFIG_DIR = existingEnvPath("PAI_CONFIG_DIR") || join(HOME, ".config", "PAI");
-const SETTINGS_PATH = existingEnvPath("PAI_SETTINGS_PATH") || join(FRAMEWORK_ROOT, "settings.json");
+const SETTINGS_PATH = STATE_ROOT_USABLE ? join(FRAMEWORK_ROOT, "settings.json") : existingEnvPath("PAI_SETTINGS_PATH") || join(FRAMEWORK_ROOT, "settings.json");
 const ADAPTER = join(ROOT, "hooks", "FrameworkHookAdapter.ts");
 
 const PRE_TOOL_HOOKS = new Set(["bash", "shell", "write", "edit", "read", "apply_patch"]);
 const CONTENT_TOOLS = new Set(["webfetch", "websearch"]);
-const TELOS_TOOLS = new Set(["write", "edit", "apply_patch"]);
+const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
+const QUESTION_TOOLS = new Set(["askuserquestion", "request_user_input", "ask_user_question"]);
+const AGENT_TOOLS = new Set(["agent", "task"]);
 const seenTranscriptRecords = new Set<string>();
 const loadedSessionContext = new Set<string>();
 const injectedSessionContext = new Set<string>();
@@ -93,6 +96,13 @@ function mapToolName(tool: unknown): string {
       return "WebFetch";
     case "websearch":
       return "WebSearch";
+    case "askuserquestion":
+    case "ask_user_question":
+    case "request_user_input":
+      return "AskUserQuestion";
+    case "agent":
+    case "task":
+      return "Agent";
     case "skill":
       return "Skill";
     default:
@@ -263,6 +273,31 @@ function promptContext(stdout: string): string {
   return match?.[0]?.trim() || "";
 }
 
+function hookAdditionalContext(stdout: string): string {
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      const value = parsed?.hookSpecificOutput?.additionalContext;
+      if (typeof value === "string" && value.trim()) return value.trim();
+    } catch {
+      // Ignore non-JSON hook output.
+    }
+  }
+  return "";
+}
+
+function prependPromptContext(output: JsonObject, prompt: string, context: string): void {
+  if (!context) return;
+  const block = `<system-reminder>\n${context}\n</system-reminder>`;
+  if (typeof output.text === "string" && typeof output.prompt !== "string") {
+    output.text = `${block}\n\n${output.text || prompt}`;
+  } else {
+    output.prompt = `${block}\n\n${output.prompt || prompt}`;
+  }
+}
+
 function loadSessionContext(input: JsonObject): void {
   const id = sessionId(input);
   if (loadedSessionContext.has(id)) return;
@@ -302,8 +337,11 @@ export const PAIOpenCodePlugin = async () => {
     },
 
     "tool.execute.before": async (input: JsonObject, output: JsonObject) => {
-      if (!PRE_TOOL_HOOKS.has(String(input.tool || "").toLowerCase())) return;
-      enforce("SecurityPipeline.hook.ts", toolPayload("PreToolUse", input, output));
+      const tool = String(input.tool || "").toLowerCase();
+      const payload = toolPayload("PreToolUse", input, output);
+      if (PRE_TOOL_HOOKS.has(tool)) enforce("SecurityPipeline.hook.ts", payload);
+      if (QUESTION_TOOLS.has(tool)) observe("SetQuestionTab.hook.ts", payload);
+      if (AGENT_TOOLS.has(tool)) observe("AgentInvocation.hook.ts", payload);
     },
 
     "tool.execute.after": async (input: JsonObject, output: JsonObject) => {
@@ -312,7 +350,13 @@ export const PAIOpenCodePlugin = async () => {
       recordTool(input, output);
 
       if (CONTENT_TOOLS.has(tool)) observe("ContentScanner.hook.ts", payload);
-      if (TELOS_TOOLS.has(tool)) observe("TelosSummarySync.hook.ts", payload);
+      if (WRITE_TOOLS.has(tool)) {
+        observe("TelosSummarySync.hook.ts", payload);
+        observe("ISASync.hook.ts", payload);
+        observe("CheckpointPerISC.hook.ts", payload);
+      }
+      if (QUESTION_TOOLS.has(tool)) observe("QuestionAnswered.hook.ts", payload);
+      if (AGENT_TOOLS.has(tool)) observe("AgentInvocation.hook.ts", payload);
       observe("ToolActivityTracker.hook.ts", payload);
     },
 
@@ -336,6 +380,13 @@ export const PAIOpenCodePlugin = async () => {
         hook_event_name: "UserPromptSubmit",
         prompt,
       });
+      const promptProcessing = runHook("PromptProcessing.hook.ts", {
+        framework: FRAMEWORK,
+        session_id: sessionId(input),
+        hook_event_name: "UserPromptSubmit",
+        prompt,
+      });
+      prependPromptContext(output, prompt, hookAdditionalContext(promptProcessing.stdout));
       injectSessionContext(input, output, prompt);
     },
 
@@ -351,6 +402,7 @@ export const PAIOpenCodePlugin = async () => {
       if (event?.type === "session.created") {
         observe("KittyEnvPersist.hook.ts", sessionPayload(event));
         loadSessionContext(event);
+        observe("StartupSelfCheck.hook.ts", sessionPayload(event));
       }
 
       if (event?.type === "session.created" || event?.type === "session.updated") {

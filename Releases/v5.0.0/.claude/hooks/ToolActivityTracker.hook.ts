@@ -32,7 +32,10 @@ interface ToolUseInput {
 
 const OBS_DIR = memoryPath('OBSERVABILITY');
 const ACTIVITY_FILE = join(OBS_DIR, 'tool-activity.jsonl');
-const OBSERVABILITY_PUSH_BUDGET_MS = Number(process.env.PAI_TOOL_ACTIVITY_PUSH_BUDGET_MS || '750');
+const DEFAULT_PUSH_BUDGET_MS = (process.env.PAI_FRAMEWORK || '').toLowerCase() === 'codex' ? 0 : 750;
+const OBSERVABILITY_PUSH_BUDGET_MS = Number(process.env.PAI_TOOL_ACTIVITY_PUSH_BUDGET_MS || String(DEFAULT_PUSH_BUDGET_MS));
+const CAPTURE_GIT_SNAPSHOT = process.env.PAI_TOOL_ACTIVITY_CAPTURE_GIT === '1' ||
+  ((process.env.PAI_FRAMEWORK || '').toLowerCase() !== 'codex' && process.env.PAI_TOOL_ACTIVITY_CAPTURE_GIT !== '0');
 
 // Tools that mutate filesystem state — capture extra ground truth.
 const WRITE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
@@ -82,8 +85,10 @@ function captureGroundTruth(toolName: string, input: Record<string, unknown>, re
       gt.content_preview = truncate(input.content, 500);
       gt.content_bytes = input.content.length;
     }
-    const gs = gitSnapshot(process.cwd());
-    if (gs) gt.git = gs;
+    if (CAPTURE_GIT_SNAPSHOT) {
+      const gs = gitSnapshot(process.cwd());
+      if (gs) gt.git = gs;
+    }
   }
 
   if (BASH_TOOLS.has(toolName) && typeof input.command === 'string') {

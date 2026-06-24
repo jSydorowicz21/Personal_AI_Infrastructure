@@ -160,7 +160,11 @@ function outerHookTimeout(timeout: number): number {
   return timeout + 5;
 }
 
-function hookCommand(config: PAIConfig, hookFile: string, timeout = 10): string {
+function hookTargetArg(hookFile: string | string[]): string {
+  return Array.isArray(hookFile) ? hookFile.join(",") : hookFile;
+}
+
+function hookCommandPosix(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
   const adapter = `${config.paiDir}/hooks/FrameworkHookAdapter.ts`;
   const env = [
     ["PAI_DIR", `${config.paiDir}/PAI`],
@@ -178,14 +182,16 @@ function hookCommand(config: PAIConfig, hookFile: string, timeout = 10): string 
     "--framework",
     shellSingleQuote(config.framework),
     "--target",
-    shellSingleQuote(hookFile),
+    shellSingleQuote(hookTargetArg(hookFile)),
     "--timeout-ms",
     shellSingleQuote(String(timeout * 1000)),
   ].join(" ");
 }
 
-function hookCommandWindows(config: PAIConfig, hookFile: string, timeout = 10): string {
+function hookCommandPowerShell(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
   const adapter = `${config.paiDir}\\hooks\\FrameworkHookAdapter.ts`;
+  const target = hookTargetArg(hookFile);
+  const timeoutMs = String(timeout * 1000);
   const env = [
     ["PAI_DIR", `${config.paiDir}\\PAI`],
     ["PAI_DATA_DIR", config.dataDir || ""],
@@ -198,19 +204,44 @@ function hookCommandWindows(config: PAIConfig, hookFile: string, timeout = 10): 
   const envAssignments = env
     .map(([key, value]) => `$env:${key}=${powerShellSingleQuote(value)};`)
     .join(" ");
-  const script = `${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework ${powerShellSingleQuote(config.framework)} --target ${powerShellSingleQuote(hookFile)} --timeout-ms ${powerShellSingleQuote(String(timeout * 1000))}`;
-
+  const powerShellScript = `$ProgressPreference='SilentlyContinue'; ${envAssignments} bun ${powerShellSingleQuote(adapter)} --framework ${powerShellSingleQuote(config.framework)} --target ${powerShellSingleQuote(target)} --timeout-ms ${powerShellSingleQuote(timeoutMs)}`;
   return [
     "powershell",
     "-NoProfile",
+    "-NonInteractive",
     "-ExecutionPolicy",
     "Bypass",
     "-EncodedCommand",
-    powerShellEncodedCommand(script),
+    powerShellEncodedCommand(powerShellScript),
   ].join(" ");
 }
 
-function commandHook(config: PAIConfig, hookFile: string, timeout = 10): Record<string, any> {
+function hookCommand(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
+  return process.platform === "win32"
+    ? hookCommandPowerShell(config, hookFile, timeout)
+    : hookCommandPosix(config, hookFile, timeout);
+}
+
+function hookCommandWindows(config: PAIConfig, hookFile: string | string[], timeout = 10): string {
+  const runner = `${config.paiDir}\\hooks\\CodexHookRunner.cmd`;
+  const target = hookTargetArg(hookFile);
+  const timeoutMs = String(timeout * 1000);
+  const args = [
+    runner,
+    config.framework,
+    target,
+    timeoutMs,
+    config.dataDir || "",
+    config.configDir || "",
+  ];
+  if (args.every((item) => !/\s/.test(item))) {
+    return `cmd.exe /d /s /c "call ${args.join(" ")}"`;
+  }
+
+  return hookCommandPowerShell(config, hookFile, timeout);
+}
+
+function commandHook(config: PAIConfig, hookFile: string | string[], timeout = 10): Record<string, any> {
   return {
     type: "command",
     command: hookCommand(config, hookFile, timeout),
@@ -220,11 +251,13 @@ function commandHook(config: PAIConfig, hookFile: string, timeout = 10): Record<
 }
 
 /**
- * Codex supports command hooks. This maps PAI's command-compatible hooks
- * through FrameworkHookAdapter so Codex/OpenCode-shaped payloads are normalized
- * before reaching the existing Claude-oriented hook implementations.
+ * Codex supports command hooks. This emits Codex-native hook groups first:
+ * Codex tool/event matchers, Codex block decisions, Codex command updates, and
+ * Windows-safe command runners are the contract tested by
+ * CodexHookContractSmokeTest. FrameworkHookAdapter is only the compatibility
+ * bridge that lets shared PAI hook implementations receive normalized input.
  *
- * HTTP hooks remain Pulse-owned for Claude. Codex gets the command equivalents
+ * HTTP hooks remain Pulse-owned for Claude. Codex gets command equivalents
  * where they exist; Pulse-only routes such as skill-guard/agent-guard are not
  * emitted here because Codex does not execute HTTP hook entries.
  */
@@ -245,8 +278,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
         {
           matcher: "Bash|Shell",
           hooks: [
-            commandHook(config, "SecurityPipeline.hook.ts"),
-            commandHook(config, "RtkPreToolUse.hook.js"),
+            commandHook(config, ["SecurityPipeline.hook.ts", "RtkPreToolUse.hook.js"]),
           ],
         },
         {
@@ -284,9 +316,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
         {
           matcher: "Write|Edit|MultiEdit|apply_patch",
           hooks: [
-            commandHook(config, "TelosSummarySync.hook.ts", 5),
-            commandHook(config, "ISASync.hook.ts", 10),
-            commandHook(config, "CheckpointPerISC.hook.ts", 10),
+            commandHook(config, ["TelosSummarySync.hook.ts", "ISASync.hook.ts", "CheckpointPerISC.hook.ts"], 10),
           ],
         },
         {
@@ -305,9 +335,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
       UserPromptSubmit: [
         {
           hooks: [
-            commandHook(config, "PromptGuard.hook.ts", 5),
-            commandHook(config, "RepeatDetection.hook.ts", 5),
-            commandHook(config, "PromptProcessing.hook.ts", 35),
+            commandHook(config, ["PromptGuard.hook.ts", "RepeatDetection.hook.ts", "PromptProcessing.hook.ts"], 35),
           ],
         },
       ],
@@ -351,6 +379,28 @@ export function generateOpenCodeConfigJson(config: PAIConfig): Record<string, an
       version: PAI_VERSION,
       algorithmVersion: ALGORITHM_VERSION,
       framework: config.framework,
+    },
+  };
+}
+
+export function mergeOpenCodeConfigJson(existing: Record<string, any>, generated: Record<string, any>): Record<string, any> {
+  return {
+    ...existing,
+    ...generated,
+    instructions: generated.instructions,
+    env: {
+      ...(existing.env && typeof existing.env === "object" ? existing.env : {}),
+      ...(generated.env && typeof generated.env === "object" ? generated.env : {}),
+    },
+    ...(existing.mcp || generated.mcp ? {
+      mcp: {
+        ...(existing.mcp && typeof existing.mcp === "object" ? existing.mcp : {}),
+        ...(generated.mcp && typeof generated.mcp === "object" ? generated.mcp : {}),
+      },
+    } : {}),
+    pai: {
+      ...(existing.pai && typeof existing.pai === "object" ? existing.pai : {}),
+      ...(generated.pai && typeof generated.pai === "object" ? generated.pai : {}),
     },
   };
 }

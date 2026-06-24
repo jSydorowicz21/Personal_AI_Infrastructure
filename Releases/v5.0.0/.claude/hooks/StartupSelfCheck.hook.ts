@@ -32,6 +32,48 @@ function readText(path: string): string {
   }
 }
 
+function readJson(path: string): unknown {
+  try {
+    return JSON.parse(readText(path));
+  } catch {
+    return null;
+  }
+}
+
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
+function collectHookCommandTexts(config: unknown): string[] {
+  const hooks = (config as { hooks?: Record<string, unknown[]> } | null)?.hooks;
+  if (!hooks || typeof hooks !== "object") return [];
+
+  const texts: string[] = [];
+  for (const groups of Object.values(hooks)) {
+    if (!Array.isArray(groups)) continue;
+    for (const group of groups) {
+      const hookList = (group as { hooks?: unknown[] } | null)?.hooks;
+      if (!Array.isArray(hookList)) continue;
+      for (const hook of hookList) {
+        const entry = hook as { command?: unknown; commandWindows?: unknown };
+        for (const value of [entry.command, entry.commandWindows]) {
+          if (typeof value !== "string" || !value) continue;
+          texts.push(value);
+          const decoded = decodeEncodedCommand(value);
+          if (decoded) texts.push(decoded);
+        }
+      }
+    }
+  }
+  return texts;
+}
+
 async function pulseCheck(path: string): Promise<Check> {
   try {
     const res = await fetch(`http://localhost:31337${path}`, {
@@ -52,15 +94,19 @@ async function main() {
   const hooksJsonPath = join(frameworkRoot, "hooks.json");
   const mcpDir = join(frameworkRoot, "MCPs");
   const configToml = readText(configTomlPath);
-  const hooksJson = readText(hooksJsonPath);
+  const hooksConfig = readJson(hooksJsonPath);
+  const hookTexts = collectHookCommandTexts(hooksConfig);
+  const hookText = hookTexts.join("\n");
+  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
 
   const checks: Check[] = [
     check("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
     check("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
     check("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), configTomlPath),
     check("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), configTomlPath),
-    check("hooks.json has FrameworkHookAdapter", hooksJson.includes("FrameworkHookAdapter.ts"), hooksJsonPath),
-    check("hooks.json has StartupSelfCheck", hooksJson.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
+    check("FrameworkHookAdapter exists", existsSync(join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")), join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")),
+    check("hooks.json has runnable hook commands", hookTexts.length > 0 && hasAdapterInvocation, hooksJsonPath),
+    check("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     check("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),
     check("Shared PAI data exists", existsSync(dataDir), dataDir),
     await pulseCheck("/health"),

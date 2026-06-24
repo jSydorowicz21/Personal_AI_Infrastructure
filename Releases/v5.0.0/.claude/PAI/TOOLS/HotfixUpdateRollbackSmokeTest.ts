@@ -7,7 +7,7 @@
  * overlaying the backup contents onto the install root.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -104,6 +104,7 @@ const installedSourceRoot = join(root, "installed-source");
 const dataDir = join(home, ".pai");
 const configDir = join(home, ".config", "PAI");
 const staleEnvDataDir = join(root, "stale-env", ".pai");
+const linkedToolsTarget = join(root, "linked-tools-target");
 
 const sentinels = {
   agents: "OLD_AGENTS_SENTINEL",
@@ -119,6 +120,7 @@ const sentinels = {
 mkdirSync(installRoot, { recursive: true });
 mkdirSync(dataDir, { recursive: true });
 mkdirSync(staleEnvDataDir, { recursive: true });
+mkdirSync(linkedToolsTarget, { recursive: true });
 copyInstalledSourceFixture(releaseRoot, installedSourceRoot);
 write(join(installedSourceRoot, "CLAUDE.md"), "**MANDATORY FIRST ACTION:** Read `PAI/ALGORITHM/LATEST` from the current directory.");
 write(join(installedSourceRoot, "AGENTS.md"), "**MANDATORY FIRST ACTION:** Read `$PAI_DIR/ALGORITHM/LATEST` from the active PAI subsystem directory.");
@@ -129,7 +131,10 @@ write(join(staleEnvDataDir, "framework.json"), JSON.stringify({
   dataDir: staleEnvDataDir,
 }, null, 2));
 write(join(installRoot, "AGENTS.md"), sentinels.agents);
-write(join(installRoot, "PAI", "TOOLS", "pai.ts"), sentinels.paiTool);
+write(join(linkedToolsTarget, "pai.ts"), sentinels.paiTool);
+write(join(linkedToolsTarget, "ExtraTool.ts"), "LINKED_EXTRA_TOOL_SENTINEL");
+mkdirSync(join(installRoot, "PAI"), { recursive: true });
+symlinkSync(linkedToolsTarget, join(installRoot, "PAI", "TOOLS"), process.platform === "win32" ? "junction" : "dir");
 write(join(installRoot, "hooks", "RepeatDetection.hook.ts"), sentinels.repeatHook);
 write(join(installRoot, "hooks", "PromptGuard.hook.ts"), sentinels.promptGuardHook);
 write(join(installRoot, "PAI", "ALGORITHM", "LATEST"), "6.3.0");
@@ -187,6 +192,7 @@ const update = spawnSync(updateCommand, updateArgs, {
 
 const backupRoot = latestBackupRoot(home);
 const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
+const linkedToolsStats = existsSync(join(installRoot, "PAI", "TOOLS")) ? lstatSync(join(installRoot, "PAI", "TOOLS")) : null;
 const updatedRepeatHook = read(join(installRoot, "hooks", "RepeatDetection.hook.ts"));
 const updatedPromptGuardHook = read(join(installRoot, "hooks", "PromptGuard.hook.ts"));
 const updatedHooksJson = read(join(installRoot, "hooks.json"));
@@ -228,6 +234,7 @@ const beforeRollbackChecks: Check[] = [
   check("RepeatDetection backup captured old content", read(join(backupRoot, "hooks", "RepeatDetection.hook.ts")) === sentinels.repeatHook, join(backupRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard backup captured old content", read(join(backupRoot, "hooks", "PromptGuard.hook.ts")) === sentinels.promptGuardHook, join(backupRoot, "hooks", "PromptGuard.hook.ts")),
   check("pai.ts updated from release", updatedPaiTool.includes("Run PAI runtime diagnostics"), join(installRoot, "PAI", "TOOLS", "pai.ts")),
+  check("hotfix preserves linked PAI/TOOLS directory", Boolean(linkedToolsStats?.isSymbolicLink()) && read(join(installRoot, "PAI", "TOOLS", "ExtraTool.ts")) === "LINKED_EXTRA_TOOL_SENTINEL", join(installRoot, "PAI", "TOOLS")),
   check("RepeatDetection updated from release", updatedRepeatHook.includes("Continue by addressing the newest request directly"), join(installRoot, "hooks", "RepeatDetection.hook.ts")),
   check("PromptGuard updated from release", updatedPromptGuardHook.includes("process.exitCode = 2"), join(installRoot, "hooks", "PromptGuard.hook.ts")),
   check("MemoryDelete smoke installed", existsSync(join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")), join(installRoot, "PAI", "TOOLS", "MemoryDeleteSmokeTest.ts")),

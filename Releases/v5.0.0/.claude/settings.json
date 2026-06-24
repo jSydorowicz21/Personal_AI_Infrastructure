@@ -199,6 +199,18 @@
             "command": "$HOME/.claude/hooks/TelosSummarySync.hook.ts",
             "timeout": 5,
             "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/ISASync.hook.ts",
+            "timeout": 10,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/CheckpointPerISC.hook.ts",
+            "timeout": 10,
+            "async": true
           }
         ]
       },
@@ -209,6 +221,41 @@
             "type": "command",
             "command": "$HOME/.claude/hooks/TelosSummarySync.hook.ts",
             "timeout": 5,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/ISASync.hook.ts",
+            "timeout": 10,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/CheckpointPerISC.hook.ts",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      },
+      {
+        "matcher": "MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/TelosSummarySync.hook.ts",
+            "timeout": 5,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/ISASync.hook.ts",
+            "timeout": 10,
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/CheckpointPerISC.hook.ts",
+            "timeout": 10,
             "async": true
           }
         ]

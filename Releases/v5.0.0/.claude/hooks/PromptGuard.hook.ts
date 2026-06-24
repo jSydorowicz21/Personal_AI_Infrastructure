@@ -26,6 +26,8 @@ interface HookInput {
 const inspector = createPromptInspector();
 
 async function main(): Promise<void> {
+  if (process.env.PAI_INFERENCE_CHILD === '1' || process.env.PAI_DISABLE_RECURSIVE_HOOKS === '1') return;
+
   let input: HookInput;
 
   try {

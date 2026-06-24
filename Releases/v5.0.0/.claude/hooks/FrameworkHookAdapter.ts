@@ -9,9 +9,46 @@
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
 import { basename, extname, join, resolve } from "path";
+import { blockEmissionForFramework, shouldExitCleanlyOnBlock } from "./lib/framework-hook-contract";
 import { isSubagentSession } from "./lib/session";
 
 type JsonObject = Record<string, any>;
+type CapturedOutput = {
+  json: JsonObject[];
+  text: string[];
+};
+type MergedHookOutput = {
+  decision?: JsonObject;
+  permission?: JsonObject;
+  updatedInput?: unknown;
+  additionalContext: string[];
+  hookEventName?: string;
+  continueValue?: boolean;
+};
+
+function childBlockReason(targetPath: string, stderr: string): string {
+  const cleaned = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+  return cleaned || `[PAI SECURITY] ${basename(targetPath)} blocked this tool call.`;
+}
+
+function exitAfterChildBlock(framework: string, targetPath: string, stderr: string, merged: MergedHookOutput, fallbackEventName: string): never {
+  if (shouldExitCleanlyOnBlock(framework)) {
+    if (!merged.decision && !merged.permission) {
+      const emission = blockEmissionForFramework(framework, childBlockReason(targetPath, stderr));
+      if (emission.output) console.log(JSON.stringify(emission.output));
+      process.exit(emission.exitCode);
+    }
+    emitMergedOutput(merged, fallbackEventName);
+    process.exit(0);
+  }
+
+  emitMergedOutput(merged, fallbackEventName);
+  process.exit(2);
+}
 
 function argValue(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -19,9 +56,28 @@ function argValue(name: string): string | undefined {
   return process.argv[index + 1];
 }
 
+function targetArgs(): string[] {
+  const raw = argValue("--target") || argValue("--targets") || "";
+  return raw.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
 function timeoutMs(): number {
   const raw = Number(argValue("--timeout-ms") || process.env.PAI_HOOK_CHILD_TIMEOUT_MS || "");
   return Number.isFinite(raw) && raw > 0 ? raw : 15_000;
+}
+
+const RECURSION_GUARDED_HOOKS = new Set([
+  "PromptGuard.hook.ts",
+  "RepeatDetection.hook.ts",
+  "PromptProcessing.hook.ts",
+  "SatisfactionCapture.hook.ts",
+]);
+
+function shouldSkipForNestedInference(target: string): boolean {
+  if (process.env.PAI_INFERENCE_CHILD !== "1" && process.env.PAI_DISABLE_RECURSIVE_HOOKS !== "1") {
+    return false;
+  }
+  return RECURSION_GUARDED_HOOKS.has(basename(target));
 }
 
 function eventName(input: JsonObject): string {
@@ -164,20 +220,102 @@ function normalize(input: JsonObject, framework: string): JsonObject {
   };
 }
 
+function captureStdout(stdout: string): CapturedOutput {
+  const captured: CapturedOutput = { json: [], text: [] };
+  for (const line of stdout.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        captured.json.push(parsed as JsonObject);
+        continue;
+      }
+    } catch {}
+    captured.text.push(line);
+  }
+  return captured;
+}
+
+function mergeCapturedJson(merged: MergedHookOutput, entries: JsonObject[]): "continue" | "stop" {
+  for (const entry of entries) {
+    if (typeof entry.decision === "string") {
+      merged.decision = entry;
+      return "stop";
+    }
+
+    if (typeof entry.continue === "boolean") {
+      merged.continueValue = merged.continueValue ?? entry.continue;
+    }
+
+    const hookOutput = entry.hookSpecificOutput;
+    if (!hookOutput || typeof hookOutput !== "object") continue;
+
+    if (typeof hookOutput.hookEventName === "string") {
+      merged.hookEventName = merged.hookEventName || hookOutput.hookEventName;
+    }
+
+    const permissionDecision = String(hookOutput.permissionDecision || "");
+    if (permissionDecision && permissionDecision !== "allow") {
+      merged.permission = hookOutput;
+      return "stop";
+    }
+
+    if ("updatedInput" in hookOutput) {
+      merged.updatedInput = hookOutput.updatedInput;
+      merged.hookEventName = merged.hookEventName || hookOutput.hookEventName;
+    }
+
+    if (typeof hookOutput.additionalContext === "string" && hookOutput.additionalContext.trim()) {
+      merged.additionalContext.push(hookOutput.additionalContext);
+      merged.hookEventName = merged.hookEventName || hookOutput.hookEventName;
+    }
+  }
+  return "continue";
+}
+
+function emitMergedOutput(merged: MergedHookOutput, fallbackEventName: string): void {
+  if (merged.decision) {
+    console.log(JSON.stringify(merged.decision));
+    return;
+  }
+
+  if (merged.permission) {
+    console.log(JSON.stringify({ hookSpecificOutput: merged.permission }));
+    return;
+  }
+
+  const hookSpecificOutput: JsonObject = {};
+  if (merged.hookEventName || merged.updatedInput !== undefined || merged.additionalContext.length > 0) {
+    hookSpecificOutput.hookEventName = merged.hookEventName || fallbackEventName;
+  }
+  if (merged.updatedInput !== undefined) {
+    hookSpecificOutput.permissionDecision = "allow";
+    hookSpecificOutput.updatedInput = merged.updatedInput;
+  }
+  if (merged.additionalContext.length > 0) {
+    hookSpecificOutput.additionalContext = merged.additionalContext.join("\n\n");
+  }
+
+  if (Object.keys(hookSpecificOutput).length > 0) {
+    console.log(JSON.stringify({ hookSpecificOutput }));
+    return;
+  }
+
+  if (merged.continueValue === false) {
+    console.log(JSON.stringify({ continue: false }));
+  }
+}
+
 async function main() {
-  const targetArg = argValue("--target");
-  if (!targetArg) {
+  const targets = targetArgs();
+  if (targets.length === 0) {
     console.error("[PAI FrameworkHookAdapter] Missing --target <hook-file>");
     process.exit(1);
   }
 
   const framework = argValue("--framework") || process.env.PAI_FRAMEWORK || "codex";
   const hooksDir = import.meta.dir;
-  const targetPath = resolve(join(hooksDir, targetArg));
-  if (!existsSync(targetPath)) {
-    console.error(`[PAI FrameworkHookAdapter] Target hook not found: ${targetPath}`);
-    process.exit(1);
-  }
 
   let input: JsonObject = {};
   const raw = await Bun.stdin.text();
@@ -189,41 +327,65 @@ async function main() {
     }
   }
 
-  const extension = extname(targetPath);
-  const runner = extension === ".sh" ? (Bun.which("bash") || "") : process.execPath;
-  if (!runner) {
-    // Shell-only hooks are optional quality-of-life adapters. Do not break a
-    // Windows Codex install just because Git Bash is unavailable.
-    process.exit(0);
-  }
-  const childArgs = extension === ".sh" ? [targetPath] : [targetPath];
+  const normalizedInput = normalize(input, framework);
+  const normalized = JSON.stringify(normalizedInput);
+  const fallbackHookEventName = eventName(input);
+  const merged: MergedHookOutput = { additionalContext: [] };
+  for (const targetArg of targets) {
+    const targetPath = resolve(join(hooksDir, targetArg));
+    if (!existsSync(targetPath)) {
+      console.error(`[PAI FrameworkHookAdapter] Target hook not found: ${targetPath}`);
+      process.exit(1);
+    }
+    if (shouldSkipForNestedInference(targetPath)) continue;
 
-  const child = spawnSync(runner, childArgs, {
-    input: JSON.stringify(normalize(input, framework)),
-    stdio: ["pipe", "inherit", "inherit"],
-    timeout: timeoutMs(),
-    env: {
-      ...process.env,
-      PAI_FRAMEWORK: framework,
-      PAI_IS_SUBAGENT: isSubagentSession(input) ? "1" : process.env.PAI_IS_SUBAGENT || "",
-      PAI_PROJECT_DIR: cwd(input),
-    },
-  });
+    const extension = extname(targetPath);
+    const runner = extension === ".sh" ? (Bun.which("bash") || "") : process.execPath;
+    if (!runner) continue;
+    const childArgs = extension === ".sh" ? [targetPath] : [targetPath];
 
-  if (child.error) {
-    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} failed: ${child.error.message}`);
-    process.exit(124);
-  }
-  if (child.signal) {
-    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} terminated by signal ${child.signal}`);
-    process.exit(124);
-  }
-  if (child.status === null) {
-    console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} exited without status`);
-    process.exit(124);
+    const child = spawnSync(runner, childArgs, {
+      input: normalized,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: timeoutMs(),
+      env: {
+        ...process.env,
+        PAI_FRAMEWORK: framework,
+        PAI_IS_SUBAGENT: isSubagentSession(input) ? "1" : process.env.PAI_IS_SUBAGENT || "",
+        PAI_PROJECT_DIR: cwd(input),
+      },
+    });
+
+    if (child.stderr) process.stderr.write(child.stderr);
+    const captured = captureStdout(child.stdout || "");
+    for (const line of captured.text) process.stderr.write(`${line}\n`);
+    const mergeAction = mergeCapturedJson(merged, captured.json);
+
+    if (child.error) {
+      emitMergedOutput(merged, fallbackHookEventName);
+      console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} failed: ${child.error.message}`);
+      process.exit(124);
+    }
+    if (child.signal) {
+      emitMergedOutput(merged, fallbackHookEventName);
+      console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} terminated by signal ${child.signal}`);
+      process.exit(124);
+    }
+    if (child.status === null) {
+      emitMergedOutput(merged, fallbackHookEventName);
+      console.error(`[PAI FrameworkHookAdapter] ${basename(targetPath)} exited without status`);
+      process.exit(124);
+    }
+    if (child.status === 2) exitAfterChildBlock(framework, targetPath, child.stderr || "", merged, fallbackHookEventName);
+    if (child.status !== 0 || mergeAction === "stop") {
+      emitMergedOutput(merged, fallbackHookEventName);
+      process.exit(child.status);
+    }
   }
 
-  process.exit(child.status);
+  emitMergedOutput(merged, fallbackHookEventName);
+  process.exit(0);
 }
 
 main().catch((err) => {

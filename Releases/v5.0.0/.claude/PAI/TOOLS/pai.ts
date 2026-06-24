@@ -22,9 +22,9 @@
  */
 
 import { spawn, spawnSync } from "bun";
-import { existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync, readdirSync, symlinkSync, unlinkSync, lstatSync, mkdirSync, cpSync, rmSync, realpathSync } from "fs";
 import { join, basename, dirname, delimiter, extname, resolve } from "path";
-import { generateCodexHooksJson } from "../PAI-Install/engine/config-gen";
+import { generateCodexHooksJson, mergeOpenCodeConfigJson } from "../PAI-Install/engine/config-gen";
 import { expandHome as expandPaiHome, getConfigDir, getPaiDataDir, homeDir as resolveHomeDir } from "./lib/paths";
 
 // ============================================================================
@@ -145,7 +145,8 @@ function frameworkRoot(id: FrameworkId): string {
   const stateFramework = state?.active || state?.framework;
   if (state?.root && stateFramework === id && existsSync(expandPaiHome(state.root))) return expandPaiHome(state.root);
   const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
-  const canCreateEnvRoot = envFramework === id && process.argv[2] === "framework" && process.argv[3] === "switch";
+  const switchTarget = normalizeFramework(process.argv[4]);
+  const canCreateEnvRoot = process.argv[2] === "framework" && process.argv[3] === "switch" && switchTarget === id;
   if (id === "codex" && process.env.CODEX_HOME) {
     const codexHome = expandPaiHome(process.env.CODEX_HOME);
     if (existsSync(codexHome) || canCreateEnvRoot) return codexHome;
@@ -286,18 +287,26 @@ function createDirectoryLink(src: string, dst: string) {
 
 function syncManagedPaiEntry(src: string, dst: string) {
   if (resolve(src) === resolve(dst)) return;
+  const sourceStat = lstatSync(src);
   if (existsSync(dst)) {
     try {
       if (realpathSync(dst) === realpathSync(src)) return;
     } catch {
       // Broken links or inaccessible targets are replaced below.
     }
-    rmSync(dst, { recursive: true, force: true });
+    try {
+      rmSync(dst, { recursive: true, force: true });
+    } catch (err) {
+      if (sourceStat.isDirectory() && existsSync(dst) && lstatSync(dst).isDirectory()) {
+        cpSync(src, dst, { recursive: true, force: true });
+        return;
+      }
+      throw err;
+    }
   }
   mkdirSync(dirname(dst), { recursive: true });
-  const stat = lstatSync(src);
-  if (stat.isDirectory()) createDirectoryLink(src, dst);
-  else if (stat.isFile()) cpSync(src, dst);
+  if (sourceStat.isDirectory()) createDirectoryLink(src, dst);
+  else if (sourceStat.isFile()) cpSync(src, dst);
 }
 
 function syncManagedFrameworkDirectory(src: string, dst: string) {
@@ -898,6 +907,20 @@ function buildOpenCodeConfig(root: string, id: FrameworkId, mcpConfig?: Record<s
   return config;
 }
 
+function readOpenCodeConfig(path: string): Record<string, any> {
+  try {
+    if (!existsSync(path)) return {};
+    const parsed = JSON.parse(readFileSync(path, "utf-8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeOpenCodeConfig(path: string, generated: Record<string, any>) {
+  writeFileSync(path, JSON.stringify(mergeOpenCodeConfigJson(readOpenCodeConfig(path), generated), null, 2));
+}
+
 function readActiveMcpConfig(root: string): Record<string, any> | null {
   const path = activeMcpPath(root);
   if (!existsSync(path)) return null;
@@ -929,7 +952,7 @@ function writeFrameworkFiles(id: FrameworkId, root: string) {
     writeCodexConfigToml(join(root, "config.toml"), root, mcpConfig);
     writeFileSync(join(root, "hooks.json"), JSON.stringify(generateCodexHooks(root), null, 2));
   } else if (id === "opencode") {
-    writeFileSync(join(root, "opencode.json"), JSON.stringify(buildOpenCodeConfig(root, id, mcpConfig), null, 2));
+    writeOpenCodeConfig(join(root, "opencode.json"), buildOpenCodeConfig(root, id, mcpConfig));
   }
 }
 
@@ -978,6 +1001,7 @@ function ensureFrameworkInstall(id: FrameworkId): string {
 }
 
 function setActiveFramework(id: FrameworkId) {
+  const previousState = readFrameworkState();
   const root = ensureFrameworkInstall(id);
   mkdirSync(DATA_DIR, { recursive: true });
   writeFileSync(FRAMEWORK_STATE, JSON.stringify({
@@ -987,6 +1011,7 @@ function setActiveFramework(id: FrameworkId) {
     dataDir: DATA_DIR,
     updatedAt: new Date().toISOString(),
   }, null, 2));
+  writeFrameworkSwitchAudit(id, root, previousState);
   if (process.platform === "win32") {
     if (setWindowsPaiUserEnvironment(root, id)) {
       log("Windows user environment updated for direct PAI/provider launches.", "✅");
@@ -996,6 +1021,28 @@ function setActiveFramework(id: FrameworkId) {
   }
   log(`Active framework set to ${frameworkName(id)} at ${root}`, "✅");
   log(`Global PAI memory remains at ${join(DATA_DIR, "MEMORY")}`, "🧠");
+}
+
+function writeFrameworkSwitchAudit(id: FrameworkId, root: string, previousState: any) {
+  try {
+    const auditDir = join(DATA_DIR, "MEMORY", "OBSERVABILITY");
+    mkdirSync(auditDir, { recursive: true });
+    appendFileSync(join(auditDir, "framework-switches.jsonl"), JSON.stringify({
+      timestamp: new Date().toISOString(),
+      source: "pai framework switch",
+      active: id,
+      root,
+      dataDir: DATA_DIR,
+      previousActive: previousState?.active || previousState?.framework || null,
+      previousRoot: previousState?.root || null,
+      cwd: process.cwd(),
+      argv: process.argv,
+      pid: process.pid,
+      ppid: process.ppid,
+    }) + "\n");
+  } catch {
+    // State switching must not fail because telemetry could not be recorded.
+  }
 }
 
 function notifyVoice(message: string) {
@@ -1146,7 +1193,7 @@ function writeActiveMcpConfig(config: Record<string, any>, activeFramework = get
   if (activeFramework === "codex") {
     writeCodexConfigToml(join(activeRoot, "config.toml"), activeRoot, config);
   } else if (activeFramework === "opencode") {
-    writeFileSync(join(activeRoot, "opencode.json"), JSON.stringify(buildOpenCodeConfig(activeRoot, activeFramework, config), null, 2));
+    writeOpenCodeConfig(join(activeRoot, "opencode.json"), buildOpenCodeConfig(activeRoot, activeFramework, config));
   }
 }
 
@@ -1394,13 +1441,26 @@ async function cmdLaunch(options: { mcp?: string; resume?: boolean; dangerous?: 
   const launchEnv = { ...process.env };
   Object.assign(launchEnv, frameworkEnv(activeRoot, activeFramework));
   delete launchEnv.ANTHROPIC_API_KEY;
-  const proc = spawn(frameworkSpawnArgs(args), {
-    stdio: ["inherit", "inherit", "inherit"],
-    env: launchEnv,
-  });
+  const launchArgs = frameworkSpawnArgs(args);
+  log(`Launching ${frameworkName(activeFramework)} from ${activeRoot}`, "🚀");
+  const started = Date.now();
+  let proc;
+  try {
+    proc = spawn(launchArgs, {
+      stdio: ["inherit", "inherit", "inherit"],
+      env: launchEnv,
+    });
+  } catch (err) {
+    error(`Failed to launch ${frameworkName(activeFramework)} with command '${launchArgs.join(" ")}': ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // Wait for the active framework CLI to exit.
-  await proc.exited;
+  const exitCode = await proc.exited;
+  const elapsedMs = Date.now() - started;
+  if (elapsedMs < 1500) {
+    log(`${frameworkName(activeFramework)} exited immediately with code ${exitCode}. Run 'pai framework status' to confirm the active framework.`, "⚠️");
+  }
+  if (exitCode !== 0) process.exit(exitCode);
 }
 
 async function cmdUpdate() {

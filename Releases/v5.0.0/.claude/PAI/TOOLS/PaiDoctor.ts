@@ -35,6 +35,39 @@ function readJson(path: string): any {
   }
 }
 
+function decodeEncodedCommand(command: string): string {
+  const match = command.match(/(?:^|\s)-EncodedCommand\s+([A-Za-z0-9+/=]+)/i);
+  if (!match) return "";
+  try {
+    return Buffer.from(match[1], "base64").toString("utf16le");
+  } catch {
+    return "";
+  }
+}
+
+function collectHookCommandTexts(config: any): string[] {
+  const hooks = config?.hooks;
+  if (!hooks || typeof hooks !== "object") return [];
+
+  const texts: string[] = [];
+  for (const groups of Object.values(hooks)) {
+    if (!Array.isArray(groups)) continue;
+    for (const group of groups) {
+      const hookList = group?.hooks;
+      if (!Array.isArray(hookList)) continue;
+      for (const hook of hookList) {
+        for (const value of [hook?.command, hook?.commandWindows]) {
+          if (typeof value !== "string" || !value) continue;
+          texts.push(value);
+          const decoded = decodeEncodedCommand(value);
+          if (decoded) texts.push(decoded);
+        }
+      }
+    }
+  }
+  return texts;
+}
+
 function timeoutForTool(name: string): number {
   if (name === "CodexRealSessionHookProof.ts") return 300_000;
   if (name === "HotfixUpdateRollbackSmokeTest.ts") return 180_000;
@@ -97,20 +130,26 @@ function optionalSecretChecks(): Check[] {
 async function main() {
   const frameworkState = readJson(join(dataDir, "framework.json"));
   const configToml = existsSync(join(frameworkRoot, "config.toml")) ? readFileSync(join(frameworkRoot, "config.toml"), "utf-8") : "";
-  const hooksJson = existsSync(join(frameworkRoot, "hooks.json")) ? readFileSync(join(frameworkRoot, "hooks.json"), "utf-8") : "";
+  const hooksJsonPath = join(frameworkRoot, "hooks.json");
+  const hooksConfig = readJson(hooksJsonPath);
+  const hookTexts = collectHookCommandTexts(hooksConfig);
+  const hookText = hookTexts.join("\n");
+  const hasAdapterInvocation = hookText.includes("FrameworkHookAdapter.ts") || hookText.includes("CodexHookRunner.cmd");
   const interviewSkillPath = join(frameworkRoot, "skills", "Interview", "SKILL.md");
   const interviewPromptPath = join(frameworkRoot, "prompts", "interview.md");
   const interviewPrompt = existsSync(interviewPromptPath) ? readFileSync(interviewPromptPath, "utf-8") : "";
   const mcpDir = join(frameworkRoot, "MCPs");
 
   const checks: Check[] = [
-    ok("Active framework is Codex", frameworkState?.active === "codex", join(dataDir, "framework.json")),
+    ok("Active framework is Codex", frameworkState?.active === "codex", join(dataDir, "framework.json"), false),
     ok("Codex root exists", existsSync(frameworkRoot), frameworkRoot),
     ok("AGENTS.md exists", existsSync(join(frameworkRoot, "AGENTS.md")), join(frameworkRoot, "AGENTS.md")),
     ok("RTK.md exists", existsSync(join(frameworkRoot, "RTK.md")), join(frameworkRoot, "RTK.md")),
     ok("config.toml has PAI root block", configToml.includes("BEGIN PAI MANAGED ROOT CONFIG"), join(frameworkRoot, "config.toml")),
     ok("config.toml has MCP block", configToml.includes("BEGIN PAI MANAGED MCP CONFIG"), join(frameworkRoot, "config.toml")),
-    ok("hooks.json has FrameworkHookAdapter", hooksJson.includes("FrameworkHookAdapter.ts"), join(frameworkRoot, "hooks.json")),
+    ok("FrameworkHookAdapter exists", existsSync(join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")), join(frameworkRoot, "hooks", "FrameworkHookAdapter.ts")),
+    ok("hooks.json has runnable hook commands", hookTexts.length > 0 && hasAdapterInvocation, hooksJsonPath),
+    ok("hooks.json has StartupSelfCheck", hookText.includes("StartupSelfCheck.hook.ts"), hooksJsonPath),
     ok("Codex Interview skill installed", existsSync(interviewSkillPath), interviewSkillPath),
     ok("Codex Interview prompt uses skill mention", interviewPrompt.includes("$Interview") && !interviewPrompt.includes('Skill("'), interviewPromptPath, false),
     ok("MCP profiles present", existsSync(mcpDir) && readdirSync(mcpDir).some((file) => file.endsWith(".mcp.json")), mcpDir),

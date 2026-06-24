@@ -53,7 +53,10 @@ function emptyPatternsConfig(): PatternsConfig {
 
 function parseScalar(value: string): string {
   const trimmed = value.trim();
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replace(/\\\\/g, '\\').replace(/\\"/g, '"');
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
     return trimmed.slice(1, -1);
   }
   return trimmed;
@@ -218,6 +221,10 @@ function extractCommand(input: Record<string, unknown> | string): string {
   return (input?.command as string) || '';
 }
 
+function isShellTool(toolName: string): boolean {
+  return ['Bash', 'Shell', 'exec'].includes(toolName);
+}
+
 // ── Inspection Logic ──
 
 function inspectBash(command: string, config: PatternsConfig): InspectionResult {
@@ -287,7 +294,7 @@ class PatternInspector implements Inspector {
     const config = loadPatterns();
     if (!config) return deny('CRITICAL: Security patterns file missing — fail-closed');
 
-    if (ctx.toolName === 'Bash') {
+    if (isShellTool(ctx.toolName)) {
       const command = extractCommand(ctx.toolInput);
       return inspectBash(command, config);
     }

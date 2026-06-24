@@ -312,6 +312,10 @@ function getRecentContext(transcriptPath: string, maxTurns: number = 4): string 
 
 async function main() {
   try {
+    if (process.env.PAI_INFERENCE_CHILD === '1' || process.env.PAI_DISABLE_RECURSIVE_HOOKS === '1') {
+      process.exit(0);
+    }
+
     console.error('[SatisfactionCapture] Hook started');
     const input = await readStdinWithTimeout();
     const data: HookInput = JSON.parse(input);
