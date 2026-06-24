@@ -31,9 +31,10 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
-import { join, basename } from 'path';
+import { isAbsolute, join, basename } from 'path';
 import { paiPath, getPaiDir, getClaudeDir } from '../lib/paths';
 import { getIdentity } from '../lib/identity';
+import { parseModifiedFilePaths } from '../lib/change-detection';
 import { inference } from '../../PAI/TOOLS/Inference';
 import type { ParsedTranscript } from '../../PAI/TOOLS/TranscriptParser';
 
@@ -102,48 +103,62 @@ function getSystemDocsOnDisk(): string[] {
 // ============================================================================
 
 function getModifiedFiles(transcriptPath: string): Set<string> {
-  const modified = new Set<string>();
-  try {
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.split('\n').filter(Boolean);
+  return parseModifiedFilePaths(transcriptPath);
+}
 
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-        // Handle both transcript formats
-        if (entry.type === 'tool_use' && (entry.name === 'Write' || entry.name === 'Edit')) {
-          const path = entry.input?.file_path || '';
-          if (path) modified.add(path);
-        }
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const blocks = Array.isArray(entry.message.content) ? entry.message.content : [];
-          for (const block of blocks) {
-            if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
-              const path = block.input?.file_path || '';
-              if (path) modified.add(path);
-            }
-          }
-        }
-      } catch {
-        // Skip malformed lines
-      }
-    }
-  } catch (error) {
-    console.error(`${TAG} Failed to parse transcript:`, error);
-  }
-  return modified;
+function normalizePathText(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function normalizePathTextLower(value: string): string {
+  return normalizePathText(value).replace(/\/+$/g, '').toLowerCase();
+}
+
+function stripRoot(filePath: string, root: string): string | null {
+  const normalized = normalizePathText(filePath);
+  const pathLower = normalizePathTextLower(normalized);
+  const rootLower = normalizePathTextLower(root);
+  if (pathLower === rootLower) return '';
+  if (!pathLower.startsWith(rootLower + '/')) return null;
+  return normalized.slice(normalizePathText(root).replace(/\/+$/g, '').length + 1);
+}
+
+function relativeToFramework(filePath: string): string {
+  const frameworkRel = stripRoot(filePath, getClaudeDir());
+  if (frameworkRel !== null) return frameworkRel;
+  return normalizePathText(filePath);
+}
+
+function relativeToPai(filePath: string): string {
+  const paiRel = stripRoot(filePath, getPaiDir());
+  if (paiRel !== null) return paiRel;
+  return normalizePathText(filePath);
+}
+
+function resolveModifiedFilePath(filePath: string): string {
+  if (isAbsolute(filePath) || /^[A-Za-z]:[\\/]/.test(filePath)) return filePath;
+
+  const frameworkCandidate = join(getClaudeDir(), filePath);
+  if (existsSync(frameworkCandidate)) return frameworkCandidate;
+
+  const paiCandidate = join(getPaiDir(), filePath);
+  if (existsSync(paiCandidate)) return paiCandidate;
+
+  return filePath;
 }
 
 function isSystemDocModified(modifiedFiles: Set<string>): boolean {
   for (const path of modifiedFiles) {
-    if (path.includes('PAI/') && path.endsWith('.md')) return true;
+    const paiRel = relativeToPai(path);
+    if ((paiRel.startsWith('DOCUMENTATION/') || paiRel.includes('PAI/') || paiRel.endsWith('.md')) && paiRel.endsWith('.md')) return true;
   }
   return false;
 }
 
 function isHookModified(modifiedFiles: Set<string>): boolean {
   for (const path of modifiedFiles) {
-    if (path.includes('/hooks/') && path.endsWith('.ts')) return true;
+    const frameworkRel = relativeToFramework(path);
+    if ((frameworkRel.startsWith('hooks/') || normalizePathText(path).includes('/hooks/')) && path.endsWith('.ts')) return true;
   }
   return false;
 }
@@ -162,9 +177,38 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
   const CLAUDE_EXCLUDED = ['projects/', '.git/', 'node_modules/', 'history.jsonl'];
 
   for (const filePath of modifiedFiles) {
+    const normalizedPath = normalizePathText(filePath);
+    const relClaude = relativeToFramework(filePath);
+    const relPai = relativeToPai(filePath);
+
+    // --- Check framework-root relative paths (Claude/Codex/OpenCode homes) ---
+    if (relClaude !== normalizedPath || /^(hooks|skills|commands|agents|custom-agents)\//.test(relClaude) || /^(CLAUDE|AGENTS|RTK)\.md$/.test(relClaude) || relClaude === 'settings.json') {
+      if (CLAUDE_EXCLUDED.some(ex => relClaude.includes(ex))) continue;
+
+      if (relClaude.startsWith('hooks/') && (relClaude.endsWith('.ts') || relClaude.endsWith('.sh'))) return true;
+      if (relClaude.startsWith('skills/') && (relClaude.endsWith('.md') || relClaude.endsWith('.ts') || relClaude.endsWith('.yaml') || relClaude.endsWith('.yml'))) return true;
+      if (relClaude === 'settings.json') return true;
+      if (relClaude === 'CLAUDE.md' || relClaude === 'AGENTS.md' || relClaude === 'RTK.md') return true;
+      if (relClaude.startsWith('agents/') && (relClaude.endsWith('.md') || relClaude.endsWith('.toml'))) return true;
+      if (relClaude.startsWith('custom-agents/') && relClaude.endsWith('.md')) return true;
+      if (relClaude.startsWith('commands/') && relClaude.endsWith('.md')) return true;
+      continue;
+    }
+
+    // --- Check PAI-root relative paths ---
+    if (relPai !== normalizedPath || /^(TOOLS|ALGORITHM|DOCUMENTATION|PULSE|USER|MEMORY)\//.test(relPai)) {
+      if (PAI_EXCLUDED.some(ex => relPai.includes(ex))) continue;
+
+      if ((relPai.startsWith('DOCUMENTATION/') || relPai.startsWith('TOOLS/') || relPai.startsWith('ALGORITHM/') || relPai.startsWith('PULSE/') || relPai.includes('skills/')) &&
+          (relPai.endsWith('.md') || relPai.endsWith('.ts') || relPai.endsWith('.yaml') || relPai.endsWith('.yml') || relPai.endsWith('.toml'))) return true;
+      if (relPai.includes('/Tools/') && relPai.endsWith('.ts')) return true;
+      if (relPai.includes('/Workflows/') && relPai.endsWith('.md')) return true;
+      continue;
+    }
+
     // --- Check ~/.claude/ paths ---
-    if (filePath.startsWith(CLAUDE_DIR + '/')) {
-      const relPath = filePath.slice(CLAUDE_DIR.length + 1);
+    if (normalizedPath.startsWith(normalizePathText(CLAUDE_DIR) + '/')) {
+      const relPath = normalizedPath.slice(normalizePathText(CLAUDE_DIR).length + 1);
       if (CLAUDE_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
       if (relPath.startsWith('hooks/') && (relPath.endsWith('.ts') || relPath.endsWith('.sh'))) return true;
@@ -178,8 +222,8 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
     }
 
     // --- Check ~/.claude/PAI/ paths ---
-    if (filePath.startsWith(PAI_DIR + '/')) {
-      const relPath = filePath.slice(PAI_DIR.length + 1);
+    if (normalizedPath.startsWith(normalizePathText(PAI_DIR) + '/')) {
+      const relPath = normalizedPath.slice(normalizePathText(PAI_DIR).length + 1);
       if (PAI_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
       if ((relPath.startsWith('PAI/') || relPath.includes('skills/')) && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
@@ -418,6 +462,9 @@ function buildInferenceContext(
   const relevantFiles = Array.from(modifiedFiles).filter(f =>
     f.includes('/hooks/') ||
     f.includes('/PAI/') ||
+    f.startsWith('hooks/') ||
+    f.startsWith('TOOLS/') ||
+    f.startsWith('DOCUMENTATION/') ||
     f.includes('skills/') ||
     f.endsWith('settings.json') ||
     f.includes('/agents/') ||
@@ -427,12 +474,13 @@ function buildInferenceContext(
 
   for (const filePath of relevantFiles.slice(0, 5)) { // Cap at 5 files
     try {
-      if (!existsSync(filePath)) continue;
-      const content = readFileSync(filePath, 'utf-8');
+      const resolvedPath = resolveModifiedFilePath(filePath);
+      if (!existsSync(resolvedPath)) continue;
+      const content = readFileSync(resolvedPath, 'utf-8');
       const lines = content.split('\n');
       // Take the doc comment header + enough code to understand behavior
       const snippet = lines.slice(0, 60).join('\n');
-      parts.push(`=== SOURCE FILE: ${basename(filePath)} ===\n${snippet}\n`);
+      parts.push(`=== SOURCE FILE: ${basename(resolvedPath)} ===\n${snippet}\n`);
     } catch {
       // Skip unreadable
     }
@@ -769,8 +817,9 @@ export async function handleDocCrossRefIntegrity(
 
   // Update Last Updated timestamps for modified SYSTEM docs
   for (const path of modifiedFiles) {
-    if (path.includes('PAI/') && path.endsWith('.md')) {
-      const docFile = basename(path);
+    const paiRel = relativeToPai(path);
+    if ((paiRel.startsWith('DOCUMENTATION/') || normalizePathText(path).includes('PAI/')) && paiRel.endsWith('.md')) {
+      const docFile = basename(paiRel);
       const result = updateLastUpdatedTimestamp(docFile);
       if (result) {
         console.error(`${TAG} [UPDATED] ${result}`);

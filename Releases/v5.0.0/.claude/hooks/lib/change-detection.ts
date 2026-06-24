@@ -6,8 +6,8 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { join, relative, basename } from 'path';
-import { getMemoryDir, getPaiDir, getUserDir, memoryPath } from './paths';
+import { isAbsolute, join, relative, basename } from 'path';
+import { getFrameworkDir, getMemoryDir, getPaiDir, getUserDir, memoryPath } from './paths';
 
 // ============================================================================
 // Types
@@ -24,6 +24,7 @@ export interface FileChange {
 export type ChangeCategory =
   | 'skill'
   | 'hook'
+  | 'tool'
   | 'workflow'
   | 'config'
   | 'core-system'
@@ -53,6 +54,7 @@ export interface IntegrityState {
 // ============================================================================
 
 const PAI_DIR = getPaiDir();
+const FRAMEWORK_DIR = getFrameworkDir();
 const MEMORY_DIR = getMemoryDir();
 const USER_DIR = getUserDir();
 const STATE_FILE = memoryPath('STATE', 'integrity-state.json');
@@ -102,68 +104,174 @@ const STRUCTURAL_PATTERNS = [
 // Transcript Parsing
 // ============================================================================
 
+interface DetectedFileOperation {
+  tool: FileChange['tool'];
+  path: string;
+}
+
+function normalizePathText(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function normalizePathTextLower(value: string): string {
+  return normalizePathText(value).replace(/\/+$/g, '').toLowerCase();
+}
+
+function parseJsonMaybe(value: any): any {
+  if (!value) return {};
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function normalizedToolName(name: unknown): string {
+  return String(name || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+}
+
+function toolKindFromName(name: unknown): FileChange['tool'] | null {
+  const normalized = normalizedToolName(name);
+  if (normalized.includes('multiedit')) return 'MultiEdit';
+  if (normalized.includes('write') || normalized.includes('create')) return 'Write';
+  if (normalized.includes('edit') || normalized.includes('update')) return 'Edit';
+  return null;
+}
+
+function isApplyPatchTool(name: unknown): boolean {
+  return normalizedToolName(name).includes('applypatch');
+}
+
+function pushOperation(
+  operations: DetectedFileOperation[],
+  seen: Set<string>,
+  tool: FileChange['tool'],
+  path: unknown,
+): void {
+  if (typeof path !== 'string' || !path.trim()) return;
+  const normalized = normalizePathText(path.trim());
+  const key = `${tool}:${normalized.toLowerCase()}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  operations.push({ tool, path: normalized });
+}
+
+function patchOperationsFromText(patch: string, operations: DetectedFileOperation[], seen: Set<string>): void {
+  if (!patch.includes('*** Begin Patch')) return;
+
+  const regex = /^\*\*\* (Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(patch)) !== null) {
+    const action = match[1];
+    const rawPath = (match[2] || match[3] || '').trim();
+    if (!rawPath) continue;
+    pushOperation(operations, seen, action === 'Add' ? 'Write' : 'Edit', rawPath);
+  }
+}
+
+function addOperationsFromToolCall(
+  toolName: unknown,
+  rawArgs: any,
+  operations: DetectedFileOperation[],
+  seen: Set<string>,
+): void {
+  const args = parseJsonMaybe(rawArgs);
+  const tool = toolKindFromName(toolName);
+  const directPath = args.file_path || args.filePath || args.path;
+
+  if (tool && directPath) {
+    pushOperation(operations, seen, tool, directPath);
+  }
+
+  if (tool === 'MultiEdit' && Array.isArray(args.edits)) {
+    for (const edit of args.edits) {
+      pushOperation(operations, seen, 'MultiEdit', edit?.file_path || edit?.filePath || edit?.path || directPath);
+    }
+  }
+
+  const patchText = args.patch || args.patchText || args.input || (isApplyPatchTool(toolName) ? rawArgs : '');
+  if (typeof patchText === 'string') {
+    patchOperationsFromText(patchText, operations, seen);
+  }
+}
+
+function detectFileOperationsFromTranscript(transcriptPath: string): DetectedFileOperation[] {
+  if (!existsSync(transcriptPath)) {
+    console.error('[ChangeDetection] Transcript not found:', transcriptPath);
+    return [];
+  }
+
+  const content = readFileSync(transcriptPath, 'utf-8');
+  const lines = content.trim().split('\n');
+  const operations: DetectedFileOperation[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    try {
+      const entry = JSON.parse(line);
+
+      if (entry.type === 'tool_use') {
+        addOperationsFromToolCall(entry.name, entry.input || entry.arguments || entry.args || {}, operations, seen);
+        continue;
+      }
+
+      if (entry.type === 'assistant' && entry.message?.content) {
+        const contentArray = Array.isArray(entry.message.content)
+          ? entry.message.content
+          : [];
+
+        for (const block of contentArray) {
+          if (block.type !== 'tool_use') continue;
+          addOperationsFromToolCall(block.name, block.input || {}, operations, seen);
+        }
+        continue;
+      }
+
+      if (entry.type === 'response_item' && entry.payload?.type === 'function_call') {
+        addOperationsFromToolCall(entry.payload.name, entry.payload.arguments, operations, seen);
+        continue;
+      }
+
+      if (entry.type === 'function_call') {
+        addOperationsFromToolCall(entry.name, entry.arguments || entry.args || entry.input, operations, seen);
+        continue;
+      }
+
+      if (entry.type === 'tool_call') {
+        addOperationsFromToolCall(entry.name || entry.tool, entry.arguments || entry.args || entry.tool_input, operations, seen);
+      }
+    } catch {
+      // Skip invalid JSON lines
+    }
+  }
+
+  return operations;
+}
+
 /**
- * Parse tool_use blocks from a transcript that modify files.
+ * Parse modified file paths from Claude, Codex, or OpenCode transcripts.
+ */
+export function parseModifiedFilePaths(transcriptPath: string): Set<string> {
+  return new Set(detectFileOperationsFromTranscript(transcriptPath).map((operation) => normalizePathText(operation.path)));
+}
+
+/**
+ * Parse tool/function call blocks from a transcript that modify files.
  * Extracts Write, Edit, and MultiEdit operations.
  */
 export function parseToolUseBlocks(transcriptPath: string): FileChange[] {
   try {
-    if (!existsSync(transcriptPath)) {
-      console.error('[ChangeDetection] Transcript not found:', transcriptPath);
-      return [];
-    }
-
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
     const changes: FileChange[] = [];
     const seenPaths = new Set<string>();
 
-    for (const line of lines) {
-      if (!line.trim()) continue;
-
-      try {
-        const entry = JSON.parse(line);
-
-        // Look for assistant messages with tool_use
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const contentArray = Array.isArray(entry.message.content)
-            ? entry.message.content
-            : [];
-
-          for (const block of contentArray) {
-            if (block.type !== 'tool_use') continue;
-
-            const toolName = block.name;
-            const input = block.input || {};
-
-            // Handle Write, Edit, MultiEdit tools
-            if (toolName === 'Write' && input.file_path) {
-              const path = normalizeToRelativePath(input.file_path);
-              if (!seenPaths.has(path)) {
-                seenPaths.add(path);
-                changes.push(createFileChange('Write', path));
-              }
-            } else if (toolName === 'Edit' && input.file_path) {
-              const path = normalizeToRelativePath(input.file_path);
-              if (!seenPaths.has(path)) {
-                seenPaths.add(path);
-                changes.push(createFileChange('Edit', path));
-              }
-            } else if (toolName === 'MultiEdit' && input.edits) {
-              for (const edit of input.edits) {
-                if (edit.file_path) {
-                  const path = normalizeToRelativePath(edit.file_path);
-                  if (!seenPaths.has(path)) {
-                    seenPaths.add(path);
-                    changes.push(createFileChange('Edit', path));
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch {
-        // Skip invalid JSON lines
+    for (const operation of detectFileOperationsFromTranscript(transcriptPath)) {
+      const path = normalizeToRelativePath(operation.path);
+      if (!seenPaths.has(path)) {
+        seenPaths.add(path);
+        changes.push(createFileChange(operation.tool, path));
       }
     }
 
@@ -178,22 +286,28 @@ export function parseToolUseBlocks(transcriptPath: string): FileChange[] {
  * Normalize an absolute path to relative (to PAI_DIR).
  */
 function normalizeToRelativePath(absolutePath: string): string {
-  if (absolutePath.startsWith(PAI_DIR)) {
-    return relative(PAI_DIR, absolutePath);
+  const normalizedInput = normalizePathText(absolutePath);
+  const inputLower = normalizePathTextLower(normalizedInput);
+
+  if (inputLower.startsWith(normalizePathTextLower(PAI_DIR) + '/')) {
+    return normalizePathText(relative(PAI_DIR, absolutePath));
   }
-  if (absolutePath.startsWith(MEMORY_DIR)) {
-    return join('MEMORY', relative(MEMORY_DIR, absolutePath));
+  if (inputLower.startsWith(normalizePathTextLower(FRAMEWORK_DIR) + '/')) {
+    return normalizePathText(relative(FRAMEWORK_DIR, absolutePath));
   }
-  if (absolutePath.startsWith(USER_DIR)) {
-    return join('USER', relative(USER_DIR, absolutePath));
+  if (inputLower.startsWith(normalizePathTextLower(MEMORY_DIR) + '/')) {
+    return normalizePathText(join('MEMORY', relative(MEMORY_DIR, absolutePath)));
   }
-  return absolutePath;
+  if (inputLower.startsWith(normalizePathTextLower(USER_DIR) + '/')) {
+    return normalizePathText(join('USER', relative(USER_DIR, absolutePath)));
+  }
+  return normalizedInput;
 }
 
 /**
  * Create a FileChange object with categorization.
  */
-function createFileChange(tool: 'Write' | 'Edit', path: string): FileChange {
+function createFileChange(tool: FileChange['tool'], path: string): FileChange {
   return {
     tool,
     path,
@@ -211,34 +325,50 @@ function createFileChange(tool: 'Write' | 'Edit', path: string): FileChange {
  * Categorize a file path by its location in the PAI system.
  */
 export function categorizeChange(path: string): ChangeCategory | null {
+  const normalizedPath = normalizePathText(path);
+
   // Check exclusions first
   for (const excluded of EXCLUDED_PATHS) {
-    if (path.includes(excluded)) {
+    if (normalizedPath.includes(excluded)) {
       return null;
     }
   }
 
-  // Check if path is within PAI directory
-  const absolutePath = path.startsWith('/') ? path : join(PAI_DIR, path);
-  if (!absolutePath.startsWith(PAI_DIR)) {
+  const absolutePath = isAbsolute(normalizedPath) || /^[A-Za-z]:\//.test(normalizedPath)
+    ? normalizedPath
+    : normalizePathText(join(PAI_DIR, normalizedPath));
+  const absoluteLower = normalizePathTextLower(absolutePath);
+  const paiLower = normalizePathTextLower(PAI_DIR);
+  const frameworkLower = normalizePathTextLower(FRAMEWORK_DIR);
+  const relativeFrameworkRoots = /^(hooks|skills|commands|agents|custom-agents)\//i.test(normalizedPath) ||
+    /^(CLAUDE|AGENTS|RTK)\.md$/i.test(normalizedPath) ||
+    /^settings\.json$/i.test(normalizedPath);
+  const relativePaiRoots = /^(TOOLS|ALGORITHM|DOCUMENTATION|PULSE|USER|MEMORY)\//i.test(normalizedPath) ||
+    /^PAI_SYSTEM_PROMPT\.md$/i.test(normalizedPath);
+
+  if (!absoluteLower.startsWith(paiLower + '/') &&
+      !absoluteLower.startsWith(frameworkLower + '/') &&
+      !relativeFrameworkRoots &&
+      !relativePaiRoots) {
     return null;
   }
 
   // Categorize by path pattern
-  if (path.includes('skills/')) {
+  if (normalizedPath.includes('skills/')) {
     // Exclude personal/private skills (prefixed with _ by convention)
-    const skillMatch = path.match(/skills\/(_[^/]+)/);
+    const skillMatch = normalizedPath.match(/skills\/(_[^/]+)/);
     if (skillMatch) return null;
-    if (path.includes('/Workflows/')) return 'workflow';
-    if (path.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/)) return 'core-system';
+    if (normalizedPath.includes('/Workflows/')) return 'workflow';
+    if (normalizedPath.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/)) return 'core-system';
     return 'skill';
   }
 
-  if (path.includes('hooks/')) return 'hook';
-  if (path.includes('MEMORY/PAISYSTEMUPDATES/')) return 'documentation';
-  if (path.includes('MEMORY/')) return 'memory-system';
-  if (path.endsWith('settings.json')) return 'config';
-  if (path.endsWith('.md') && !path.includes('WORK/')) return 'documentation';
+  if (normalizedPath.includes('hooks/')) return 'hook';
+  if (normalizedPath.startsWith('TOOLS/') || normalizedPath.includes('/TOOLS/') || normalizedPath.includes('/Tools/')) return 'tool';
+  if (normalizedPath.includes('MEMORY/PAISYSTEMUPDATES/')) return 'documentation';
+  if (normalizedPath.includes('MEMORY/')) return 'memory-system';
+  if (normalizedPath.endsWith('settings.json') || /^(CLAUDE|AGENTS|RTK)\.md$/i.test(normalizedPath)) return 'config';
+  if (normalizedPath.endsWith('.md') && !normalizedPath.includes('WORK/')) return 'documentation';
 
   return null;
 }
@@ -291,7 +421,7 @@ export function isSignificantChange(changes: FileChange[]): boolean {
   }
 
   // Significant if any skill, hook, or core-system change
-  const importantCategories: ChangeCategory[] = ['skill', 'hook', 'core-system', 'workflow'];
+  const importantCategories: ChangeCategory[] = ['skill', 'hook', 'tool', 'core-system', 'workflow'];
   if (systemChanges.some(c => importantCategories.includes(c.category!))) {
     return true;
   }
@@ -316,7 +446,7 @@ export function shouldDocumentChanges(changes: FileChange[]): boolean {
   }
 
   // Document ANY skill, hook, workflow, core-system, or config change
-  const importantCategories: ChangeCategory[] = ['skill', 'hook', 'workflow', 'core-system', 'config'];
+  const importantCategories: ChangeCategory[] = ['skill', 'hook', 'tool', 'workflow', 'core-system', 'config'];
   if (systemChanges.some(c => c.category && importantCategories.includes(c.category))) {
     return true;
   }
@@ -481,6 +611,7 @@ export function inferChangeType(changes: FileChange[]): ChangeType {
     switch (cat) {
       case 'skill': return changes.some(c => c.isStructural) ? 'structure_change' : 'skill_update';
       case 'hook': return 'hook_update';
+      case 'tool': return 'tool_update';
       case 'workflow': return 'workflow_update';
       case 'config': return 'config_update';
       case 'core-system': return 'structure_change';
@@ -491,6 +622,7 @@ export function inferChangeType(changes: FileChange[]): ChangeType {
 
   // Two categories - pick the more significant one
   if (uniqueCategories.has('hook')) return 'hook_update';
+  if (uniqueCategories.has('tool')) return 'tool_update';
   if (uniqueCategories.has('skill')) return 'skill_update';
   if (uniqueCategories.has('workflow')) return 'workflow_update';
   if (uniqueCategories.has('config')) return 'config_update';

@@ -44,6 +44,8 @@ const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
+const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
+const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
@@ -126,6 +128,22 @@ check(
     transcriptParser.includes("entry.payload?.type === 'function_call'") &&
     transcriptParser.includes("requestuserinput"),
   "PAI/TOOLS/TranscriptParser.ts",
+);
+
+check(
+  "Integrity change detection understands Codex writes and patches",
+  changeDetection.includes("entry.type === 'response_item'") &&
+    changeDetection.includes("entry.payload?.type === 'function_call'") &&
+    changeDetection.includes("parseModifiedFilePaths") &&
+    changeDetection.includes("*** Begin Patch"),
+  "hooks/lib/change-detection.ts",
+);
+
+check(
+  "Doc integrity uses shared provider-aware modified-file parser",
+  docCrossRefIntegrity.includes("parseModifiedFilePaths") &&
+    !docCrossRefIntegrity.includes("entry.type === 'assistant' && entry.message?.content"),
+  "hooks/handlers/DocCrossRefIntegrity.ts",
 );
 
 check(

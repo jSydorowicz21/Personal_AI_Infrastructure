@@ -49,6 +49,10 @@
       "target": "PAI/TOOLS/TranscriptParserSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
+      "target": "PAI/TOOLS/ChangeDetectionSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },

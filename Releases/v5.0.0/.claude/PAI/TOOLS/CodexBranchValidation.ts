@@ -201,6 +201,8 @@ function main(): void {
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
+      "PAI/TOOLS/TranscriptParserSmokeTest.ts",
+      "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
       "PAI/TOOLS/FrameworkSmokeTest.ts",
       "PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts",
       "PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts",
@@ -242,6 +244,8 @@ function main(): void {
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
+    run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
+    run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("Framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts"]);
     run("Framework command resolution smoke", "bun", ["PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts"]);
     run("Framework launch cwd smoke", "bun", ["PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts"]);

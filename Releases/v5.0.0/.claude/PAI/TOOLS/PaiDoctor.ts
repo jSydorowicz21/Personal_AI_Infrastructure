@@ -170,6 +170,8 @@ async function main() {
     runBunTool("PaiSecurityAuditSmokeTest.ts"),
     runBunTool("StartupSelfCheckSmokeTest.ts"),
     runBunTool("RepeatDetectionSmokeTest.ts"),
+    runBunTool("TranscriptParserSmokeTest.ts"),
+    runBunTool("ChangeDetectionSmokeTest.ts"),
     runBunTool("CodexRealSessionHookProof.ts"),
     runBunTool("HotfixUpdateRollbackSmokeTest.ts"),
     runBunTool("CodexFreshInstallSmokeTest.ts"),
