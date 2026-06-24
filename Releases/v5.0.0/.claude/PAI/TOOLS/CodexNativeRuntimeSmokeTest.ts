@@ -182,6 +182,17 @@ check(
 );
 
 check(
+  "Doc integrity keeps provider inference opt-in",
+  docCrossRefIntegrity.includes("function docInferenceEnabled") &&
+    docCrossRefIntegrity.includes("PAI_DOC_INFERENCE") &&
+    docCrossRefIntegrity.includes("PAI_DOC_INTEGRITY_INFERENCE") &&
+    docCrossRefIntegrity.includes("level: 'fast'") &&
+    docCrossRefIntegrity.includes("timeout: 5000") &&
+    docCrossRefIntegrity.includes("Skipped; set PAI_DOC_INFERENCE=1"),
+  "hooks/handlers/DocCrossRefIntegrity.ts",
+);
+
+check(
   "Arch summary rebuild watches active framework instruction files",
   rebuildArchSummary.includes('"DOCUMENTATION", "ARCHITECTURE_SUMMARY.md"') &&
     rebuildArchSummary.includes('"TOOLS", "ArchitectureSummaryGenerator.ts"') &&

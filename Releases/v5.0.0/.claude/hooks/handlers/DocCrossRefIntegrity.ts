@@ -1,9 +1,9 @@
 /**
- * DocCrossRefIntegrity.ts - Hybrid doc integrity checker (deterministic + inference)
+ * DocCrossRefIntegrity.ts - Hybrid doc integrity checker (deterministic + opt-in inference)
  *
  * Two-layer approach:
  * Layer 1 (Deterministic): Grep-based pattern checks for broken refs, counts, timestamps
- * Layer 2 (Inference): AI analysis of semantic drift using TOOLS/Inference.ts fast tier
+ * Layer 2 (Inference): Optional AI analysis of semantic drift using TOOLS/Inference.ts fast tier
  *
  * The deterministic layer detects WHAT changed. The inference layer understands
  * HOW docs need updating — generating surgical edit pairs, never full rewrites.
@@ -18,9 +18,10 @@
  * 5. Numeric counts (e.g., "21 hooks active") - recount from disk
  * 6. Last Updated timestamps - update on modification
  *
- * INFERENCE ANALYSIS:
+ * INFERENCE ANALYSIS (OPT-IN):
  * 7. Semantic drift - doc descriptions vs actual file behavior
- *    Uses Inference.ts fast tier (~500ms), constrained to surgical edits only
+ *    Set PAI_DOC_INFERENCE=1 or PAI_DOC_INTEGRITY_INFERENCE=1 to enable.
+ *    Uses Inference.ts fast tier, constrained to surgical edits only.
  *
  * AUDIT TRAIL: All operations logged to stderr via [DocAutoUpdate] prefix
  *
@@ -66,6 +67,10 @@ const HOOKS_DIR = join(getClaudeDir(), 'hooks');
 const HANDLERS_DIR = join(HOOKS_DIR, 'handlers');
 const LIB_DIR = join(HOOKS_DIR, 'lib');
 const TAG = '[DocAutoUpdate]';
+
+function docInferenceEnabled(): boolean {
+  return process.env.PAI_DOC_INFERENCE === '1' || process.env.PAI_DOC_INTEGRITY_INFERENCE === '1';
+}
 
 // ============================================================================
 // Filesystem Inventory
@@ -551,7 +556,7 @@ function buildInferenceContext(
 
 /**
  * Run inference to detect semantic drift and generate surgical edits.
- * Uses Inference.ts fast tier (Haiku, ~500ms).
+ * Uses Inference.ts fast tier.
  */
 async function runInferenceAnalysis(
   modifiedFiles: Set<string>,
@@ -572,9 +577,9 @@ async function runInferenceAnalysis(
     const result = await inference({
       systemPrompt: INFERENCE_SYSTEM_PROMPT,
       userPrompt: `Analyze these source file changes and documentation sections for factual inaccuracies:\n\n${context}`,
-      level: 'standard',
+      level: 'fast',
       expectJson: true,
-      timeout: 15000, // Sonnet needs more time but produces better quality
+      timeout: 5000,
     });
 
     const elapsed = Date.now() - startTime;
@@ -837,17 +842,20 @@ export async function handleDocCrossRefIntegrity(
     }
   }
 
-  // Step 6: Inference-powered semantic analysis
-  // Run inference to catch what grep can't: semantic drift in descriptions.
-  // Always runs when system files are modified — deterministic checks only catch
-  // broken refs/counts, not semantic drift (e.g., "this hook does X" when it now does Y).
-  console.error(`${TAG} === Running inference analysis ===`);
-  const inferenceEdits = await runInferenceAnalysis(modifiedFiles, docsToCheck);
-  if (inferenceEdits.length > 0) {
-    const inferenceApplied = applyInferenceEdits(inferenceEdits);
-    updatesApplied.push(...inferenceApplied);
+  // Step 6: Optional inference-powered semantic analysis.
+  // Deterministic checks stay on the hook hot path. Provider inference is opt-in
+  // because Stop hooks must not spend normal session shutdown budget on AI calls.
+  if (docInferenceEnabled()) {
+    console.error(`${TAG} === Running inference analysis ===`);
+    const inferenceEdits = await runInferenceAnalysis(modifiedFiles, docsToCheck);
+    if (inferenceEdits.length > 0) {
+      const inferenceApplied = applyInferenceEdits(inferenceEdits);
+      updatesApplied.push(...inferenceApplied);
+    } else {
+      console.error(`${TAG} [INFERENCE] No semantic corrections needed`);
+    }
   } else {
-    console.error(`${TAG} [INFERENCE] No semantic corrections needed`);
+    console.error(`${TAG} [INFERENCE] Skipped; set PAI_DOC_INFERENCE=1 to enable semantic doc edits`);
   }
 
   // Step 7: Summary

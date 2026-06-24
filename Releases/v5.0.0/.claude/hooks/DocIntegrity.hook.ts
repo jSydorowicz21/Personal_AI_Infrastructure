@@ -3,8 +3,10 @@
  * DocIntegrity.hook.ts — Check cross-refs if system docs/hooks were modified
  *
  * PURPOSE:
- * Runs deterministic + inference-powered doc integrity checks when system
+ * Runs deterministic doc integrity checks when system
  * files (hooks, PAI docs, skills, components) were modified during the session.
+ * Optional semantic inference runs only when PAI_DOC_INFERENCE=1 or
+ * PAI_DOC_INTEGRITY_INFERENCE=1 is set.
  * Self-gating: returns instantly when no system files changed.
  *
  * TRIGGER: Stop
