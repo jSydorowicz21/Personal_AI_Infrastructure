@@ -55,6 +55,7 @@ const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildA
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
+const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
 const pulse = read(join(paiRoot, "PULSE", "pulse.ts"));
 const githubWork = read(join(paiRoot, "PULSE", "checks", "github-work.ts"));
@@ -129,6 +130,30 @@ check(
     paiCli.includes('new Blob([prompt])') &&
     !paiCli.includes('["claude", "-p", prompt]'),
   "PAI/TOOLS/pai.ts",
+);
+
+check(
+  "PAI CLI update/version paths are Windows-native",
+  paiCli.includes("spawnSync([process.execPath, BANNER_SCRIPT]") &&
+    paiCli.includes("function frameworkCliPackage") &&
+    paiCli.includes("function getGlobalCliPackageVersion") &&
+    paiCli.includes('join(process.env.APPDATA, "npm", "node_modules")') &&
+    paiCli.includes('process.platform === "win32"') &&
+    paiCli.includes("getGlobalCliPackageVersion(frameworkCliPackage(framework))") &&
+    paiCli.includes('spawnSync([process.execPath, "install", "-g", frameworkCliPackage(activeFramework)]') &&
+    paiCli.includes("result.stderr?.toString()") &&
+    paiCli.includes("...frameworkEnv(root, framework)"),
+  "PAI/TOOLS/pai.ts",
+);
+
+check(
+  "Pulse Windows launcher avoids visible shim windows",
+  pulseManage.includes("npm\\node_modules\\bun") &&
+    pulseManage.includes("bin\\bun.exe") &&
+    pulseManage.includes("Test-Path -LiteralPath $candidate") &&
+    pulseManage.includes("-WindowStyle Hidden") &&
+    pulseManage.includes("-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass"),
+  "PAI/PULSE/manage.ps1",
 );
 
 check(

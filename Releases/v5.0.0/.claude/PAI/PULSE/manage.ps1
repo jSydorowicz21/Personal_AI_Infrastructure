@@ -22,6 +22,18 @@ function Ensure-Dirs {
 }
 
 function Get-BunPath {
+  $candidateRoots = @(
+    $env:BUN_INSTALL,
+    (Join-Path $HOME ".bun"),
+    (Join-Path $env:APPDATA "npm\node_modules\bun"),
+    (Join-Path $env:LOCALAPPDATA "bun")
+  ) | Where-Object { $_ }
+
+  foreach ($root in $candidateRoots) {
+    $candidate = Join-Path $root "bin\bun.exe"
+    if (Test-Path -LiteralPath $candidate) { return $candidate }
+  }
+
   $cmd = Get-Command bun.exe -CommandType Application -ErrorAction SilentlyContinue
   if (-not $cmd) {
     $cmd = Get-Command bun.cmd -CommandType Application -ErrorAction SilentlyContinue
@@ -136,7 +148,7 @@ function Stop-Pulse {
 function Install-PulseTask {
   Ensure-Dirs
   $script = $MyInvocation.MyCommand.Path
-  $arg = "-NoProfile -ExecutionPolicy Bypass -File `"$script`" start"
+  $arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`" start"
   $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arg
   $trigger = New-ScheduledTaskTrigger -AtLogOn
   $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited

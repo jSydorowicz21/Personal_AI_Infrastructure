@@ -222,6 +222,31 @@ function frameworkName(id: FrameworkId): string {
   return "Claude Code";
 }
 
+function frameworkCliPackage(id: FrameworkId): string {
+  if (id === "codex") return "@openai/codex";
+  if (id === "opencode") return "opencode-ai";
+  return "@anthropic-ai/claude-code";
+}
+
+function getGlobalCliPackageVersion(packageName: string): string | null {
+  const nodeModuleRoots = [
+    process.env.NPM_CONFIG_PREFIX ? join(process.env.NPM_CONFIG_PREFIX, "node_modules") : "",
+    process.env.APPDATA ? join(process.env.APPDATA, "npm", "node_modules") : "",
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, "npm", "node_modules") : "",
+  ].filter(Boolean);
+
+  for (const root of nodeModuleRoots) {
+    const packageJson = join(root, ...packageName.split("/"), "package.json");
+    if (!existsSync(packageJson)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(packageJson, "utf-8")) as { version?: unknown };
+      if (typeof parsed.version === "string" && parsed.version.trim()) return parsed.version.trim();
+    } catch {}
+  }
+
+  return null;
+}
+
 function normalizeFramework(value: string | undefined): FrameworkId | null {
   const v = (value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
   if (v === "claude" || v === "claudecode") return "claude";
@@ -1083,13 +1108,24 @@ function notifyVoice(message: string) {
 
 function displayBanner() {
   if (existsSync(BANNER_SCRIPT)) {
-    spawnSync(["bun", BANNER_SCRIPT], { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
+    spawnSync([process.execPath, BANNER_SCRIPT], { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
   }
 }
 
-function getCurrentVersion(): string | null {
-  const result = spawnSync(frameworkSpawnArgs([frameworkCommand(getActiveFramework()), "--version"]));
-  const output = result.stdout.toString();
+function getCurrentVersion(framework = getActiveFramework()): string | null {
+  if (process.platform === "win32") {
+    const packageVersion = getGlobalCliPackageVersion(frameworkCliPackage(framework));
+    if (packageVersion) return packageVersion;
+  }
+
+  const root = frameworkRoot(framework);
+  const result = spawnSync(frameworkSpawnArgs([frameworkCommand(framework), "--version"]), {
+    env: {
+      ...process.env,
+      ...frameworkEnv(root, framework),
+    },
+  });
+  const output = `${result.stdout?.toString() || ""}\n${result.stderr?.toString() || ""}`;
   const match = output.match(/([0-9]+\.[0-9]+\.[0-9]+)/);
   return match ? match[1] : null;
 }
@@ -1485,7 +1521,9 @@ async function cmdUpdate() {
 
   // Step 1: Update Bun
   log("Step 1/2: Updating Bun...", "📦");
-  const bunResult = spawnSync(["brew", "upgrade", "bun"]);
+  const bunResult = process.platform === "win32"
+    ? spawnSync([process.execPath, "upgrade"], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+    : spawnSync(["brew", "upgrade", "bun"]);
   if (bunResult.exitCode !== 0) {
     log("Bun update skipped (may already be latest)", "⚠️");
   } else {
@@ -1494,12 +1532,17 @@ async function cmdUpdate() {
 
   // Step 2: Update selected framework CLI
   log(`Step 2/2: Installing latest ${frameworkName(activeFramework)}...`, "🤖");
-  const command = activeFramework === "codex"
-    ? "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
-    : activeFramework === "opencode"
-      ? "curl -fsSL https://opencode.ai/install | bash"
-      : "curl -fsSL https://claude.ai/install.sh | bash";
-  const frameworkResult = spawnSync(["bash", "-c", command]);
+  const frameworkResult = process.platform === "win32"
+    ? spawnSync([process.execPath, "install", "-g", frameworkCliPackage(activeFramework)], {
+        stdin: "inherit",
+        stdout: "inherit",
+        stderr: "inherit",
+      })
+    : spawnSync(["bash", "-c", activeFramework === "codex"
+      ? "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh"
+      : activeFramework === "opencode"
+        ? "curl -fsSL https://opencode.ai/install | bash"
+        : "curl -fsSL https://claude.ai/install.sh | bash"]);
   if (frameworkResult.exitCode !== 0) {
     error(`${frameworkName(activeFramework)} installation failed`);
   }
