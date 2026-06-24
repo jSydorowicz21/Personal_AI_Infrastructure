@@ -102,7 +102,7 @@ export async function handleRebuildArchSummary(): Promise<void> {
 
 async function rebuild(generator: string, cwd: string): Promise<void> {
   return new Promise((resolve) => {
-    const proc = spawn("bun", [generator, "generate"], { cwd, stdio: "pipe" });
+    const proc = spawn(process.execPath, [generator, "generate"], { cwd, stdio: "pipe" });
 
     let stderr = "";
     proc.stderr?.on("data", (chunk) => { stderr += chunk.toString(); });

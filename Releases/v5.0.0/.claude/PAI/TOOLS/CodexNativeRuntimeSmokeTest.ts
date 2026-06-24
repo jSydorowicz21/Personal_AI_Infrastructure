@@ -153,6 +153,8 @@ check(
     rebuildArchSummary.includes('"TOOLS", "ArchitectureSummaryGenerator.ts"') &&
     rebuildArchSummary.includes('"AGENTS.md"') &&
     rebuildArchSummary.includes('"RTK.md"') &&
+    rebuildArchSummary.includes("process.execPath") &&
+    !rebuildArchSummary.includes('spawn("bun"') &&
     !rebuildArchSummary.includes('"PAI_ARCHITECTURE_SUMMARY.md"') &&
     !rebuildArchSummary.includes('"Tools/ArchitectureSummaryGenerator.ts"'),
   "hooks/handlers/RebuildArchSummary.ts",
