@@ -68,6 +68,7 @@ const bannerSources = [
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
+const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const hookPathHelpers = read(join(releaseRoot, "hooks", "lib", "paths.ts"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
@@ -83,6 +84,7 @@ const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemInteg
 const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const frameworkSmoke = read(join(paiRoot, "TOOLS", "FrameworkSmokeTest.ts"));
+const checkpointTool = read(join(paiRoot, "TOOLS", "Checkpoint.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
 const pulseLib = read(join(paiRoot, "PULSE", "lib.ts"));
@@ -184,6 +186,19 @@ check(
     smartApprover.includes("const HOME = homeDir()") &&
     !smartApprover.includes("from 'os'"),
   "hooks/SmartApprover.hook.ts and hooks/lib/paths.ts",
+);
+
+check(
+  "Checkpoint allowlists use active home and hidden git probes",
+  checkpointPerIsc.includes("import { getFrameworkDir, homeDir } from './lib/paths'") &&
+    checkpointPerIsc.includes("const HOME = homeDir()") &&
+    !checkpointPerIsc.includes("from 'node:os'") &&
+    checkpointPerIsc.includes("windowsHide: true") &&
+    checkpointTool.includes("import { getFrameworkDir, homeDir, memoryPath } from './lib/paths'") &&
+    checkpointTool.includes("const HOME = homeDir()") &&
+    !checkpointTool.includes("from 'node:os'") &&
+    checkpointTool.includes("windowsHide: true"),
+  "hooks/CheckpointPerISC.hook.ts and PAI/TOOLS/Checkpoint.ts",
 );
 
 check(

@@ -22,9 +22,8 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import { parseFrontmatter, parseCriteriaList, ARTIFACT_FILENAME, LEGACY_ARTIFACT_FILENAME } from './lib/isa-utils';
-import { getFrameworkDir } from './lib/paths';
+import { getFrameworkDir, homeDir } from './lib/paths';
 
 // Allowlist path: top of the active framework home. We only READ this file
 // (never write to it), so containment write restrictions do not apply.
@@ -33,6 +32,7 @@ import { getFrameworkDir } from './lib/paths';
 // life feature so users can write `~/Projects/foo` instead of the long form.
 const ALLOWLIST_PATH = join(getFrameworkDir(), 'checkpoint-repos.txt');
 const GIT_TIMEOUT_MS = 5000;
+const HOME = homeDir();
 
 interface CheckpointState {
   committed_iscs: string[];
@@ -42,9 +42,9 @@ interface CheckpointState {
 function expandPath(p: string): string {
   let s = p.trim();
   if (!s) return s;
-  if (s.startsWith('~/')) s = join(homedir(), s.slice(2));
-  else if (s === '~') s = homedir();
-  s = s.replace(/^\$HOME(\/|$)/, homedir() + '$1');
+  if (s.startsWith('~/')) s = join(HOME, s.slice(2));
+  else if (s === '~') s = HOME;
+  s = s.replace(/^\$HOME(\/|$)/, HOME + '$1');
   return s;
 }
 
@@ -89,6 +89,7 @@ function gitRun(repo: string, args: string[]): string {
     encoding: 'utf-8',
     timeout: GIT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   });
 }
 

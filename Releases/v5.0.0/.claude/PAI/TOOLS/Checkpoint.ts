@@ -14,9 +14,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { parseCriteriaList } from '../../hooks/lib/isa-utils';
-import { getFrameworkDir, memoryPath } from './lib/paths';
+import { getFrameworkDir, homeDir, memoryPath } from './lib/paths';
 
 // Allowlist path: top of the active framework home. We only READ it (never write),
 // so containment write restrictions do not apply. Parser must match
@@ -24,13 +23,14 @@ import { getFrameworkDir, memoryPath } from './lib/paths';
 // prefixes, treat the rest as absolute repo paths.
 const ALLOWLIST_PATH = join(getFrameworkDir(), 'checkpoint-repos.txt');
 const WORK_DIR = memoryPath('WORK');
+const HOME = homeDir();
 
 function expandPath(p: string): string {
   let s = p.trim();
   if (!s) return s;
-  if (s.startsWith('~/')) s = join(homedir(), s.slice(2));
-  else if (s === '~') s = homedir();
-  s = s.replace(/^\$HOME(\/|$)/, homedir() + '$1');
+  if (s.startsWith('~/')) s = join(HOME, s.slice(2));
+  else if (s === '~') s = HOME;
+  s = s.replace(/^\$HOME(\/|$)/, HOME + '$1');
   return s;
 }
 
@@ -48,6 +48,7 @@ function gitRun(repo: string, args: string[]): string {
     encoding: 'utf-8',
     timeout: 5000,
     stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
   });
 }
 

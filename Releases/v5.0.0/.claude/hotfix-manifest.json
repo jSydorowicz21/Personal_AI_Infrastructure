@@ -53,6 +53,10 @@
       "target": "PAI/TOOLS/algorithm.ts"
     },
     {
+      "source": "PAI/TOOLS/Checkpoint.ts",
+      "target": "PAI/TOOLS/Checkpoint.ts"
+    },
+    {
       "source": "PAI/TOOLS/lib",
       "target": "PAI/TOOLS/lib"
     },
