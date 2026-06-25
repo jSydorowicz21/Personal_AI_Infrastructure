@@ -280,6 +280,7 @@ function main(): void {
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
     run("Integrity transcript smoke", "bun", ["PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts"]);
     run("Relationship memory transcript smoke", "bun", ["PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts"]);
+    run("Provider transcript consumers smoke", "bun", ["PAI/TOOLS/ProviderTranscriptConsumersSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("Config audit smoke", "bun", ["PAI/TOOLS/ConfigAuditSmokeTest.ts"]);
     run("DocCheck smoke", "bun", ["PAI/TOOLS/DocCheckSmokeTest.ts"]);

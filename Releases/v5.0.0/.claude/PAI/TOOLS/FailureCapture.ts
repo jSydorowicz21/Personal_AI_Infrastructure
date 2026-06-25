@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from
 import { join, basename } from 'path';
 import { inference } from './Inference';
 import { memoryPath } from './lib/paths';
+import { getActiveFramework, parseTranscriptEntries, type FrameworkId } from './lib/transcripts';
 
 interface FailureCaptureInput {
   transcriptPath: string;
@@ -56,7 +57,7 @@ interface ToolCall {
 }
 
 /**
- * Extract text content from Claude's content format
+ * Extract text content from provider content formats.
  */
 function contentToText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -74,10 +75,37 @@ function contentToText(content: unknown): string {
   return '';
 }
 
+function parseJsonMaybe(value: unknown): unknown {
+  if (!value) return {};
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function addToolCall(toolCalls: ToolCall[], name: unknown, input: unknown, timestamp?: string): void {
+  const toolName = String(name || '').trim();
+  if (!toolName) return;
+  toolCalls.push({
+    name: toolName,
+    input: parseJsonMaybe(input),
+    timestamp,
+  });
+}
+
+function attachToolOutput(toolCalls: ToolCall[], output: unknown): void {
+  const lastToolCall = toolCalls[toolCalls.length - 1];
+  if (!lastToolCall || lastToolCall.output) return;
+  const text = contentToText(output) || (typeof output === 'string' ? output : '');
+  if (text) lastToolCall.output = text;
+}
+
 /**
  * Parse transcript and extract all relevant data
  */
-function parseTranscript(transcriptPath: string): {
+export function parseTranscript(transcriptPath: string, framework: FrameworkId = getActiveFramework()): {
   entries: TranscriptEntry[];
   toolCalls: ToolCall[];
   conversations: { role: string; content: string; timestamp?: string }[];
@@ -90,54 +118,50 @@ function parseTranscript(transcriptPath: string): {
     const content = readFileSync(transcriptPath, 'utf-8');
     const lines = content.trim().split('\n');
 
+    conversations.push(...parseTranscriptEntries(transcriptPath, framework).map(entry => ({
+      role: entry.role,
+      content: entry.text,
+      timestamp: entry.timestamp,
+    })));
+
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
         const entry = JSON.parse(line) as TranscriptEntry;
         entries.push(entry);
 
-        // Extract conversations
-        if (entry.type === 'user' && entry.message?.content) {
-          const text = contentToText(entry.message.content);
-          if (text) {
-            conversations.push({
-              role: 'user',
-              content: text,
-              timestamp: entry.timestamp,
-            });
-          }
-        }
-
         if (entry.type === 'assistant' && entry.message?.content) {
-          const text = contentToText(entry.message.content);
-          if (text) {
-            conversations.push({
-              role: 'assistant',
-              content: text,
-              timestamp: entry.timestamp,
-            });
-          }
-
           // Extract tool calls
           if (Array.isArray(entry.message.content)) {
             for (const block of entry.message.content as any[]) {
               if (block.type === 'tool_use') {
-                toolCalls.push({
-                  name: block.name,
-                  input: block.input,
-                  timestamp: entry.timestamp,
-                });
+                addToolCall(toolCalls, block.name, block.input, entry.timestamp);
               }
             }
           }
         }
 
+        if (entry.type === 'tool_use') {
+          addToolCall(toolCalls, (entry as any).name, (entry as any).input || (entry as any).arguments || (entry as any).args, entry.timestamp);
+        }
+
+        if (entry.type === 'response_item' && (entry as any).payload?.type === 'function_call') {
+          const payload = (entry as any).payload;
+          addToolCall(toolCalls, payload.name, payload.arguments, entry.timestamp);
+        }
+
+        if (entry.type === 'tool_call') {
+          addToolCall(toolCalls, (entry as any).name || (entry as any).tool, (entry as any).arguments || (entry as any).args || (entry as any).tool_input, entry.timestamp);
+        }
+
         // Capture tool results
         if (entry.type === 'tool_result' || entry.type === 'tool_output') {
-          const lastToolCall = toolCalls[toolCalls.length - 1];
-          if (lastToolCall && !lastToolCall.output) {
-            lastToolCall.output = contentToText((entry as any).content || (entry as any).output);
-          }
+          attachToolOutput(toolCalls, (entry as any).content || (entry as any).output);
+        }
+
+        if (entry.type === 'response_item' && /output|result/i.test(String((entry as any).payload?.type || ''))) {
+          const payload = (entry as any).payload;
+          attachToolOutput(toolCalls, payload.output || payload.content || payload.result);
         }
       } catch {
         // Skip malformed lines

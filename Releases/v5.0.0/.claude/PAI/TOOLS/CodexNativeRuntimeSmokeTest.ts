@@ -57,6 +57,8 @@ const integrityMaintenance = read(join(paiRoot, "TOOLS", "IntegrityMaintenance.t
 const integrityMaintenanceTranscriptSmoke = read(join(paiRoot, "TOOLS", "IntegrityMaintenanceTranscriptSmokeTest.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
+const providerTranscriptConsumersSmoke = read(join(paiRoot, "TOOLS", "ProviderTranscriptConsumersSmokeTest.ts"));
+const failureCapture = read(join(paiRoot, "TOOLS", "FailureCapture.ts"));
 const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
 const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
@@ -81,6 +83,7 @@ const bannerSources = [
   "NeofetchBanner.ts",
 ].map((file) => read(join(paiRoot, "TOOLS", file))).join("\n");
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
+const satisfactionCapture = read(join(releaseRoot, "hooks", "SatisfactionCapture.hook.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
@@ -693,6 +696,25 @@ check(
     relationshipMemoryTranscriptSmoke.includes("Codex user preference becomes relationship opinion note") &&
     relationshipMemoryTranscriptSmoke.includes("Claude relationship transcript still parses"),
   "hooks/RelationshipMemory.hook.ts and PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts",
+);
+
+check(
+  "Prompt, satisfaction, and failure consumers read provider-native transcripts",
+  transcriptRoots.includes("export function parseTranscriptEntriesFromText") &&
+    promptProcessing.includes("parseTranscriptEntriesFromText(content, { sourcePath: transcriptPath })") &&
+    promptProcessing.includes("export function getRecentContext") &&
+    promptProcessing.includes("if (import.meta.main)") &&
+    satisfactionCapture.includes("parseTranscriptEntries(transcriptPath)") &&
+    satisfactionCapture.includes("export function getRecentContext") &&
+    satisfactionCapture.includes("if (import.meta.main)") &&
+    failureCapture.includes("parseTranscriptEntries(transcriptPath, framework)") &&
+    failureCapture.includes("export function parseTranscript") &&
+    failureCapture.includes("function_call") &&
+    providerTranscriptConsumersSmoke.includes("Satisfaction context parses Codex response_item messages") &&
+    providerTranscriptConsumersSmoke.includes("Failure capture tool calls parse Codex function_call") &&
+    !promptProcessing.includes("entry.type === 'user' && entry.message?.content") &&
+    !satisfactionCapture.includes("entry.type === 'user' && entry.message?.content"),
+  "hooks/PromptProcessing.hook.ts, hooks/SatisfactionCapture.hook.ts, PAI/TOOLS/FailureCapture.ts, and ProviderTranscriptConsumersSmokeTest.ts",
 );
 
 check(

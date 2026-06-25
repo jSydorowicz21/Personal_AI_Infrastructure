@@ -35,6 +35,7 @@ import { setTabState, getSessionOneWord } from './lib/tab-setter';
 import { getFrameworkDir, memoryPath } from './lib/paths';
 import { updateSessionNameInWorkJson, upsertSession } from './lib/isa-utils';
 import { pushStateToTargets } from './lib/observability-transport';
+import { parseTranscriptEntriesFromText } from '../PAI/TOOLS/lib/transcripts';
 import {
   computeIdentityKey,
   computePromptHash,
@@ -855,37 +856,19 @@ OUTPUT FORMAT (JSON only, single object on one line, no prose, no markdown):
 // leak into session names — producing garbage like "Review Entering Yet Forge" instead of the
 // user's actual subject. Callers set `includeAssistant: false` when generating the permanent
 // session name (first prompt), and can opt in for tab-title-only context on later prompts.
-function getRecentContext(transcriptPath: string, maxTurns: number = classifierContextTurns(), includeAssistant: boolean = false): string {
+export function getRecentContext(transcriptPath: string, maxTurns: number = classifierContextTurns(), includeAssistant: boolean = false): string {
   try {
     if (!transcriptPath || !existsSync(transcriptPath)) return '';
     const content = readFileTail(transcriptPath, classifierContextBytes());
-    const lines = content.trim().split('\n');
-    const turns: { role: string; text: string }[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type === 'user' && entry.message?.content) {
-          let text = '';
-          if (typeof entry.message.content === 'string') text = entry.message.content;
-          else if (Array.isArray(entry.message.content))
-            text = entry.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ');
-          if (text.trim()) turns.push({ role: 'User', text: text.slice(0, 200) });
+    const turns = parseTranscriptEntriesFromText(content, { sourcePath: transcriptPath })
+      .filter((entry) => includeAssistant || entry.role === 'user')
+      .map((entry) => {
+        if (entry.role === 'assistant') {
+          const summaryMatch = entry.text.match(/SUMMARY:\s*([^\n]+)/i);
+          return { role: 'Assistant', text: summaryMatch ? summaryMatch[1] : entry.text.slice(0, 150) };
         }
-        if (includeAssistant && entry.type === 'assistant' && entry.message?.content) {
-          const text = typeof entry.message.content === 'string'
-            ? entry.message.content
-            : Array.isArray(entry.message.content)
-              ? entry.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ')
-              : '';
-          if (text) {
-            const summaryMatch = text.match(/SUMMARY:\s*([^\n]+)/i);
-            turns.push({ role: 'Assistant', text: summaryMatch ? summaryMatch[1] : text.slice(0, 150) });
-          }
-        }
-      } catch {}
-    }
+        return { role: 'User', text: entry.text.slice(0, 200) };
+      });
 
     const recent = turns.slice(-maxTurns);
     return recent.length > 0 ? recent.map(t => `${t.role}: ${t.text}`).join('\n') : '';
@@ -1225,4 +1208,6 @@ async function main() {
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

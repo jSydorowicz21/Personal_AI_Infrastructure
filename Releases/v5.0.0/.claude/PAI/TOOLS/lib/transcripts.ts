@@ -222,12 +222,22 @@ function opencodeTextEntry(obj: any, fallbackTimestamp: string): { role: "user" 
   };
 }
 
-export function parseTranscriptEntries(sessionPath: string, framework = getActiveFramework()): TranscriptEntry[] {
+export function parseTranscriptEntriesFromText(
+  transcriptContent: string,
+  options: {
+    framework?: FrameworkId;
+    sourcePath?: string;
+    sessionId?: string;
+    fallbackTimestamp?: string;
+  } = {},
+): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
-  const fallbackTimestamp = new Date().toISOString();
-  let sessionId = basename(sessionPath, ".jsonl");
+  const framework = options.framework || getActiveFramework();
+  const sourcePath = options.sourcePath || "";
+  const fallbackTimestamp = options.fallbackTimestamp || new Date().toISOString();
+  let sessionId = options.sessionId || (sourcePath ? basename(sourcePath, ".jsonl") : "");
 
-  const lines = readFileSync(sessionPath, "utf-8")
+  const lines = transcriptContent
     .split("\n")
     .map((line) => line.replace(/^\uFEFF/, ""))
     .filter((line) => line.trim());
@@ -253,7 +263,7 @@ export function parseTranscriptEntries(sessionPath: string, framework = getActiv
         role: parsed.role,
         text: parsed.text,
         sourceLine: lineIdx + 1,
-        sourcePath: sessionPath,
+        sourcePath,
       });
     } catch {
       // Skip malformed transcript lines.
@@ -261,6 +271,13 @@ export function parseTranscriptEntries(sessionPath: string, framework = getActiv
   }
 
   return entries;
+}
+
+export function parseTranscriptEntries(sessionPath: string, framework = getActiveFramework()): TranscriptEntry[] {
+  return parseTranscriptEntriesFromText(readFileSync(sessionPath, "utf-8"), {
+    framework,
+    sourcePath: sessionPath,
+  });
 }
 
 function resolveTranscriptPath(filePath: string, cwd: string | null): string {

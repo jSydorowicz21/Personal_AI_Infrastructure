@@ -129,6 +129,10 @@
       "target": "PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/ProviderTranscriptConsumersSmokeTest.ts",
+      "target": "PAI/TOOLS/ProviderTranscriptConsumersSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },

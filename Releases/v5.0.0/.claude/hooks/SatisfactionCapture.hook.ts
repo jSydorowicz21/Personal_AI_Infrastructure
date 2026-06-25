@@ -29,6 +29,7 @@ import { getIdentity, getPrincipal, getPrincipalName } from './lib/identity';
 import { getLearningCategory } from './lib/learning-utils';
 import { getISOTimestamp, getPSTComponents } from './lib/time';
 import { captureFailure } from '../PAI/TOOLS/FailureCapture';
+import { parseTranscriptEntries } from '../PAI/TOOLS/lib/transcripts';
 import { addRatingPulse } from './lib/isa-utils';
 import { memoryPath } from './lib/paths';
 
@@ -278,38 +279,16 @@ OUTPUT FORMAT (JSON only):
 
 // ── Recent Transcript Context ──
 
-function getRecentContext(transcriptPath: string, maxTurns: number = 4): string {
+export function getRecentContext(transcriptPath: string, maxTurns: number = 4): string {
   try {
     if (!transcriptPath || !existsSync(transcriptPath)) return '';
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
-    const turns: { role: string; text: string }[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type === 'user' && entry.message?.content) {
-          let text = '';
-          if (typeof entry.message.content === 'string') text = entry.message.content;
-          else if (Array.isArray(entry.message.content))
-            text = entry.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ');
-          if (text.trim()) turns.push({ role: 'User', text: text.slice(0, 200) });
-        }
-        if (entry.type === 'assistant' && entry.message?.content) {
-          const text = typeof entry.message.content === 'string'
-            ? entry.message.content
-            : Array.isArray(entry.message.content)
-              ? entry.message.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join(' ')
-              : '';
-          if (text) {
-            const summaryMatch = text.match(/SUMMARY:\s*([^\n]+)/i);
-            turns.push({ role: 'Assistant', text: summaryMatch ? summaryMatch[1] : text.slice(0, 150) });
-          }
-        }
-      } catch {}
-    }
-
+    const turns = parseTranscriptEntries(transcriptPath).map((entry) => {
+      if (entry.role === 'assistant') {
+        const summaryMatch = entry.text.match(/SUMMARY:\s*([^\n]+)/i);
+        return { role: 'Assistant', text: summaryMatch ? summaryMatch[1] : entry.text.slice(0, 150) };
+      }
+      return { role: 'User', text: entry.text.slice(0, 200) };
+    });
     const recent = turns.slice(-maxTurns);
     return recent.length > 0 ? recent.map(t => `${t.role}: ${t.text}`).join('\n') : '';
   } catch { return ''; }
@@ -529,4 +508,6 @@ async function main() {
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
