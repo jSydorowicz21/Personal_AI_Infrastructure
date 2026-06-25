@@ -545,7 +545,7 @@ function checkOpenCodeTranscript(root: string, data: string): Check[] {
   ];
 }
 
-function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
+function checkFrameworkStatePathFallback(root: string, data: string, framework: Framework): Check[] {
   mkdirSync(root, { recursive: true });
   const toolsPath = join(import.meta.dir, "lib", "paths.ts");
   const hooksPath = join(import.meta.dir, "..", "..", "hooks", "lib", "paths.ts");
@@ -700,6 +700,42 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
   });
   const explicitResolved = parseJsonOutput(explicitResult.stdout);
 
+  const providerHomeData = join(root, "provider-home-data");
+  const providerHome = join(root, "provider-home");
+  mkdirSync(providerHomeData, { recursive: true });
+  mkdirSync(providerHome, { recursive: true });
+  const providerHomeEnv = {
+    ...process.env,
+    HOME: providerHome,
+    USERPROFILE: providerHome,
+    PAI_DATA_DIR: providerHomeData,
+    PAI_FRAMEWORK: framework,
+  } as Record<string, string>;
+  for (const key of [
+    "PAI_DIR",
+    "PAI_FRAMEWORK_DIR",
+    "PAI_MEMORY_DIR",
+    "PAI_USER_DIR",
+    "PAI_SETTINGS_PATH",
+    "CLAUDE_HOME",
+    "PAI_CLAUDE_HOME",
+    "CODEX_HOME",
+    "OPENCODE_CONFIG_DIR",
+  ]) {
+    delete providerHomeEnv[key];
+  }
+  if (framework === "claude") providerHomeEnv.CLAUDE_HOME = root;
+  if (framework === "codex") providerHomeEnv.CODEX_HOME = root;
+  if (framework === "opencode") providerHomeEnv.OPENCODE_CONFIG_DIR = root;
+  const providerHomeResult = spawnSync(process.execPath, ["-e", script], {
+    cwd: root,
+    env: providerHomeEnv,
+    encoding: "utf-8",
+    timeout: 20_000,
+    windowsHide: true,
+  });
+  const providerHomeResolved = parseJsonOutput(providerHomeResult.stdout);
+
   return [
     {
       name: "path fallback exits 0",
@@ -805,6 +841,24 @@ function checkFrameworkStatePathFallback(root: string, data: string): Check[] {
       name: "hooks path explicit different-framework env overrides framework.json",
       passed: explicitResolved.hooksPaiDir === join(explicitRoot, "PAI") && explicitResolved.hooksFrameworkDir === explicitRoot,
       detail: JSON.stringify({ pai: explicitResolved.hooksPaiDir, root: explicitResolved.hooksFrameworkDir }),
+    },
+    {
+      name: "tools path uses provider home env without PAI_DIR",
+      passed: providerHomeResolved.toolsPaiDir === join(root, "PAI") && providerHomeResolved.toolsFrameworkDir === root,
+      detail: JSON.stringify({
+        status: providerHomeResult.status,
+        pai: providerHomeResolved.toolsPaiDir,
+        root: providerHomeResolved.toolsFrameworkDir,
+      }),
+    },
+    {
+      name: "hooks path uses provider home env without PAI_DIR",
+      passed: providerHomeResolved.hooksPaiDir === join(root, "PAI") && providerHomeResolved.hooksFrameworkDir === root,
+      detail: JSON.stringify({
+        status: providerHomeResult.status,
+        pai: providerHomeResolved.hooksPaiDir,
+        root: providerHomeResolved.hooksFrameworkDir,
+      }),
     },
   ];
 }
@@ -1039,7 +1093,7 @@ function runSwitch(framework: Framework, base: string): { root: string; data: st
       passed: state.active === framework && state.root === root && state.dataDir === data,
       detail: JSON.stringify({ active: state.active, root: state.root, dataDir: state.dataDir }),
     });
-    checks.push(...checkFrameworkStatePathFallback(root, data));
+    checks.push(...checkFrameworkStatePathFallback(root, data, framework));
   }
 
   return {

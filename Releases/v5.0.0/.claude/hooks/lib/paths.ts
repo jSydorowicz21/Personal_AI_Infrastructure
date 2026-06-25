@@ -94,6 +94,16 @@ function activeFrameworkHomeEnv(): string {
   return '';
 }
 
+function activeFrameworkRootFromEnv(state: FrameworkState | null, requirePaiDir = false): string {
+  const providerHome = activeFrameworkHomeEnv();
+  if (!providerHome) return '';
+  const expanded = expandPath(providerHome);
+  if (!existsSync(expanded)) return '';
+  if (requirePaiDir && !existsSync(join(expanded, 'PAI'))) return '';
+  if (!canUseExplicitFrameworkRoot(state, expanded)) return '';
+  return expanded;
+}
+
 function matchesActiveFrameworkHome(path: string): boolean {
   const providerHome = activeFrameworkHomeEnv();
   return Boolean(providerHome && resolve(expandPath(providerHome)) === resolve(path));
@@ -132,6 +142,9 @@ export function getPaiDir(): string {
     const paiDir = join(expanded, 'PAI');
     if (existsSync(expanded) && existsSync(paiDir) && canUseExplicitFrameworkRoot(state, expanded)) return paiDir;
   }
+
+  const providerFrameworkDir = activeFrameworkRootFromEnv(state, true);
+  if (providerFrameworkDir) return join(providerFrameworkDir, 'PAI');
 
   const frameworkRoot = state?.root;
   if (frameworkRoot) return join(expandPath(frameworkRoot), 'PAI');
@@ -183,6 +196,9 @@ export function getFrameworkDir(): string {
     const frameworkDir = resolve(expanded, '..');
     if (existsSync(expanded) && canUseExplicitFrameworkRoot(state, frameworkDir)) return frameworkDir;
   }
+
+  const providerFrameworkDir = activeFrameworkRootFromEnv(state);
+  if (providerFrameworkDir) return providerFrameworkDir;
 
   const frameworkRoot = state?.root;
   if (frameworkRoot) return expandPath(frameworkRoot);

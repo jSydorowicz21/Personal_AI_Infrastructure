@@ -75,6 +75,16 @@ function activeFrameworkHomeEnv(): string {
   return "";
 }
 
+function activeFrameworkRootFromEnv(state: FrameworkState | null, requirePaiDir = false): string {
+  const providerHome = activeFrameworkHomeEnv();
+  if (!providerHome) return "";
+  const expanded = expandHome(providerHome);
+  if (!existsSync(expanded)) return "";
+  if (requirePaiDir && !existsSync(join(expanded, "PAI"))) return "";
+  if (!canUseExplicitFrameworkRoot(state, expanded)) return "";
+  return expanded;
+}
+
 function matchesActiveFrameworkHome(path: string): boolean {
   const providerHome = activeFrameworkHomeEnv();
   return Boolean(providerHome && resolve(expandHome(providerHome)) === resolve(path));
@@ -104,6 +114,8 @@ export function getPaiDir(): string {
     const envPaiDir = join(envFrameworkDir, "PAI");
     if (existsSync(envFrameworkDir) && existsSync(envPaiDir) && canUseExplicitFrameworkRoot(state, envFrameworkDir)) return envPaiDir;
   }
+  const providerFrameworkDir = activeFrameworkRootFromEnv(state, true);
+  if (providerFrameworkDir) return join(providerFrameworkDir, "PAI");
   const frameworkRoot = state?.root;
   if (frameworkRoot) return join(expandHome(frameworkRoot), "PAI");
   return resolve(import.meta.dir, "..", "..");
@@ -120,6 +132,8 @@ export function getFrameworkDir(): string {
     const envFrameworkDir = resolve(envPaiDir, "..");
     if (existsSync(envPaiDir) && canUseExplicitFrameworkRoot(state, envFrameworkDir)) return envFrameworkDir;
   }
+  const providerFrameworkDir = activeFrameworkRootFromEnv(state);
+  if (providerFrameworkDir) return providerFrameworkDir;
   const frameworkRoot = state?.root;
   if (frameworkRoot) return expandHome(frameworkRoot);
   return resolve(getPaiDir(), "..");

@@ -82,6 +82,7 @@ const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const hookPathHelpers = read(join(releaseRoot, "hooks", "lib", "paths.ts"));
+const toolPathHelpers = read(join(paiRoot, "TOOLS", "lib", "paths.ts"));
 const toolActivityTracker = read(join(releaseRoot, "hooks", "ToolActivityTracker.hook.ts"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
@@ -219,6 +220,23 @@ check(
     smartApprover.includes("const HOME = homeDir()") &&
     !smartApprover.includes("from 'os'"),
   "hooks/SmartApprover.hook.ts and hooks/lib/paths.ts",
+);
+
+check(
+  "Path helpers resolve provider home env without PAI_DIR",
+  hookPathHelpers.includes("function activeFrameworkRootFromEnv") &&
+    hookPathHelpers.includes("activeFrameworkRootFromEnv(state, true)") &&
+    hookPathHelpers.includes("activeFrameworkRootFromEnv(state)") &&
+    hookPathHelpers.includes("process.env.CODEX_HOME") &&
+    hookPathHelpers.includes("process.env.OPENCODE_CONFIG_DIR") &&
+    toolPathHelpers.includes("function activeFrameworkRootFromEnv") &&
+    toolPathHelpers.includes("activeFrameworkRootFromEnv(state, true)") &&
+    toolPathHelpers.includes("activeFrameworkRootFromEnv(state)") &&
+    toolPathHelpers.includes("process.env.CODEX_HOME") &&
+    toolPathHelpers.includes("process.env.OPENCODE_CONFIG_DIR") &&
+    frameworkSmoke.includes("tools path uses provider home env without PAI_DIR") &&
+    frameworkSmoke.includes("hooks path uses provider home env without PAI_DIR"),
+  "hooks/lib/paths.ts, PAI/TOOLS/lib/paths.ts, and FrameworkSmokeTest.ts",
 );
 
 check(
