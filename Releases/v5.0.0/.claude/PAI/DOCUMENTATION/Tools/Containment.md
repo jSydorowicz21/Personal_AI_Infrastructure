@@ -3,7 +3,7 @@
 **Status:** Authoritative. Contributors and future Kai sessions read this before adding a new file.
 **Enforcement:** `hooks/ContainmentGuard.hook.ts` (prospective, PreToolUse). `skills/_PAI/TOOLS/ShadowRelease.ts` G1-G5 gates (retrospective, pre-release).
 **Zone inventory (authoritative):** `hooks/lib/containment-zones.ts` — the runtime source of truth both enforcers import.
-**Last updated:** 2026-04-29
+**Last updated:** 2026-06-25
 
 ---
 
@@ -24,7 +24,7 @@ Today's zones:
 | Name | Pattern(s) | What lives here |
 |------|-----------|-----------------|
 | `user-data` | `PAI/USER/**` | Principal identity, TELOS, credentials, personal infra, contacts, finances, health, business |
-| `config-secrets` | `settings.json`, `settings.local.json`, `.vscode/settings.json`, `.env`, `.env.*`, `PAI/.env`, `PAI/.env.*` | API tokens, allowed command lists, MCP auth |
+| `config-secrets` | `settings.json`, `settings.local.json`, `config.toml`, `hooks.json`, `opencode.json`, `auth.json`, `.vscode/settings.json`, `.env`, `.env.*`, `PAI/.env`, `PAI/.env.*` | Provider config, hook registration, auth state, API tokens, allowed command lists, MCP auth |
 | `runtime-memory` | `PAI/MEMORY/**` | Work sessions, learnings, observability, research, raw data, bookmarks, relationship notes |
 | `private-skills` | `skills/_*/**` (underscore prefix) | Principal-specific and proprietary skills |
 | `install-state` | `history.jsonl`, `Plugins/**`, `plugins/installed_plugins.json`, `plugins/known_marketplaces.json` | Claude Code runtime install state written by the harness |
@@ -39,7 +39,7 @@ The underscore-prefix rule for `private-skills` is the interface contract. If a 
 Zones drift. Before running `ShadowRelease --create <version>`:
 
 1. Open `hooks/lib/containment-zones.ts`.
-2. Walk `~/.claude/` at depth 1-2 (e.g. `ls -la && ls -la PAI/ && ls -la skills/`) and compare against the zone list.
+2. Walk the active framework root (`~/.claude`, `~/.codex`, or `~/.config/opencode`) at depth 1-2 and compare against the zone list.
 3. Ask, for every new top-level or first-nested dir since the last release:
     - Does it contain anything principal-specific? → **Add a zone or extend an existing one.**
     - Is it runtime state the harness writes? → **Add it to `install-state` or the RSYNC_EXCLUDES in `ShadowRelease.ts`.**

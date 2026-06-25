@@ -181,6 +181,10 @@
       "target": "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/ContainmentZonesSmokeTest.ts",
+      "target": "PAI/TOOLS/ContainmentZonesSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "target": "PAI/TOOLS/CodexFreshInstallSmokeTest.ts"
     },
@@ -255,6 +259,10 @@
     {
       "source": "PAI/DOCUMENTATION/Tools/Cli.md",
       "target": "PAI/DOCUMENTATION/Tools/Cli.md"
+    },
+    {
+      "source": "PAI/DOCUMENTATION/Tools/Containment.md",
+      "target": "PAI/DOCUMENTATION/Tools/Containment.md"
     },
     {
       "source": "PAI/PULSE/PULSE.toml",
@@ -335,6 +343,10 @@
     {
       "source": "hooks/ContentScanner.hook.ts",
       "target": "hooks/ContentScanner.hook.ts"
+    },
+    {
+      "source": "hooks/ContainmentGuard.hook.ts",
+      "target": "hooks/ContainmentGuard.hook.ts"
     },
     {
       "source": "hooks/ContextReduction.hook.sh",

@@ -3,10 +3,10 @@
  * ContainmentGuard.hook.ts — PreToolUse Edit/Write/MultiEdit gate
  *
  * Blocks writes that would leak sensitive identity/infra strings into
- * files outside the Z1-Z4 containment zones used by ShadowRelease.
+ * files outside the containment zones used by ShadowRelease.
  *
- * Z1 USER/**            Z3 PAI/MEMORY/**
- * Z2 settings*.json     Z4 skills/_*
+ * USER/**              PAI/MEMORY/**
+ * provider config      skills/_*
  *
  * Anything outside those zones must stay clean of:
  *   /Users/daniel, daniel@, kai@unsupervised-learning, danielmiessler.com,
@@ -17,11 +17,11 @@
  * EXIT CODES: 0 = allow, 2 = deny (blocks the write)
  *
  * Test safely:
- *   echo '{"tool_name":"Write","tool_input":{"file_path":"/Users/daniel/.claude/hooks/demo.ts","content":"const u = \"/Users/daniel\";"}}' | bun run hooks/ContainmentGuard.hook.ts; echo $?
+ *   echo '{"tool_name":"Write","tool_input":{"file_path":"/Users/daniel/.codex/hooks/demo.ts","content":"const u = \"/Users/daniel\";"}}' | bun run hooks/ContainmentGuard.hook.ts; echo $?
  */
 
 import { readFileSync } from 'fs';
-import { isContained, isPatternAllowlisted, relativeToClaudeRoot } from './lib/containment-zones';
+import { isContainedInFrameworkRoot, isPatternAllowlisted, isUnderFrameworkRoot, relativeToFrameworkRoot } from './lib/containment-zones';
 import { getFrameworkDir } from './lib/paths';
 
 interface HookInput {
@@ -46,20 +46,15 @@ const IDENTITY_PATTERNS: readonly string[] = [
   '0baeb281c44f46878a4650ee3ff26b5b',
 ];
 
-const CLAUDE_ROOT = getFrameworkDir();
-
-function isUnderClaudeRoot(filePath: string): boolean {
-  const prefix = CLAUDE_ROOT.endsWith('/') ? CLAUDE_ROOT : CLAUDE_ROOT + '/';
-  return filePath === CLAUDE_ROOT || filePath.startsWith(prefix);
-}
+const FRAMEWORK_ROOT = getFrameworkDir();
 
 function isFileContained(filePath: string): boolean {
-  // Files outside ~/.claude/ are personal project repos (~/Projects, ~/LocalProjects, etc.)
-  // and are not part of the PAI release tree that ShadowRelease scrubs. The containment
+  // Files outside the active framework root are personal project repos and are
+  // not part of the PAI release tree that ShadowRelease scrubs. The containment
   // guard exists to keep PAI public-release content clean — not to police Daniel's own projects.
-  if (!isUnderClaudeRoot(filePath)) return true;
-  if (isPatternAllowlisted(relativeToClaudeRoot(filePath, CLAUDE_ROOT))) return true;
-  return isContained(filePath, CLAUDE_ROOT);
+  if (!isUnderFrameworkRoot(filePath, FRAMEWORK_ROOT)) return true;
+  if (isPatternAllowlisted(relativeToFrameworkRoot(filePath, FRAMEWORK_ROOT))) return true;
+  return isContainedInFrameworkRoot(filePath, FRAMEWORK_ROOT);
 }
 
 function extractScanTargets(toolName: string, toolInput: Record<string, unknown>): ScanTarget[] {
@@ -115,7 +110,7 @@ function main(): void {
     const hit = findMatch(target.content);
     if (!hit) continue;
     process.stderr.write(
-      `[ContainmentGuard] 🚨 BLOCKED: ${toolName} ${target.filePath} (${target.label}) would write '${hit}' outside Z1-Z4 containment. ` +
+      `[ContainmentGuard] 🚨 BLOCKED: ${toolName} ${target.filePath} (${target.label}) would write '${hit}' outside configured containment. ` +
       `Route via env var, move the file under PAI/USER/, PAI/MEMORY/, skills/_*, or rewrite the content.\n`,
     );
     process.exit(2);

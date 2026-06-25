@@ -219,6 +219,7 @@ function main(): void {
       "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
       "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
+      "PAI/TOOLS/ContainmentZonesSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
       "PAI/TOOLS/JunctionSafeUpdateSmokeTest.ts",
       "PAI/TOOLS/SessionEndLifecycleSmokeTest.ts",
@@ -272,6 +273,7 @@ function main(): void {
       },
     });
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
+    run("Containment zones smoke", "bun", ["PAI/TOOLS/ContainmentZonesSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
     run("Performance cost aggregator smoke", "bun", ["PAI/TOOLS/PerformanceCostAggregatorSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);

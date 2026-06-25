@@ -113,6 +113,9 @@ const hotfixUpdateRollbackSmoke = read(join(paiRoot, "TOOLS", "HotfixUpdateRollb
 const junctionSafeUpdateSmoke = read(join(paiRoot, "TOOLS", "JunctionSafeUpdateSmokeTest.ts"));
 const memoryDeleteSmoke = read(join(paiRoot, "TOOLS", "MemoryDeleteSmokeTest.ts"));
 const paiSecurityAuditSmoke = read(join(paiRoot, "TOOLS", "PaiSecurityAuditSmokeTest.ts"));
+const containmentZones = read(join(releaseRoot, "hooks", "lib", "containment-zones.ts"));
+const containmentGuard = read(join(releaseRoot, "hooks", "ContainmentGuard.hook.ts"));
+const containmentZonesSmoke = read(join(paiRoot, "TOOLS", "ContainmentZonesSmokeTest.ts"));
 const checkpointTool = read(join(paiRoot, "TOOLS", "Checkpoint.ts"));
 const opencodePlugin = read(join(releaseRoot, "plugins", "pai-opencode.ts"));
 const pulseManage = read(join(paiRoot, "PULSE", "manage.ps1"));
@@ -517,6 +520,23 @@ check(
     patternInspector.includes("const home = homeDir()") &&
     !patternInspector.includes("homedir()"),
   "hooks/security/inspectors/PatternInspector.ts",
+);
+
+check(
+  "Containment zones cover provider-native config files",
+  containmentZones.includes('"config.toml"') &&
+    containmentZones.includes('"hooks.json"') &&
+    containmentZones.includes('"opencode.json"') &&
+    containmentZones.includes('"auth.json"') &&
+    containmentZones.includes("relativeToFrameworkRoot") &&
+    containmentZones.includes("isContainedInFrameworkRoot") &&
+    containmentZones.includes("isUnderFrameworkRoot") &&
+    containmentZones.includes('path.replace(/\\\\/g, "/")') &&
+    containmentGuard.includes("FRAMEWORK_ROOT = getFrameworkDir()") &&
+    containmentGuard.includes("isContainedInFrameworkRoot") &&
+    containmentZonesSmoke.includes("Windows backslash config path is contained") &&
+    containmentZonesSmoke.includes("ordinary public files stay outside containment"),
+  "hooks/lib/containment-zones.ts, hooks/ContainmentGuard.hook.ts, and ContainmentZonesSmokeTest.ts",
 );
 
 check(

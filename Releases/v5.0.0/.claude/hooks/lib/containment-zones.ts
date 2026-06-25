@@ -8,9 +8,9 @@
 // retrospective release gates (skills/_PAI/TOOLS/ShadowRelease.ts) import
 // from here. Add, remove, or rename zones in one place.
 //
-// Path patterns are matched relative to CLAUDE_ROOT (the .claude directory
-// root, resolved from HOME). `**` means "anywhere under this prefix". A bare
-// path means "this exact file or directory (and anything inside it)".
+// Path patterns are matched relative to the active framework root (.claude,
+// .codex, or .config/opencode). `**` means "anywhere under this prefix". A
+// bare path means "this exact file or directory (and anything inside it)".
 
 export interface ContainmentZone {
   name: string;
@@ -29,13 +29,17 @@ export const CONTAINMENT_ZONES: readonly ContainmentZone[] = [
     patterns: [
       "settings.json",
       "settings.local.json",
+      "config.toml",
+      "hooks.json",
+      "opencode.json",
+      "auth.json",
       ".vscode/settings.json",
       ".env",
       ".env.*",
       "PAI/.env",
       "PAI/.env.*",
     ],
-    description: "Shell env with API keys, allowed command lists, MCP auth",
+    description: "Provider config, hook registration, auth state, shell env with API keys, allowed command lists, MCP auth",
   },
   {
     name: "runtime-memory",
@@ -127,23 +131,58 @@ function matchesPattern(relPath: string, pattern: string): boolean {
   return i === pathParts.length;
 }
 
-// Normalize an absolute path to the path relative to CLAUDE_ROOT. Returns
-// the input unchanged if it does not live under CLAUDE_ROOT.
+function normalizeSeparators(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function trimTrailingSlashes(path: string): string {
+  return path.replace(/\/+$/, "");
+}
+
+function comparablePath(path: string): string {
+  const normalized = normalizeSeparators(path);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+export function isUnderFrameworkRoot(absolutePath: string, frameworkRoot: string): boolean {
+  const root = trimTrailingSlashes(normalizeSeparators(frameworkRoot));
+  const absolute = normalizeSeparators(absolutePath);
+  const rootComparable = comparablePath(root);
+  const absoluteComparable = comparablePath(absolute);
+  const prefix = rootComparable.endsWith("/") ? rootComparable : rootComparable + "/";
+  return absoluteComparable === rootComparable || absoluteComparable.startsWith(prefix);
+}
+
+// Normalize an absolute path to the path relative to the active framework root.
+// Returns the input unchanged if it does not live under that root.
+export function relativeToFrameworkRoot(absolutePath: string, frameworkRoot: string): string {
+  const root = trimTrailingSlashes(normalizeSeparators(frameworkRoot));
+  const absolute = normalizeSeparators(absolutePath);
+  if (!isUnderFrameworkRoot(absolute, root)) return absolute;
+  if (comparablePath(absolute) === comparablePath(root)) return "";
+  const prefix = root.endsWith("/") ? root : root + "/";
+  return absolute.slice(prefix.length);
+}
+
+// Backward-compatible alias for older hook callers.
 export function relativeToClaudeRoot(absolutePath: string, claudeRoot: string): string {
-  if (absolutePath === claudeRoot) return "";
-  const prefix = claudeRoot.endsWith("/") ? claudeRoot : claudeRoot + "/";
-  return absolutePath.startsWith(prefix) ? absolutePath.slice(prefix.length) : absolutePath;
+  return relativeToFrameworkRoot(absolutePath, claudeRoot);
 }
 
 // Predicate: is this path inside any configured containment zone?
-export function isContained(absolutePath: string, claudeRoot: string): boolean {
-  const rel = relativeToClaudeRoot(absolutePath, claudeRoot);
+export function isContainedInFrameworkRoot(absolutePath: string, frameworkRoot: string): boolean {
+  const rel = relativeToFrameworkRoot(absolutePath, frameworkRoot);
   for (const zone of CONTAINMENT_ZONES) {
     for (const pattern of zone.patterns) {
       if (matchesPattern(rel, pattern)) return true;
     }
   }
   return false;
+}
+
+// Backward-compatible alias for older hook callers.
+export function isContained(absolutePath: string, claudeRoot: string): boolean {
+  return isContainedInFrameworkRoot(absolutePath, claudeRoot);
 }
 
 // Predicate: is this relative path in the pattern-embedding allowlist?
