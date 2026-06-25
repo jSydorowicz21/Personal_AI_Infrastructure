@@ -48,8 +48,10 @@ const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"))
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
+const installMain = read(join(paiRoot, "PAI-Install", "main.ts"));
 const installActions = read(join(paiRoot, "PAI-Install", "engine", "actions.ts"));
 const installDetect = read(join(paiRoot, "PAI-Install", "engine", "detect.ts"));
+const installValidate = read(join(paiRoot, "PAI-Install", "engine", "validate.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
@@ -86,6 +88,7 @@ const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
 const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts"));
 const patternInspector = read(join(releaseRoot, "hooks", "security", "inspectors", "PatternInspector.ts"));
 const codexHookContractSmoke = read(join(paiRoot, "TOOLS", "CodexHookContractSmokeTest.ts"));
+const codexFreshInstallSmoke = read(join(paiRoot, "TOOLS", "CodexFreshInstallSmokeTest.ts"));
 const codexHookTriggerSmoke = read(join(paiRoot, "TOOLS", "CodexHookTriggerSmokeTest.ts"));
 const codexRealSessionHookProof = read(join(paiRoot, "TOOLS", "CodexRealSessionHookProof.ts"));
 const repeatDetectionSmoke = read(join(paiRoot, "TOOLS", "RepeatDetectionSmokeTest.ts"));
@@ -313,14 +316,34 @@ check(
 
 check(
   "Installer avoids shell-string exec on Windows-sensitive paths",
-  !installActions.includes("execSync") &&
+  !installMain.includes("execSync") &&
+    !installMain.includes('spawn("bun"') &&
+    !installMain.includes('spawnSync("bun"') &&
+    installMain.includes("spawnSync(process.execPath, [\"install\"]") &&
+    installMain.includes("spawn(process.execPath, [\"run\", \"start\"]") &&
+    (installMain.match(/windowsHide:\s*true/g)?.length ?? 0) >= 4 &&
+    !installActions.includes("execSync") &&
     !installDetect.includes("execSync") &&
+    (installValidate.match(/windowsHide:\s*true/g)?.length ?? 0) >= 3 &&
     installActions.includes("function trySpawn") &&
     installActions.includes("windowsHide: true") &&
     installActions.includes('tryGit(["clone", "https://github.com/danielmiessler/PAI.git", paiDir]') &&
     installDetect.includes("execFileSync") &&
     installDetect.includes("windowsHide: true"),
-  "PAI/PAI-Install/engine/actions.ts and detect.ts",
+  "PAI/PAI-Install/main.ts, engine/actions.ts, engine/detect.ts, and engine/validate.ts",
+);
+
+check(
+  "Installer preserves bundled shared USER defaults",
+  installActions.includes("function ensureLinkedDirectory") &&
+    installActions.includes("const resolvedPath = realpathSync(srcPath)") &&
+    installActions.includes("const resolvedStat = lstatSync(resolvedPath)") &&
+    installActions.includes("const copied = copyMissing(localPath, globalPath)") &&
+    installActions.includes("if (!existsSync(dst)) mkdirSync(dst, { recursive: true })") &&
+    installerCodexSmoke.includes("Shared security patterns installed") &&
+    codexFreshInstallSmoke.includes("shared security patterns installed") &&
+    installValidate.includes('join(getPaiDataDir(), "USER", "SECURITY", "PATTERNS.yaml")'),
+  "PAI/PAI-Install/engine/actions.ts plus installer/fresh-install smokes",
 );
 
 check(

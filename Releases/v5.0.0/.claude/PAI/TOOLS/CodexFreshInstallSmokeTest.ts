@@ -175,6 +175,7 @@ try {
     check("installer refreshes PAI environment variables", process.platform !== "win32" || events.some((event) => event.includes("Windows user environment updated")), "process-scope user env test"),
     check("shared MEMORY link exists", existsSync(join(codexHome, "PAI", "MEMORY")) && lstatSync(join(codexHome, "PAI", "MEMORY")).isSymbolicLink(), join(codexHome, "PAI", "MEMORY")),
     check("shared USER link exists", existsSync(join(codexHome, "PAI", "USER")) && lstatSync(join(codexHome, "PAI", "USER")).isSymbolicLink(), join(codexHome, "PAI", "USER")),
+    check("shared security patterns installed", existsSync(join(dataDir, "USER", "SECURITY", "PATTERNS.yaml")), join(dataDir, "USER", "SECURITY", "PATTERNS.yaml")),
   ];
 
   print(checks);

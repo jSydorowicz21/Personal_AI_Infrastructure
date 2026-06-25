@@ -9,7 +9,7 @@
  *   --mode gui   → Launch Electron app (which spawns web mode internally)
  */
 
-import { spawn, spawnSync, execSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import { join } from "path";
 import { existsSync } from "fs";
 
@@ -33,6 +33,7 @@ function missingElectronLibraries(electronDir: string): string[] {
   const check = spawnSync("ldd", [electronBin], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
 
   if (check.status !== 0) return [];
@@ -66,9 +67,10 @@ async function main() {
     // for the typical PAI user.
     if (!existsSync(electronBin)) {
       console.log("Installing GUI dependencies (first run only)...\n");
-      const install = spawnSync("bun", ["install"], {
+      const install = spawnSync(process.execPath, ["install"], {
         cwd: electronDir,
         stdio: "inherit",
+        windowsHide: true,
       });
       if (install.status !== 0) {
         console.error("Failed to install GUI dependencies. Falling back to CLI...\n");
@@ -89,7 +91,11 @@ async function main() {
     // Clear macOS quarantine flags (prevents "app is damaged" error on copied installs)
     if (process.platform === "darwin") {
       try {
-        execSync(`xattr -cr "${electronDir}"`, { stdio: "pipe", timeout: 30000 });
+        spawnSync("xattr", ["-cr", electronDir], {
+          stdio: "pipe",
+          timeout: 30000,
+          windowsHide: true,
+        });
         console.log("Cleared macOS quarantine flags.\n");
       } catch {
         // Non-fatal
@@ -98,9 +104,10 @@ async function main() {
 
     console.log("Starting PAI Installer GUI...\n");
     const code = await new Promise<number | null>((resolve, reject) => {
-      const child = spawn("bun", ["run", "start"], {
+      const child = spawn(process.execPath, ["run", "start"], {
         cwd: electronDir,
         stdio: "inherit",
+        windowsHide: true,
       });
 
       child.on("error", reject);

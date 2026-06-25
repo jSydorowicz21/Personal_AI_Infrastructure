@@ -111,6 +111,7 @@ enabled = true
   assert("Pulse Assistant module installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "module.ts")));
   assert("Pulse Assistant checks installed", existsSync(join(codexHome, "PAI", "PULSE", "Assistant", "checks", "tasks.ts")));
   assert("Memory delete tool installed", existsSync(join(codexHome, "PAI", "TOOLS", "MemoryDelete.ts")));
+  assert("Shared security patterns installed", existsSync(join(paiData, "USER", "SECURITY", "PATTERNS.yaml")));
   assert("Codex agents generated", existsSync(join(codexHome, "agents")));
   assert("Codex hooks generated", existsSync(join(codexHome, "hooks.json")));
   const interviewPromptPath = join(codexHome, "prompts", "interview.md");

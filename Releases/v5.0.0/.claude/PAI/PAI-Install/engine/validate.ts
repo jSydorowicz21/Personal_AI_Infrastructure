@@ -143,6 +143,7 @@ function checkSecurityHookSmoke(
       input: payload,
       encoding: "utf-8",
       timeout: process.platform === "win32" ? 20000 : 8000,
+      windowsHide: true,
       // Match Claude Code: no inherited zshrc, minimal env. HOME and PATH only.
       env: {
         HOME: homedir(),
@@ -194,6 +195,7 @@ function checkOpenCodePluginBuild(paiDir: string): { passed: boolean; detail: st
     const res = spawnSync(process.execPath, ["build", pluginPath, "--outfile", outPath, "--target", "bun"], {
       encoding: "utf-8",
       timeout: 10000,
+      windowsHide: true,
       env: { HOME: homedir(), PATH: process.env.PATH || "" },
     });
     if (res.status !== 0) {

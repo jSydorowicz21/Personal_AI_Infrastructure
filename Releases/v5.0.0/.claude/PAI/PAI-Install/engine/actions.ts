@@ -5,7 +5,7 @@
  */
 
 import { spawn, spawnSync } from "child_process";
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, unlinkSync, chmodSync, lstatSync, cpSync, rmSync, readlinkSync, realpathSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, unlinkSync, chmodSync, lstatSync, cpSync, rmSync, readlinkSync, realpathSync, copyFileSync } from "fs";
 import { homedir } from "os";
 import { join, basename, dirname } from "path";
 import type { InstallState, EngineEventHandler, DetectionResult, ExistingUserContentDetection, StepId, FrameworkId, FrameworkTarget } from "./types";
@@ -433,23 +433,31 @@ function copyMissing(src: string, dst: string): number {
     return copied;
   }
 
-  for (const entry of readdirSync(src, { withFileTypes: true })) {
-    const srcPath = join(src, entry.name);
-    const dstPath = join(dst, entry.name);
+  if (!stat.isDirectory() && !stat.isSymbolicLink()) return copied;
+  if (!existsSync(dst)) mkdirSync(dst, { recursive: true });
 
-    if (entry.isDirectory()) {
-      if (!existsSync(dstPath)) mkdirSync(dstPath, { recursive: true });
-      copied += copyMissing(srcPath, dstPath);
-    } else if (entry.isFile()) {
-      if (!existsSync(dstPath)) {
-        try {
-          cpSync(srcPath, dstPath);
-          copied++;
-        } catch {
-          // Skip files that can't be copied (permission errors)
+  try {
+    for (const entry of readdirSync(src, { withFileTypes: true })) {
+      const srcPath = join(src, entry.name);
+      const dstPath = join(dst, entry.name);
+
+      if (entry.isDirectory()) {
+        if (!existsSync(dstPath)) mkdirSync(dstPath, { recursive: true });
+        copied += copyMissing(srcPath, dstPath);
+      } else if (entry.isFile()) {
+        if (!existsSync(dstPath)) {
+          try {
+            mkdirSync(dirname(dstPath), { recursive: true });
+            cpSync(srcPath, dstPath);
+            copied++;
+          } catch {
+            // Skip files that can't be copied (permission errors)
+          }
         }
       }
     }
+  } catch {
+    // Skip directories or links that can't be read.
   }
   return copied;
 }
@@ -627,9 +635,10 @@ function ensureLinkedDirectory(localPath: string, globalPath: string): { copied:
         } catch {
           // Broken or inaccessible links are replaced below.
         }
+        const copied = copyMissing(localPath, globalPath);
         rmSync(localPath, { recursive: true, force: true });
         symlinkSync(globalPath, localPath, process.platform === "win32" ? "junction" : "dir");
-        return { copied: 0, linked: true, skipped: false };
+        return { copied, linked: true, skipped: false };
       }
     } catch {}
   }
@@ -1654,6 +1663,19 @@ function copyBundleTree(
       copyBundleTree(srcPath, dstPath, stats);
     } else if (entry.isSymbolicLink()) {
       try {
+        const resolvedPath = realpathSync(srcPath);
+        const resolvedStat = lstatSync(resolvedPath);
+        if (resolvedStat.isDirectory()) {
+          copyBundleTree(srcPath, dstPath, stats);
+          continue;
+        }
+        if (resolvedStat.isFile()) {
+          mkdirSync(dirname(dstPath), { recursive: true });
+          copyFileSync(resolvedPath, dstPath);
+          stats.files++;
+          stats.bytes += resolvedStat.size;
+          continue;
+        }
         const target = readlinkSync(srcPath);
         if (existsSync(dstPath)) unlinkSync(dstPath);
         symlinkSync(target, dstPath);
