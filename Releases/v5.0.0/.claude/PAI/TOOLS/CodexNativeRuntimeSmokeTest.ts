@@ -445,6 +445,17 @@ check(
 );
 
 check(
+  "DocCheck scans provider-native instruction and nested doc paths",
+  docCheck.includes("const FRAMEWORK_DIR = getFrameworkDir()") &&
+    docCheck.includes(".codex") &&
+    docCheck.includes("opencode") &&
+    docCheck.includes("function listFilesRecursive") &&
+    docCheck.includes("'CLAUDE.md', 'AGENTS.md', 'RTK.md'") &&
+    !docCheck.includes("const CLAUDE_DIR"),
+  "PAI/TOOLS/DocCheck.ts",
+);
+
+check(
   "Runtime helper child processes stay hidden on Windows",
   secretScan.includes("spawn('trufflehog', args, { windowsHide: true })") &&
     splitAndTranscribe.includes("], { windowsHide: true })") &&

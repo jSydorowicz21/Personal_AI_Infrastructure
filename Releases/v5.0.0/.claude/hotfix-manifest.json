@@ -53,6 +53,10 @@
       "target": "PAI/TOOLS/DocCheck.ts"
     },
     {
+      "source": "PAI/TOOLS/DocCheckSmokeTest.ts",
+      "target": "PAI/TOOLS/DocCheckSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/gmail.ts",
       "target": "PAI/TOOLS/gmail.ts"
     },

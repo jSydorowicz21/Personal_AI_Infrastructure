@@ -20,9 +20,9 @@ import { join, resolve, dirname, relative } from 'path';
 import { spawnSync } from 'child_process';
 import { getFrameworkDir, getPaiDir } from './lib/paths';
 
-const CLAUDE_DIR = getFrameworkDir();
+const FRAMEWORK_DIR = getFrameworkDir();
 const PAI_DIR = getPaiDir();
-const HOOKS_DIR = join(CLAUDE_DIR, 'hooks');
+const HOOKS_DIR = join(FRAMEWORK_DIR, 'hooks');
 
 const args = process.argv.slice(2);
 const changedOnly = args.includes('--changed');
@@ -33,15 +33,15 @@ const quiet = args.includes('--quiet');
 
 const PATH_PATTERNS = [
   // Backtick-quoted paths: `PAI/DOCUMENTATION/Hooks/HookSystem.md`, `hooks/SecurityPipeline.hook.ts`
-  /`((?:PAI|hooks|skills|agents|Pulse|USER|MEMORY|Components|Algorithm|Tools)\/[\w/.@-]+\.\w+)`/g,
-  // Backtick-quoted paths with ~/.claude/ prefix
-  /`~\/\.claude\/([\w/.@-]+\.\w+)`/g,
-  // Backtick-quoted paths with $HOME/.claude/ prefix
-  /`\$HOME\/\.claude\/([\w/.@-]+\.\w+)`/g,
+  /`((?:PAI|hooks|skills|agents|commands|plugins|MCPs|Pulse|USER|MEMORY|Components|Algorithm|Tools)\/[\w/.@-]+\.\w+)`/g,
+  // Backtick-quoted framework-home paths with ~/.claude, ~/.codex, or ~/.config/opencode prefix
+  /`~\/(?:\.claude|\.codex|\.config\/opencode)\/([\w/.@-]+\.\w+)`/g,
+  // Backtick-quoted framework-home paths with $HOME/.claude, $HOME/.codex, or $HOME/.config/opencode prefix
+  /`\$HOME\/(?:\.claude|\.codex|\.config\/opencode)\/([\w/.@-]+\.\w+)`/g,
   // @-imports: @PAI/USER/FILE.md
   /^@(PAI\/[\w/.@-]+\.md)/gm,
   // Table cell paths: | `path` | or | path |
-  /\|\s*`?((?:PAI|hooks|skills|Pulse|USER)\/[\w/.@-]+\.\w+)`?\s*\|/g,
+  /\|\s*`?((?:PAI|hooks|skills|agents|commands|plugins|Pulse|USER)\/[\w/.@-]+\.\w+)`?\s*\|/g,
   // Arrow notation in TOPOLOGY.md: → file: `path`
   /→\s+[\w\s]+:\s+`([\w/.@-]+\.\w+)`/g,
 ];
@@ -111,7 +111,7 @@ function extractPathRefs(content: string, docPath: string): PathRef[] {
       // Resolve path — try the active framework home first, then PAI_DIR, then
       // section-aware root from `## ... (paths under `X`)` heading hint, then
       // referrer-dir relative.
-      let resolved = resolve(CLAUDE_DIR, raw);
+      let resolved = resolve(FRAMEWORK_DIR, raw);
       if (!existsSync(resolved)) {
         const paiResolved = resolve(PAI_DIR, raw);
         if (existsSync(paiResolved)) {
@@ -119,7 +119,7 @@ function extractPathRefs(content: string, docPath: string): PathRef[] {
         } else {
           const sectionRoot = getSectionRootAt(sectionRoots, match.index);
           if (sectionRoot) {
-            const sectionResolved = resolve(CLAUDE_DIR, sectionRoot, raw);
+            const sectionResolved = resolve(FRAMEWORK_DIR, sectionRoot, raw);
             if (existsSync(sectionResolved)) resolved = sectionResolved;
           }
           if (!existsSync(resolved)) {
@@ -142,6 +142,18 @@ function extractPathRefs(content: string, docPath: string): PathRef[] {
 
 // ── File Discovery ──
 
+function listFilesRecursive(dir: string, include: (path: string) => boolean, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      listFilesRecursive(path, include, out);
+    } else if (include(path)) {
+      out.push(path);
+    }
+  }
+  return out;
+}
+
 function findDocs(): string[] {
   const docs: string[] = [];
 
@@ -155,26 +167,24 @@ function findDocs(): string[] {
   // PAI documentation subsystem docs (relocated from PAI root in v5)
   const docsDir = join(PAI_DIR, 'DOCUMENTATION');
   try {
-    for (const f of readdirSync(docsDir)) {
-      if (f.endsWith('.md')) docs.push(join(docsDir, f));
-    }
+    docs.push(...listFilesRecursive(docsDir, (path) => path.endsWith('.md')));
   } catch { /* */ }
 
   // Security docs
   const secDir = join(PAI_DIR, 'USER', 'PAISECURITYSYSTEM');
   try {
-    for (const f of readdirSync(secDir)) {
-      if (f.endsWith('.md') || f.endsWith('.yaml')) docs.push(join(secDir, f));
-    }
+    docs.push(...listFilesRecursive(secDir, (path) => path.endsWith('.md') || path.endsWith('.yaml')));
   } catch { /* */ }
 
   // hooks README
   const hooksReadme = join(HOOKS_DIR, 'README.md');
   if (existsSync(hooksReadme)) docs.push(hooksReadme);
 
-  // CLAUDE.md
-  const claudeMd = join(CLAUDE_DIR, 'CLAUDE.md');
-  if (existsSync(claudeMd)) docs.push(claudeMd);
+  // Framework instruction files
+  for (const instructionFile of ['CLAUDE.md', 'AGENTS.md', 'RTK.md']) {
+    const path = join(FRAMEWORK_DIR, instructionFile);
+    if (existsSync(path)) docs.push(path);
+  }
 
   return docs;
 }
@@ -183,13 +193,13 @@ function getChangedFiles(): Set<string> {
   const changed = new Set<string>();
   for (const args of [["diff", "--name-only", "HEAD"], ["diff", "--cached", "--name-only"]]) {
     const diff = spawnSync("git", args, {
-      cwd: CLAUDE_DIR,
+      cwd: FRAMEWORK_DIR,
       encoding: "utf-8",
       windowsHide: true,
     });
     if (diff.status !== 0 && !diff.stdout) continue;
     for (const file of diff.stdout.split('\n').filter(Boolean)) {
-      changed.add(resolve(CLAUDE_DIR, file));
+      changed.add(resolve(FRAMEWORK_DIR, file));
     }
   }
   return changed;
@@ -244,7 +254,7 @@ for (const docPath of docsToCheck) {
     // Check existence
     if (!existsSync(ref.resolved)) {
       findings.push({
-        doc: relative(CLAUDE_DIR, docPath),
+        doc: relative(FRAMEWORK_DIR, docPath),
         ref: ref.raw,
         line: ref.line,
         type: 'missing',
@@ -258,7 +268,7 @@ for (const docPath of docsToCheck) {
       if (refMtime > docMtime) {
         const daysStale = Math.round((refMtime - docMtime) / (1000 * 60 * 60 * 24));
         findings.push({
-          doc: relative(CLAUDE_DIR, docPath),
+          doc: relative(FRAMEWORK_DIR, docPath),
           ref: ref.raw,
           line: ref.line,
           type: 'stale',
