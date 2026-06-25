@@ -15,7 +15,8 @@
 
 import { spawn } from "child_process"
 import { join } from "path"
-import { existsSync, readFileSync } from "fs"
+import { tmpdir } from "os"
+import { existsSync, readFileSync, unlinkSync } from "fs"
 import { log } from "../lib"
 import { getFrameworkDir, userPath } from "../../TOOLS/lib/paths"
 
@@ -347,25 +348,57 @@ async function generateSpeech(
 
 // ── Audio Playback ──
 
+function resolveAudioPlayer(): { command: string; args: (file: string, volume: number) => string[] } | null {
+  if (process.platform === "darwin" && existsSync("/usr/bin/afplay")) {
+    return { command: "/usr/bin/afplay", args: (file, volume) => ["-v", volume.toString(), file] }
+  }
+
+  const ffplay = Bun.which("ffplay")
+  if (ffplay) {
+    return { command: ffplay, args: (file) => ["-nodisp", "-autoexit", "-loglevel", "quiet", file] }
+  }
+
+  const mpv = Bun.which("mpv")
+  if (mpv) {
+    return { command: mpv, args: (file, volume) => ["--no-video", `--volume=${Math.round(volume * 100)}`, file] }
+  }
+
+  const mpg123 = Bun.which("mpg123")
+  if (mpg123) {
+    return { command: mpg123, args: (file) => ["-q", file] }
+  }
+
+  return null
+}
+
 async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOLUME): Promise<void> {
-  const tempFile = `/tmp/voice-${Date.now()}.mp3`
+  const player = resolveAudioPlayer()
+  if (!player) {
+    throw new Error("No audio player found. Install ffplay, mpv, or mpg123 for PAI voice playback on this platform.")
+  }
+
+  const tempFile = join(tmpdir(), `pai-voice-${Date.now()}-${Math.random().toString(16).slice(2)}.mp3`)
 
   await Bun.write(tempFile, audioBuffer)
 
   return new Promise((resolve, reject) => {
-    const proc = spawn("/usr/bin/afplay", ["-v", volume.toString(), tempFile])
+    const cleanup = () => {
+      try { unlinkSync(tempFile) } catch {}
+    }
+    const proc = spawn(player.command, player.args(tempFile, volume), { windowsHide: true })
 
     proc.on("error", (error) => {
       log("error", "Voice: error playing audio", { error: String(error) })
+      cleanup()
       reject(error)
     })
 
     proc.on("exit", (code) => {
-      spawn("/bin/rm", [tempFile])
+      cleanup()
       if (code === 0) {
         resolve()
       } else {
-        reject(new Error(`afplay exited with code ${code}`))
+        reject(new Error(`${player.command} exited with code ${code}`))
       }
     })
   })
@@ -373,7 +406,7 @@ async function playAudio(audioBuffer: ArrayBuffer, volume: number = FALLBACK_VOL
 
 function spawnAndWait(command: string, args: string[]): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const proc = spawn(command, args)
+    const proc = spawn(command, args, { windowsHide: true })
     proc.on("error", reject)
     proc.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${command} exited ${code}`))))
   })

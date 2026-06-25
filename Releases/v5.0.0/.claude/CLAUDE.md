@@ -56,7 +56,7 @@ FOR: Multi-step, complex, or difficult work. Troubleshooting, debugging, buildin
 - Plan means stop. "Create a plan" = present and STOP. No execution without approval.
 - Build over ask for reversible actions. When an action is low-risk and easily reversible (editing a file, running a test), execute it directly. Reserve AskUserQuestion for irreversible or high-impact decisions. Momentum matters.
 - Reproduce before fixing. Reported UI bug = open the page with **Interceptor skill** FIRST. Console errors and network 404s before code analysis. Never theorize from code when you can just look.
-- Interceptor for ALL web verification. Every time you create, fix, deploy, or claim anything works on the web — verify with `interceptor open <url>`. NEVER use agent-browser for verification. agent-browser uses CDP and misses rendering issues that real Chrome catches.
+- Browser verification is mandatory for web work. Prefer Interceptor for real Chrome/authenticated verification; in Codex Windows sessions where Codex-native browser tooling is the active harness capability or Interceptor is unavailable, use that provider-native browser tooling and record what verified the result.
 
 ### Operational Notes
 - Context reduction: PreToolUse hook rewrites Bash through RTK for 60-90% token reduction. Use `rtk gain` to check savings.

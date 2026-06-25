@@ -68,10 +68,103 @@ const PATTERNS_PATH = userPath("SECURITY", "PATTERNS.yaml")
 const SECURITY_RULES_PATH = userPath("SECURITY", "SECURITY_RULES.md")
 const SECURITY_LOG_DIR = join(MEMORY_DIR, "SECURITY")
 const SETTINGS_PATH = join(FRAMEWORK_DIR, "settings.json")
+const CODEX_HOOKS_PATH = join(FRAMEWORK_DIR, "hooks.json")
 const LADDER_DIR = join(HOME, "Projects", "Ladder")
 
 const DEFAULT_DASHBOARD_DIR = join(PAI_DIR, "PULSE", "Observability", "out")
 const FRAMEWORK_STATE_PATH = join(PAI_DATA_DIR, "framework.json")
+
+function detectActiveFramework(): "claude" | "codex" | "opencode" | "unknown" {
+  if (existsSync(CODEX_HOOKS_PATH) && existsSync(join(FRAMEWORK_DIR, "config.toml"))) return "codex"
+  if (existsSync(join(FRAMEWORK_DIR, "opencode.json"))) return "opencode"
+  if (existsSync(SETTINGS_PATH)) return "claude"
+  return "unknown"
+}
+
+function hookTargetFromCommand(command: string): string | null {
+  const targetMatch = command.match(/--target\s+(?:"([^"]+)"|'([^']+)'|([^\s]+))/)
+  if (targetMatch) return targetMatch[1] || targetMatch[2] || targetMatch[3]
+  const hookMatch = command.match(/(?:^|\s)([^\s"']+\.hook\.(?:ts|js|mjs|cjs))(?:\s|$)/)
+  return hookMatch ? hookMatch[1] : null
+}
+
+function resolveHookTarget(target: string | null): string | null {
+  if (!target) return null
+  const normalized = target.replace(/\\/g, "/")
+  if (/^[A-Za-z]:[\\/]/.test(target) || target.startsWith("/")) return target
+  if (normalized.startsWith("hooks/")) return join(FRAMEWORK_DIR, target)
+  return join(FRAMEWORK_DIR, "hooks", target)
+}
+
+function hookFilenameFromCommand(command: string): { name: string; status: "active" | "missing" | "unknown" } {
+  const target = hookTargetFromCommand(command)
+  if (!target) return { name: command, status: "unknown" }
+  const targets = target.split(",").map((part) => part.trim()).filter(Boolean)
+  const resolved = targets.map((part) => resolveHookTarget(part)).filter((part): part is string => Boolean(part))
+  if (resolved.length === 0) return { name: command, status: "unknown" }
+  const missing = resolved.filter((path) => !existsSync(path))
+  const name = targets.map((part) => part.split(/[\\/]/).pop() || part).join(",")
+  return { name, status: missing.length === 0 ? "active" : "missing" }
+}
+
+function isSecurityHookCommand(command: string): boolean {
+  return (
+    command.includes("SecurityPipeline") ||
+    command.includes("ContentScanner") ||
+    command.includes("SmartApprover") ||
+    command.includes("PromptGuard") ||
+    command.includes("ConfigAudit") ||
+    command.includes("SkillGuard") ||
+    command.includes("AgentGuard") ||
+    command.includes("skill-guard") ||
+    command.includes("agent-guard")
+  )
+}
+
+function loadSecurityHookHealth(): any[] {
+  const hooks: any[] = []
+  const framework = detectActiveFramework()
+  try {
+    if (framework === "codex" && existsSync(CODEX_HOOKS_PATH)) {
+      const config = JSON.parse(readFileSync(CODEX_HOOKS_PATH, "utf-8"))
+      for (const [eventType, entries] of Object.entries(config.hooks || {})) {
+        if (!Array.isArray(entries)) continue
+        for (const entry of entries as any[]) {
+          const hookList = Array.isArray(entry.hooks) ? entry.hooks : [entry]
+          const matcher = entry.matcher || "(all)"
+          for (const hook of hookList) {
+            const command = String(hook.commandWindows || hook.command || "")
+            if (!command || !isSecurityHookCommand(command)) continue
+            const detail = hookFilenameFromCommand(command)
+            hooks.push({ type: eventType, matcher, command: detail.name, status: detail.status, framework, config: "hooks.json" })
+          }
+        }
+      }
+      return hooks
+    }
+
+    if (existsSync(SETTINGS_PATH)) {
+      const settings = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"))
+      const hookConfig = settings.hooks || {}
+      for (const [eventType, entries] of Object.entries(hookConfig)) {
+        if (!Array.isArray(entries)) continue
+        for (const entry of entries as any[]) {
+          const hookList = entry.hooks || []
+          const matcher = entry.matcher || "(all)"
+          for (const hook of hookList) {
+            const command = String(hook.command || hook.url || "")
+            if (!command || !isSecurityHookCommand(command)) continue
+            const detail = hook.type === "command" ? hookFilenameFromCommand(command) : { name: command, status: "active" as const }
+            hooks.push({ type: eventType, matcher, command: detail.name, status: detail.status, framework, config: "settings.json" })
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[Observability] Failed to read hook health:", e)
+  }
+  return hooks
+}
 
 // ── In-Memory Store (hook-pushed state/events) ──
 
@@ -538,51 +631,10 @@ function handleSecurityApi(): Response {
     console.error("[Observability] Failed to read security events:", e)
   }
 
-  // Load hook health
-  const hooks: any[] = []
-  try {
-    if (existsSync(SETTINGS_PATH)) {
-      const settings = JSON.parse(readFileSync(SETTINGS_PATH, "utf-8"))
-      const hookConfig = settings.hooks || {}
-      for (const [eventType, entries] of Object.entries(hookConfig)) {
-        if (!Array.isArray(entries)) continue
-        for (const entry of entries as any[]) {
-          const hookList = entry.hooks || []
-          const matcher = entry.matcher || "(all)"
-          for (const hook of hookList) {
-            const isSecurityHook =
-              hook.command?.includes("SecurityPipeline") ||
-              hook.command?.includes("ContentScanner") ||
-              hook.command?.includes("SmartApprover") ||
-              hook.command?.includes("PromptGuard") ||
-              hook.command?.includes("ConfigAudit") ||
-              hook.url?.includes("skill-guard") ||
-              hook.url?.includes("agent-guard")
-            if (!isSecurityHook) continue
-
-            if (hook.type === "command" && hook.command) {
-              const parts = hook.command.split("/")
-              const filename = parts[parts.length - 1]
-              const expandedPath = hook.command
-                .replace("bun ", "")
-                .replace("$HOME", HOME)
-                .replace("${HOME}", HOME)
-              hooks.push({
-                type: eventType,
-                matcher,
-                command: filename,
-                status: existsSync(expandedPath) ? "active" : "missing",
-              })
-            } else if (hook.type === "http" && hook.url) {
-              hooks.push({ type: eventType, matcher, command: hook.url, status: "active" })
-            }
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.error("[Observability] Failed to read hook health:", e)
-  }
+  // Load provider-native hook health. Claude registers in settings.json; Codex
+  // registers in hooks.json. Pulse should display the active provider, not a
+  // dormant framework's config.
+  const hooks = loadSecurityHookHealth()
 
   const blocked = patterns?.bash?.blocked || []
   const alerts = patterns?.bash?.alert || []

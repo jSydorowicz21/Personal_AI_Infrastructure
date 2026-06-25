@@ -137,11 +137,11 @@ function codexModelFor(level: InferenceLevel): string {
   const levelSpecific = process.env[CODEX_MODEL_ENV[level]];
   if (levelSpecific) return levelSpecific;
 
-  if (level !== "smart" && process.env.PAI_CODEX_MODEL_CLASSIFIER) {
+  if (level === "fast" && process.env.PAI_CODEX_MODEL_CLASSIFIER) {
     return process.env.PAI_CODEX_MODEL_CLASSIFIER;
   }
 
-  if (level !== "smart") {
+  if (level === "fast") {
     return CODEX_DEFAULT_CLASSIFIER_MODEL;
   }
 
@@ -443,7 +443,8 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
     let stdout = '';
     let stderr = '';
 
-    const proc = spawn('claude', args, {
+    const claudePath = process.env.PAI_CLAUDE_BIN || Bun.which("claude") || "claude";
+    const proc = spawn(claudePath, args, {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,

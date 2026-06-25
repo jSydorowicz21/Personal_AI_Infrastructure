@@ -588,6 +588,147 @@ migrate_claude_sessionend_lifecycle() {
   fi
 }
 
+write_pai_framework_state() {
+  local install_root="$1"
+  local framework="$2"
+  local data_dir config_dir state_path
+  data_dir="$(resolve_pai_data_dir)"
+  config_dir="$(resolve_pai_config_dir)"
+  state_path="$data_dir/framework.json"
+  mkdir -p "$data_dir" "$config_dir"
+
+  local tool
+  tool="$(json_tool)"
+  [ -n "$tool" ] || fail "Need python, node, or bun to write $state_path"
+  if [ "$tool" = "python3" ] || [ "$tool" = "python" ]; then
+    "$tool" - "$state_path" "$framework" "$install_root" "$install_root/PAI" "$data_dir" "$config_dir" <<'PY'
+import json, sys
+path, framework, root, pai_dir, data_dir, config_dir = sys.argv[1:7]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump({
+        "active": framework,
+        "root": root,
+        "paiDir": pai_dir,
+        "dataDir": data_dir,
+        "configDir": config_dir,
+    }, f, indent=2)
+    f.write("\n")
+PY
+  else
+    "$tool" -e 'const fs=require("fs"); const [path, framework, root, paiDir, dataDir, configDir]=process.argv.slice(1); fs.writeFileSync(path, JSON.stringify({active:framework, root, paiDir, dataDir, configDir}, null, 2)+"\n");' "$state_path" "$framework" "$install_root" "$install_root/PAI" "$data_dir" "$config_dir"
+  fi
+
+  export PAI_FRAMEWORK="$framework"
+  export PAI_FRAMEWORK_DIR="$install_root"
+  export PAI_DIR="$install_root/PAI"
+  export PAI_DATA_DIR="$data_dir"
+  export PAI_CONFIG_DIR="$config_dir"
+  success "Wrote PAI framework state: $state_path"
+}
+
+pai_shell_block() {
+  local install_root="$1"
+  local framework="$2"
+  local data_dir config_dir pai_dir pai_script
+  data_dir="$(resolve_pai_data_dir)"
+  config_dir="$(resolve_pai_config_dir)"
+  pai_dir="$install_root/PAI"
+  pai_script="$pai_dir/TOOLS/pai.ts"
+  cat <<EOF
+# PAI aliases
+initialize_pai_environment() {
+  local default_pai_data_dir="$data_dir"
+  if [ -z "\${PAI_DATA_DIR:-}" ] || [ ! -f "\$PAI_DATA_DIR/framework.json" ]; then export PAI_DATA_DIR="\$default_pai_data_dir"; fi
+  pai_read_framework_state() {
+    local path="\$1/framework.json"
+    [ -f "\$path" ] || return 0
+    if command -v python3 >/dev/null 2>&1; then
+      python3 - "\$path" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+print("{}\t{}\t{}".format(data.get("active", "") or "", data.get("root", "") or "", data.get("dataDir", "") or ""))
+PY
+    elif command -v python >/dev/null 2>&1; then
+      python - "\$path" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+print("{}\t{}\t{}".format(data.get("active", "") or "", data.get("root", "") or "", data.get("dataDir", "") or ""))
+PY
+    elif command -v node >/dev/null 2>&1; then
+      node -e 'const fs=require("fs"); try { const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log((data.active||"")+"\t"+(data.root||"")+"\t"+(data.dataDir||"")); } catch {}' "\$path"
+    elif command -v bun >/dev/null 2>&1; then
+      bun -e 'const fs=require("fs"); try { const data=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); console.log((data.active||"")+"\t"+(data.root||"")+"\t"+(data.dataDir||"")); } catch {}' "\$path"
+    fi
+  }
+  local state_path="\$PAI_DATA_DIR/framework.json"
+  if [ -f "\$state_path" ]; then
+    local state_line state_root state_active state_data
+    state_line="\$(pai_read_framework_state "\$PAI_DATA_DIR" 2>/dev/null || true)"
+    state_active="\$(printf '%s' "\$state_line" | awk -F '\t' 'NR==1 {print \$1}')"
+    state_root="\$(printf '%s' "\$state_line" | awk -F '\t' 'NR==1 {print \$2}')"
+    state_data="\$(printf '%s' "\$state_line" | awk -F '\t' 'NR==1 {print \$3}')"
+    if [ -n "\$state_root" ] && [ -d "\$state_root" ]; then export PAI_FRAMEWORK_DIR="\$state_root"; export PAI_DIR="\$PAI_FRAMEWORK_DIR/PAI"; fi
+    if [ -n "\$state_active" ]; then export PAI_FRAMEWORK="\$state_active"; fi
+    if [ -n "\$state_data" ] && [ -d "\$state_data" ]; then export PAI_DATA_DIR="\$state_data"; fi
+  fi
+  if [ -z "\${PAI_FRAMEWORK_DIR:-}" ] || [ ! -d "\$PAI_FRAMEWORK_DIR" ]; then export PAI_FRAMEWORK_DIR="$install_root"; fi
+  if [ -z "\${PAI_DIR:-}" ] || [ ! -d "\$PAI_DIR" ]; then export PAI_DIR="$pai_dir"; fi
+  if [ -z "\${PAI_FRAMEWORK:-}" ]; then export PAI_FRAMEWORK="$framework"; fi
+  if [ -z "\${PAI_CONFIG_DIR:-}" ] || [ ! -d "\$PAI_CONFIG_DIR" ]; then export PAI_CONFIG_DIR="$config_dir"; fi
+}
+initialize_pai_environment
+pai() {
+  initialize_pai_environment
+  bun "$pai_script" "\$@"
+}
+k() {
+  pai "\$@"
+}
+EOF
+}
+
+shell_profile_candidates() {
+  [ -n "${PAI_SHELL_PROFILE:-}" ] && printf '%s\n' "$PAI_SHELL_PROFILE"
+  printf '%s\n' "$HOME/.profile" "$HOME/.bashrc" "$HOME/.zshrc"
+}
+
+repair_shell_profiles() {
+  local install_root="$1"
+  local framework="$2"
+  local backup_root="$3"
+  local block
+  block="$(pai_shell_block "$install_root" "$framework")"
+  while IFS= read -r profile_path; do
+    [ -n "$profile_path" ] || continue
+    if [ "$DRY_RUN" -eq 1 ]; then
+      info "DRY RUN repair shell profile $profile_path"
+      continue
+    fi
+    mkdir -p "$(dirname "$profile_path")"
+    if [ -f "$profile_path" ]; then
+      backup_existing "$install_root" "$profile_path" "$backup_root" >/dev/null || true
+      local cleaned
+      cleaned="$(awk '
+        /^# PAI aliases$/ { skip=1; next }
+        skip && /^# / { skip=0 }
+        !skip { print }
+      ' "$profile_path")"
+      printf '%s\n\n%s\n' "$cleaned" "$block" > "$profile_path"
+    else
+      printf '%s\n' "$block" > "$profile_path"
+    fi
+    success "Repaired shell PAI bootstrap: $profile_path"
+  done < <(shell_profile_candidates | awk 'NF && !seen[$0]++')
+}
+
 printf '\nPAI | Installed Hotfix Updater\n\n'
 
 target="$(resolve_target)"
@@ -624,6 +765,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
   elif [ "$target_framework" = "claude" ]; then
     migrate_claude_sessionend_lifecycle "$target_root" "$backup_root"
   fi
+  write_pai_framework_state "$target_root" "$target_framework"
+  repair_shell_profiles "$target_root" "$target_framework" "$backup_root"
   verify_install "$target_root" "$target_framework"
   success "Hotfix update complete. Restart the agent session so instructions reload."
 else

@@ -59,6 +59,7 @@ function readClaudeModel(root: string): string {
   const settings = readJson(join(root, "settings.json"));
   const env = settings.env && typeof settings.env === "object" ? settings.env as JsonObject : {};
   return firstString(
+    process.env.PAI_CLAUDE_MODEL,
     process.env.ANTHROPIC_MODEL,
     process.env.CLAUDE_MODEL,
     env.ANTHROPIC_MODEL,

@@ -260,8 +260,8 @@ function commandHook(config: PAIConfig, hookFile: string | string[], timeout = 1
  * bridge that lets shared PAI hook implementations receive normalized input.
  *
  * HTTP hooks remain Pulse-owned for Claude. Codex gets command equivalents
- * where they exist; Pulse-only routes such as skill-guard/agent-guard are not
- * emitted here because Codex does not execute HTTP hook entries.
+ * where they exist, including SkillGuard and AgentGuard mirrors, because Codex
+ * does not execute Claude HTTP hook entries.
  */
 export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
   return {
@@ -297,9 +297,15 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           ],
         },
         {
+          matcher: "Skill",
+          hooks: [
+            commandHook(config, "SkillGuard.hook.ts", 5),
+          ],
+        },
+        {
           matcher: "Agent",
           hooks: [
-            commandHook(config, "AgentInvocation.hook.ts", 5),
+            commandHook(config, ["AgentGuard.hook.ts", "AgentInvocation.hook.ts"], 5),
           ],
         },
       ],
@@ -350,7 +356,7 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
         {
           hooks: [
             commandHook(config, ["PromptGuard.hook.ts", "RepeatDetection.hook.ts", "PromptProcessing.hook.ts"], 35),
-            commandHook(config, "SatisfactionCapture.hook.ts", 5),
+            commandHook(config, "SatisfactionCapture.hook.ts", 30),
           ],
         },
       ],
@@ -362,6 +368,20 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
           ],
         },
       ],
+      PostToolUseFailure: [
+        {
+          hooks: [
+            commandHook(config, "ToolFailureTracker.hook.ts", 5),
+          ],
+        },
+      ],
+      PostCompact: [
+        {
+          hooks: [
+            commandHook(config, "RestoreContext.hook.ts", 20),
+          ],
+        },
+      ],
       Stop: [
         {
           hooks: [
@@ -369,6 +389,13 @@ export function generateCodexHooksJson(config: PAIConfig): Record<string, any> {
             commandHook(config, "ResponseTabReset.hook.ts", 10),
             commandHook(config, "VoiceCompletion.hook.ts", 10),
             commandHook(config, "DocIntegrity.hook.ts", 20),
+          ],
+        },
+      ],
+      StopFailure: [
+        {
+          hooks: [
+            commandHook(config, "StopFailureHandler.hook.ts", 10),
           ],
         },
       ],

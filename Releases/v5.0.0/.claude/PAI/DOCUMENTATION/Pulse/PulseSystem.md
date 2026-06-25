@@ -630,7 +630,7 @@ Pulse includes an integrated HTTP hook validation server as the `hooks` module (
 
 ### Behavior
 
-- **Fail-open:** If Pulse is unreachable, Claude Code treats hooks as non-blocking success. This is acceptable for skill-guard (minor annoyance) and agent-guard (warning only). These Pulse HTTP routes are the ONLY implementation — the standalone `.hook.ts` files (`SkillGuard.hook.ts`, `AgentExecutionGuard.hook.ts`) were deleted.
+- **Fail-open:** If Pulse is unreachable, Claude Code treats hooks as non-blocking success. This is acceptable for skill-guard (minor annoyance) and agent-guard (warning only). Claude uses Pulse HTTP routes for these guards; Codex/OpenCode use command-native hook files (`SkillGuard.hook.ts`, `AgentGuard.hook.ts`) with the same policy because they do not execute Claude HTTP hook entries.
 - **Security hooks stay as command hooks:** `SecurityPipeline.hook.ts` uses `process.exit(2)` for hard-blocking. HTTP hooks would fail-open on connection failure, which is unacceptable for security operations.
 - **Port:** 31337 (shared with all Pulse modules), bound to 127.0.0.1 only.
 

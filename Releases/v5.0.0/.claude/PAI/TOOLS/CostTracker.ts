@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * CostTracker — Anthropic cost observability for PAI
+ * CostTracker — provider cost and usage observability for PAI
  *
  * Why this exists:
  *   April 2026 Anthropic invoice was $498.45, dominated by PAI-local processes
@@ -9,10 +9,11 @@
  *   until the monthly invoice arrived. This tool closes that feedback loop.
  *
  * What it tracks:
- *   1. Subscription usage (5h/7d window %, read from UpdateCounts cache)
- *   2. API spend (from ANTHROPIC_ADMIN_API_KEY cost_report, if available)
+ *   1. Claude subscription usage (5h/7d window %, read from UpdateCounts cache)
+ *   2. Anthropic API spend (from ANTHROPIC_ADMIN_API_KEY cost_report, if available)
  *   3. Call-site inventory (static rg scan for SDK imports + `--bare` + ANTHROPIC_API_KEY refs)
  *      — This is the real leak detector: catches regressions BEFORE they bill
+ *   4. Codex subscription usage (from Pulse session-costs.jsonl; token guard, not dollars)
  *
  * Outputs:
  *   MEMORY/OBSERVABILITY/anthropic-cost.jsonl   — append-only ledger
@@ -39,11 +40,14 @@ const FRAMEWORK_DIR = getFrameworkDir();
 const OBS_DIR = memoryPath("OBSERVABILITY");
 const LEDGER_PATH = join(OBS_DIR, "anthropic-cost.jsonl");
 const CALL_SITES_PATH = join(OBS_DIR, "anthropic-call-sites.json");
+const SESSION_COSTS_PATH = memoryPath("OBSERVABILITY", "session-costs.jsonl");
 const USAGE_CACHE_PATH = memoryPath("STATE", "usage-cache.json");
 
 // Alert thresholds — tunable
 const API_SPEND_MONTHLY_ALERT_USD = 5.0;    // even Arbol should stay under $5/mo
 const SUB_USAGE_ALERT_PCT = 95;             // subscription near-capacity warning
+const CODEX_24H_TOKEN_ALERT = parseInt(process.env.PAI_CODEX_DAILY_TOKEN_ALERT ?? "2000000", 10);
+const CODEX_SESSION_TOKEN_ALERT = parseInt(process.env.PAI_CODEX_SESSION_TOKEN_ALERT ?? "500000", 10);
 
 interface CostSnapshot {
   ts: string;
@@ -55,6 +59,7 @@ interface CostSnapshot {
     month_used_usd: number | null;
     source: "admin_key" | "unavailable";
   };
+  codex_usage: CodexUsageSnapshot;
   call_sites: {
     total: number;
     bypass: number;    // should NOT bill API but do
@@ -62,6 +67,15 @@ interface CostSnapshot {
     new_since_baseline: string[];
   };
   alerts: string[];
+}
+
+interface CodexUsageSnapshot {
+  source: "session-costs" | "unavailable";
+  sessions_24h: number;
+  tokens_24h: number;
+  largest_session_tokens: number;
+  largest_session_id: string | null;
+  models: Record<string, number>;
 }
 
 interface CallSite {
@@ -122,6 +136,75 @@ async function fetchApiSpend(): Promise<{ month_used_usd: number | null; source:
     return { month_used_usd: totalCents / 100, source: "admin_key" };
   } catch {
     return { month_used_usd: null, source: "unavailable" };
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Codex subscription usage (shared Pulse session ledger)
+// ──────────────────────────────────────────────────────────────────────────
+
+function readCodexUsage(): CodexUsageSnapshot {
+  const empty: CodexUsageSnapshot = {
+    source: "unavailable",
+    sessions_24h: 0,
+    tokens_24h: 0,
+    largest_session_tokens: 0,
+    largest_session_id: null,
+    models: {},
+  };
+
+  try {
+    if (!existsSync(SESSION_COSTS_PATH)) return empty;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const seen = new Set<string>();
+    const models: Record<string, number> = {};
+    let sessions = 0;
+    let tokens = 0;
+    let largestTokens = 0;
+    let largestSessionId: string | null = null;
+
+    for (const line of readFileSync(SESSION_COSTS_PATH, "utf-8").split("\n")) {
+      if (!line.trim()) continue;
+      let row: any;
+      try {
+        row = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (row?.framework !== "codex") continue;
+      const ts = Date.parse(row.lastTimestamp || row.firstTimestamp || row.ts || "");
+      if (Number.isFinite(ts) && ts < cutoff) continue;
+      const sessionKey = String(row.sessionKey || row.sessionId || row.filePath || `${sessions}`);
+      if (seen.has(sessionKey)) continue;
+      seen.add(sessionKey);
+
+      const rowTokens = Number(row.totalTokens || 0);
+      sessions += 1;
+      tokens += Number.isFinite(rowTokens) ? rowTokens : 0;
+      if (rowTokens > largestTokens) {
+        largestTokens = rowTokens;
+        largestSessionId = row.sessionId ? String(row.sessionId) : sessionKey;
+      }
+      const modelCounts = row.models && typeof row.models === "object" ? row.models : {};
+      for (const [model, count] of Object.entries(modelCounts)) {
+        models[model] = (models[model] || 0) + Number(count || 0);
+      }
+      if (Object.keys(modelCounts).length === 0 && row.primaryModel) {
+        const model = String(row.primaryModel);
+        models[model] = (models[model] || 0) + 1;
+      }
+    }
+
+    return {
+      source: "session-costs",
+      sessions_24h: sessions,
+      tokens_24h: tokens,
+      largest_session_tokens: largestTokens,
+      largest_session_id: largestSessionId,
+      models,
+    };
+  } catch {
+    return empty;
   }
 }
 
@@ -281,6 +364,7 @@ function writeBaseline(sites: CallSite[]): void {
 async function takeSnapshot(): Promise<{ snapshot: CostSnapshot; sites: CallSite[] }> {
   const subscription = readSubscriptionUsage();
   const api_spend = await fetchApiSpend();
+  const codex_usage = readCodexUsage();
   const sites = scanCallSites();
   const baseline = readBaseline();
 
@@ -303,12 +387,19 @@ async function takeSnapshot(): Promise<{ snapshot: CostSnapshot; sites: CallSite
   if (subscription.five_hour_pct !== null && subscription.five_hour_pct > SUB_USAGE_ALERT_PCT) {
     alerts.push(`Subscription 5h window at ${subscription.five_hour_pct}% (threshold ${SUB_USAGE_ALERT_PCT}%)`);
   }
+  if (codex_usage.tokens_24h > CODEX_24H_TOKEN_ALERT) {
+    alerts.push(`Codex subscription usage at ${codex_usage.tokens_24h.toLocaleString()} tokens/24h (threshold ${CODEX_24H_TOKEN_ALERT.toLocaleString()})`);
+  }
+  if (codex_usage.largest_session_tokens > CODEX_SESSION_TOKEN_ALERT) {
+    alerts.push(`Largest Codex session used ${codex_usage.largest_session_tokens.toLocaleString()} tokens (threshold ${CODEX_SESSION_TOKEN_ALERT.toLocaleString()})`);
+  }
 
   return {
     snapshot: {
       ts: new Date().toISOString(),
       subscription,
       api_spend,
+      codex_usage,
       call_sites: { total: sites.length, bypass, legit, new_since_baseline: newSites },
       alerts,
     },
@@ -340,7 +431,7 @@ async function voiceAlert(message: string): Promise<void> {
 
 function formatStatus(snap: CostSnapshot): string {
   const lines: string[] = [];
-  lines.push(`═══ PAI Anthropic Cost — ${snap.ts} ═══`);
+  lines.push(`═══ PAI Provider Usage — ${snap.ts} ═══`);
   lines.push(``);
   lines.push(`Subscription (OAuth):`);
   lines.push(`  5h window:   ${snap.subscription.five_hour_pct ?? "unknown"}%`);
@@ -352,6 +443,11 @@ function formatStatus(snap: CostSnapshot): string {
   } else {
     lines.push(`  unknown  (ANTHROPIC_ADMIN_API_KEY not set)`);
   }
+  lines.push(``);
+  lines.push(`Codex Subscription Usage (last 24h):`);
+  lines.push(`  sessions: ${snap.codex_usage.sessions_24h}`);
+  lines.push(`  tokens:   ${snap.codex_usage.tokens_24h.toLocaleString()}`);
+  lines.push(`  largest:  ${snap.codex_usage.largest_session_tokens.toLocaleString()}${snap.codex_usage.largest_session_id ? ` (${snap.codex_usage.largest_session_id})` : ""}`);
   lines.push(``);
   lines.push(`Call Sites (PAI-local risk surface):`);
   lines.push(`  total:   ${snap.call_sites.total}`);

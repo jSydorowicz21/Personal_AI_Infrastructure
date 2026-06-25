@@ -142,33 +142,38 @@ function getStartupCatchphrase(): string {
 }
 
 function frameworkRoot(id: FrameworkId): string {
-  const state = readFrameworkState();
-  const stateFramework = state?.active || state?.framework;
-  if (state?.root && stateFramework === id && existsSync(expandPaiHome(state.root))) return expandPaiHome(state.root);
   const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
   const switchTarget = normalizeFramework(process.argv[4]);
   const canCreateEnvRoot = process.argv[2] === "framework" && process.argv[3] === "switch" && switchTarget === id;
-  if (id === "codex" && process.env.CODEX_HOME) {
-    const codexHome = expandPaiHome(process.env.CODEX_HOME);
-    if (existsSync(codexHome) || canCreateEnvRoot) return codexHome;
-  }
-  if (id === "opencode" && process.env.OPENCODE_CONFIG_DIR) {
-    const opencodeHome = expandPaiHome(process.env.OPENCODE_CONFIG_DIR);
-    if (existsSync(opencodeHome) || canCreateEnvRoot) return opencodeHome;
-  }
-  const claudeHome = process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME;
-  if (id === "claude" && claudeHome) {
-    const expandedClaudeHome = expandPaiHome(claudeHome);
-    if (existsSync(expandedClaudeHome) || canCreateEnvRoot) return expandedClaudeHome;
-  }
   const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
-  if (frameworkDirOverride && envFramework === id) {
-    const expandedFrameworkDir = expandPaiHome(frameworkDirOverride);
-    if (existsSync(expandedFrameworkDir) || canCreateEnvRoot) return expandedFrameworkDir;
+  const explicitHome =
+    (id === "codex" && process.env.CODEX_HOME ? expandPaiHome(process.env.CODEX_HOME) : "") ||
+    (id === "opencode" && process.env.OPENCODE_CONFIG_DIR ? expandPaiHome(process.env.OPENCODE_CONFIG_DIR) : "") ||
+    (id === "claude" && (process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME)
+      ? expandPaiHome(process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || "")
+      : "") ||
+    (frameworkDirOverride && envFramework === id ? expandPaiHome(frameworkDirOverride) : "");
+  if (explicitHome && (existsSync(explicitHome) || canCreateEnvRoot) && !wouldContaminateCanonicalSource(id, explicitHome)) {
+    return explicitHome;
+  }
+
+  const state = readFrameworkState();
+  const stateFramework = state?.active || state?.framework;
+  if (state?.root && stateFramework === id && existsSync(expandPaiHome(state.root)) && !wouldContaminateCanonicalSource(id, state.root)) {
+    return expandPaiHome(state.root);
   }
   if (id === "codex") return join(HOME, ".codex");
   if (id === "opencode") return join(HOME, ".config", "opencode");
   return join(HOME, ".claude");
+}
+
+function wouldContaminateCanonicalSource(id: FrameworkId, root: string): boolean {
+  if (id === "claude") return false;
+  try {
+    return resolve(expandPaiHome(root)) === resolve(CURRENT_INSTALL_ROOT);
+  } catch {
+    return false;
+  }
 }
 
 function frameworkCommand(id: FrameworkId): string {
@@ -256,10 +261,12 @@ function normalizeFramework(value: string | undefined): FrameworkId | null {
 }
 
 function getActiveFramework(): FrameworkId {
+  const envFramework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (envFramework) return envFramework;
   const state = readFrameworkState();
   if (state?.active || state?.framework) return state.active || state.framework || "claude";
   const settings = readSettings();
-  return normalizeFramework(settings.pai?.framework) || normalizeFramework(process.env.PAI_FRAMEWORK) || "claude";
+  return normalizeFramework(settings.pai?.framework) || "claude";
 }
 
 // Remove a symlink/junction destination WITHOUT recursing into (and deleting)

@@ -5,6 +5,10 @@
  * Validates skill and agent tool calls via HTTP hooks.
  */
 
+import { basename, join } from "path"
+import { existsSync, readFileSync } from "fs"
+import { getFrameworkDir } from "../../TOOLS/lib/paths"
+
 // ── Types ──
 
 export interface HooksConfig {
@@ -16,6 +20,14 @@ interface HookStats {
   requests: number
   skillGuard: { total: number; blocked: number; passed: number }
   agentGuard: { total: number; warned: number; passed: number }
+}
+
+interface RegisteredHook {
+  event: string
+  matcher: string
+  command: string
+  target: string | null
+  status: "active" | "missing" | "unknown"
 }
 
 // ── State ──
@@ -138,6 +150,97 @@ function handleAgentGuard(body: {
 
 // ── Health ──
 
-export function hooksHealth(): { status: string; stats: HookStats } {
-  return { status: "ok", ...stats }
+function detectFramework(frameworkDir: string): "claude" | "codex" | "opencode" | "unknown" {
+  if (existsSync(join(frameworkDir, "hooks.json")) && existsSync(join(frameworkDir, "config.toml"))) return "codex"
+  if (existsSync(join(frameworkDir, "opencode.json"))) return "opencode"
+  if (existsSync(join(frameworkDir, "settings.json"))) return "claude"
+  return "unknown"
+}
+
+function hookTargetFromCommand(command: string): string | null {
+  const targetMatch = command.match(/--target\s+(?:"([^"]+)"|'([^']+)'|([^\s]+))/)
+  if (targetMatch) return targetMatch[1] || targetMatch[2] || targetMatch[3]
+  const hookMatch = command.match(/(?:^|\s)([^\s"']+\.hook\.(?:ts|js|mjs|cjs))(?:\s|$)/)
+  return hookMatch ? hookMatch[1] : null
+}
+
+function resolveHookTarget(frameworkDir: string, target: string | null): string | null {
+  if (!target) return null
+  const normalized = target.replace(/\\/g, "/")
+  if (/^[A-Za-z]:[\\/]/.test(target) || target.startsWith("/")) return target
+  if (normalized.startsWith("hooks/")) return join(frameworkDir, target)
+  return join(frameworkDir, "hooks", target)
+}
+
+function hookStatus(frameworkDir: string, command: string): { target: string | null; status: RegisteredHook["status"] } {
+  const target = hookTargetFromCommand(command)
+  if (!target) return { target, status: "unknown" }
+  const targets = target.split(",").map((part) => part.trim()).filter(Boolean)
+  const resolved = targets.map((part) => resolveHookTarget(frameworkDir, part)).filter((part): part is string => Boolean(part))
+  if (resolved.length === 0) return { target, status: "unknown" }
+  const missing = resolved.filter((path) => !existsSync(path))
+  return {
+    target: targets.map((part) => basename(part)).join(","),
+    status: missing.length === 0 ? "active" : "missing",
+  }
+}
+
+function collectHooksFromClaudeSettings(frameworkDir: string): { configPath: string; hooks: RegisteredHook[] } {
+  const configPath = join(frameworkDir, "settings.json")
+  const hooks: RegisteredHook[] = []
+  if (!existsSync(configPath)) return { configPath, hooks }
+  const settings = JSON.parse(readFileSync(configPath, "utf-8"))
+  for (const [event, entries] of Object.entries(settings.hooks || {})) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries as any[]) {
+      const matcher = entry.matcher || "(all)"
+      for (const hook of entry.hooks || []) {
+        const command = String(hook.command || hook.url || "")
+        if (!command) continue
+        const status = hook.type === "command" ? hookStatus(frameworkDir, command) : { target: null, status: "active" as const }
+        hooks.push({ event, matcher, command, target: status.target, status: status.status })
+      }
+    }
+  }
+  return { configPath, hooks }
+}
+
+function collectHooksFromCodexJson(frameworkDir: string): { configPath: string; hooks: RegisteredHook[] } {
+  const configPath = join(frameworkDir, "hooks.json")
+  const hooks: RegisteredHook[] = []
+  if (!existsSync(configPath)) return { configPath, hooks }
+  const config = JSON.parse(readFileSync(configPath, "utf-8"))
+  for (const [event, entries] of Object.entries(config.hooks || {})) {
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries as any[]) {
+      const matcher = entry.matcher || "(all)"
+      const hookList = Array.isArray(entry.hooks) ? entry.hooks : [entry]
+      for (const hook of hookList) {
+        const command = String(hook.commandWindows || hook.command || "")
+        if (!command) continue
+        const status = hookStatus(frameworkDir, command)
+        hooks.push({ event, matcher, command, target: status.target, status: status.status })
+      }
+    }
+  }
+  return { configPath, hooks }
+}
+
+export function hooksHealth(): Record<string, unknown> {
+  const frameworkDir = getFrameworkDir()
+  const framework = detectFramework(frameworkDir)
+  const registered = framework === "codex"
+    ? collectHooksFromCodexJson(frameworkDir)
+    : collectHooksFromClaudeSettings(frameworkDir)
+  const missing = registered.hooks.filter((hook) => hook.status === "missing")
+  return {
+    status: missing.length > 0 ? "degraded" : "ok",
+    framework,
+    frameworkDir,
+    configPath: registered.configPath,
+    registeredHooks: registered.hooks.length,
+    missingHooks: missing,
+    hooks: registered.hooks,
+    stats,
+  }
 }

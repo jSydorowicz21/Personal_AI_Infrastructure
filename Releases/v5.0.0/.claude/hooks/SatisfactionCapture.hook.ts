@@ -97,7 +97,7 @@ function isCodexFramework(): boolean {
 
 function codexImplicitInferenceEnabled(): boolean {
   const raw = String(process.env.PAI_CODEX_SATISFACTION_INFERENCE || '').toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes';
+  return raw !== '0' && raw !== 'false' && raw !== 'no';
 }
 
 // ── Word-to-Number Map (for "ten", "eight", etc.) ──

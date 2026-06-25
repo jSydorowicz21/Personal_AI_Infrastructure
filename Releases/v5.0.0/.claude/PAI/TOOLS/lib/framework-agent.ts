@@ -69,6 +69,20 @@ export function buildFrameworkAgentCommand(
 
   if (framework === "codex") {
     const command = process.env.PAI_CODEX_BIN || Bun.which("codex") || "codex";
+    if (mode === "interactive") {
+      return {
+        framework,
+        label: "codex",
+        command,
+        args: [
+          "--cd", opts.cwd,
+          ...maybeModelArg(framework, opts.model ?? process.env.PAI_CODEX_MODEL),
+          prompt,
+        ],
+        env,
+      };
+    }
+
     return {
       framework,
       label: "codex exec",
@@ -108,18 +122,19 @@ export function buildFrameworkAgentCommand(
     };
   }
 
-  const command = Bun.which("claude") ?? "claude";
+  const command = process.env.PAI_CLAUDE_BIN || Bun.which("claude") || "claude";
   const allowedTools = opts.allowedTools ?? DEFAULT_AGENT_TOOLS;
+  const model = opts.model ?? process.env.PAI_CLAUDE_MODEL ?? process.env.ANTHROPIC_MODEL ?? process.env.CLAUDE_MODEL;
   const args = mode === "interactive"
     ? [
         prompt,
         "--allowedTools", allowedTools,
-        ...maybeModelArg(framework, opts.model),
+        ...maybeModelArg(framework, model),
       ]
     : [
         "-p", prompt,
         "--allowedTools", allowedTools,
-        ...maybeModelArg(framework, opts.model),
+        ...maybeModelArg(framework, model),
       ];
 
   return {

@@ -78,6 +78,8 @@ const USER_MIGRATION_FULL_ENTRIES = [
   "BELIEFS.md",
 ] as const;
 
+const BACKUP_PREFIXES = [".claude", ".codex", ".config-opencode"];
+
 function isPlaceholderValue(value: string): boolean {
   return /^\{.+\}$/.test(value) || /^e\.g\./i.test(value.trim()) || PLACEHOLDER_LITERALS.has(value.trim());
 }
@@ -273,7 +275,7 @@ export function findExistingEnvKey(keyName: string, activeFrameworkDir?: string)
 }
 
 /**
- * List backup .claude* directories that have an .env containing the key.
+ * List backup framework directories that have an .env containing the key.
  * Returns paths only — does NOT read or use the values until the caller
  * gets explicit user permission. Used by setupVoice to ask before scanning.
  */
@@ -283,7 +285,7 @@ function findKeyInBackupDirs(keyName: string): { path: string; value: string }[]
   try {
     const homeEntries = readdirSync(home);
     for (const entry of homeEntries) {
-      if (!entry.startsWith(".claude") || entry === ".claude") continue;
+      if (!BACKUP_PREFIXES.some((prefix) => entry.startsWith(prefix)) || BACKUP_PREFIXES.includes(entry)) continue;
       for (const candidate of [
         join(home, entry, ".env"),
         join(home, entry, ".config", "PAI", ".env"),
@@ -303,22 +305,23 @@ function findKeyInBackupDirs(keyName: string): { path: string; value: string }[]
  * WITHOUT importing anything. Read-only check used to decide whether to
  * ask the user permission before proceeding with import.
  *
- * Scope (deliberately narrow — the just-installed `~/.claude/` is excluded):
+ * Scope (deliberately narrow — the just-installed active framework dir is excluded):
  *   1. `~/.config/PAI/.env` — PAI's canonical key store. Lives outside
  *      `~/.claude/` so it survives `rm -rf ~/.claude` between installs.
  *      This is where a prior install's key actually persists.
- *   2. ANY directory in `$HOME` whose name starts with `.claude` EXCEPT
- *      `~/.claude/` itself — covers `.claude.bak`, `.claude-bak`,
- *      `.claude.backup.20260101`, `.claude.previous`, `.claude_old`, etc.
- *      Inside each, both `<dir>/.env` AND `<dir>/.config/PAI/.env` are
- *      checked, plus `<dir>/settings.json` for the voice ID.
+ *   2. ANY directory in `$HOME` whose name starts with `.claude`, `.codex`,
+ *      or `.config-opencode` EXCEPT the active install itself — covers
+ *      `.claude.bak`, `.codex-bak`, `.config-opencode.backup.20260101`,
+ *      `.claude.previous`, `.codex_old`, etc. Inside each, both `<dir>/.env`
+ *      AND `<dir>/.config/PAI/.env` are checked, plus `<dir>/settings.json`
+ *      for the voice ID.
  *
- * The active `~/.claude/.env` and `~/.claude/settings.json` are NOT
- * inventoried — they're the install we just built, not prior state to ask
- * about importing. Returns a list of human-readable signals — a fresh
- * machine returns []. Any non-empty result triggers the upfront "may I
- * import?" prompt at the top of runVoiceSetup. The user must explicitly
- * opt in before any prior key or voice ID gets pulled into the new install.
+ * The active install's `.env` and `settings.json` are NOT inventoried —
+ * they're the install we just built, not prior state to ask about importing.
+ * Returns a list of human-readable signals — a fresh machine returns [].
+ * Any non-empty result triggers the upfront "may I import?" prompt at the
+ * top of runVoiceSetup. The user must explicitly opt in before any prior key
+ * or voice ID gets pulled into the new install.
  */
 function inventoryExistingConfig(): { signals: string[] } {
   const home = homedir();
@@ -328,12 +331,12 @@ function inventoryExistingConfig(): { signals: string[] } {
   if (readKeyFromFile(configEnv, "ELEVENLABS_API_KEY")) {
     signals.push(`ElevenLabs key in ${configEnv.replace(home, "~")}`);
   }
-  // (2) Every `.claude*` directory in $HOME EXCEPT `~/.claude/` itself.
-  //     Pattern matches `.claude.bak`, `.claude-bak`, `.claude.backup.20260101`,
-  //     `.claude.previous`, `.claude_old`, `.claude20251215`, etc.
+  // (2) Every backup framework directory in $HOME, excluding the live install.
+  //     Pattern matches `.claude.bak`, `.codex-bak`, `.config-opencode.previous`,
+  //     `.claude.previous`, `.codex_old`, `.config-opencode20251215`, etc.
   try {
     for (const entry of readdirSync(home)) {
-      if (!entry.startsWith(".claude") || entry === ".claude") continue;
+      if (!BACKUP_PREFIXES.some((prefix) => entry.startsWith(prefix)) || BACKUP_PREFIXES.includes(entry)) continue;
       for (const candidate of [join(home, entry, ".env"), join(home, entry, ".config", "PAI", ".env")]) {
         if (readKeyFromFile(candidate, "ELEVENLABS_API_KEY")) {
           signals.push(`ElevenLabs key in ${candidate.replace(home, "~")}`);
@@ -355,7 +358,7 @@ function inventoryExistingConfig(): { signals: string[] } {
 }
 
 /**
- * Search existing .claude directories for settings.json voice configuration.
+ * Search existing provider backup directories for voice configuration.
  * Returns { voiceId, aiName, source } if found, or null.
  */
 export function findExistingVoiceConfig(activeFrameworkDir?: string): { voiceId: string; aiName: string; source: string } | null {
@@ -365,11 +368,12 @@ export function findExistingVoiceConfig(activeFrameworkDir?: string): { voiceId:
   // Active framework first, then legacy Claude compatibility fallback.
   candidates.push(...activeFrameworkEnvDirs(activeFrameworkDir).map((dir) => join(dir, "settings.json")));
 
-  // Scan all .claude* directories (backups, renamed, etc.)
+  // Scan all backup framework directories (backups, renamed, etc.)
   try {
     const homeEntries = readdirSync(home);
     for (const entry of homeEntries) {
-      if (entry.startsWith(".claude") && entry !== ".claude") {
+      if ((entry.startsWith(".claude") || entry.startsWith(".codex") || entry.startsWith(".config-opencode")) &&
+          entry !== ".claude" && entry !== ".codex" && entry !== ".config-opencode") {
         candidates.push(join(home, entry, "settings.json"));
       }
     }
@@ -2558,7 +2562,8 @@ export async function runVoiceSetup(
   // The very first prompt of the voice step. Fires regardless of whether
   // anything is found — the user authorizes the scan BEFORE any read
   // happens. This is the point: don't silently touch `~/.config/PAI/.env`,
-  // `~/.claude*` backup dirs, or stale settings.json voice configs without
+  // provider backup dirs (`~/.claude*`, `~/.codex*`, `~/.config-opencode*`),
+  // or stale settings.json voice configs without
   // the user's explicit OK, even when the read would return nothing.
   //
   // If the user says yes → run `inventoryExistingConfig()` and present
@@ -2569,7 +2574,7 @@ export async function runVoiceSetup(
     "scan-prior-config",
     "Look in backup directories and your prior PAI config for existing ElevenLabs voice IDs and API keys?",
     [
-      { label: "Yes — scan and let me confirm anything found", value: "yes", description: "Reads ~/.config/PAI/.env and any ~/.claude.bak / ~/.claude-bak / ~/.claude.backup.* / ~/.claude.previous etc. Per-item confirmation before anything is imported." },
+      { label: "Yes — scan and let me confirm anything found", value: "yes", description: "Reads ~/.config/PAI/.env and provider backup dirs such as ~/.claude.bak, ~/.codex-bak, or ~/.config-opencode.previous. Per-item confirmation before anything is imported." },
       { label: "No — start completely fresh", value: "no", description: "Skip the scan. I'll either enter a new ElevenLabs key or skip voice entirely." },
     ],
     daName
@@ -2621,7 +2626,7 @@ export async function runVoiceSetup(
         }
       }
 
-      // Step 2: Check backup .claude* directories with per-finding confirmation.
+      // Step 2: Check backup provider directories with per-finding confirmation.
       if (!elevenLabsKey) {
         const backupHits = findKeyInBackupDirs("ELEVENLABS_API_KEY");
         for (const hit of backupHits) {
@@ -3004,7 +3009,7 @@ export async function runVoiceSetup(
 // to ~/.claude/.env, then ask Pulse to restart so it picks up the env vars.
 //
 // Same key-discovery pattern as the voice step: check primary .env first,
-// ask permission before scanning .claude* backup directories, fall back to
+// ask permission before scanning provider backup directories, fall back to
 // manual entry.
 
 interface TelegramValidation { valid: boolean; username?: string; error?: string }
@@ -3129,7 +3134,7 @@ export async function runTelegramSetup(
     }
   }
 
-  // ── Step 2: Offer to scan backup .claude* dirs (with permission) ──
+  // ── Step 2: Offer to scan backup provider dirs (with permission) ──
   if (!token) {
     const backupHits = findKeyInBackupDirs("TELEGRAM_BOT_TOKEN");
     if (backupHits.length > 0) {

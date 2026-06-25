@@ -74,8 +74,11 @@ function handleCostApi(url: URL): Response {
 
   // Aggregate by model
   const modelCosts: Record<string, { cost: number; sessions: number; tokens: number }> = {}
+  const billingSources: Record<string, number> = { subscription: 0, "api-estimate": 0, unknown: 0 }
   let totalCost = 0
   let totalTokens = 0
+  let subscriptionTokens = 0
+  let subscriptionSessions = 0
 
   for (const s of filtered) {
     const model = s.primaryModel || "<unknown>"
@@ -85,6 +88,12 @@ function handleCostApi(url: URL): Response {
     modelCosts[model].tokens += s.totalTokens ?? 0
     totalCost += s.costTotal ?? 0
     totalTokens += s.totalTokens ?? 0
+    const billingSource = s.billingSource || "unknown"
+    billingSources[billingSource] = (billingSources[billingSource] ?? 0) + 1
+    if (billingSource === "subscription") {
+      subscriptionSessions += 1
+      subscriptionTokens += s.totalTokens ?? 0
+    }
   }
 
   // Aggregate by day
@@ -116,6 +125,8 @@ function handleCostApi(url: URL): Response {
       totalTokens: s.totalTokens,
       firstTimestamp: s.firstTimestamp,
       lastTimestamp: s.lastTimestamp,
+      billingSource: s.billingSource || "unknown",
+      pricingSource: s.pricingSource || "unknown",
     }))
 
   return Response.json({
@@ -123,6 +134,12 @@ function handleCostApi(url: URL): Response {
     totalSessions: filtered.length,
     totalCost: Math.round(totalCost * 100) / 100,
     totalTokens,
+    subscriptionUsage: {
+      sessions: subscriptionSessions,
+      tokens: subscriptionTokens,
+      note: "Subscription-backed providers report usage/capacity, not API dollar spend.",
+    },
+    billingSources,
     avgCostPerSession: filtered.length > 0 ? Math.round((totalCost / filtered.length) * 100) / 100 : 0,
     costBreakdown: {
       input: Math.round(totalInput * 100) / 100,
@@ -137,6 +154,7 @@ function handleCostApi(url: URL): Response {
         cost: Math.round(data.cost * 100) / 100,
         sessions: data.sessions,
         tokens: data.tokens,
+        billingSource: filtered.find((s: any) => (s.primaryModel || "<unknown>") === model)?.billingSource || "unknown",
       })),
     dailyCosts: Object.entries(dailyCosts)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -280,6 +298,14 @@ async function handleAnthropicCostApi(): Promise<Response> {
     ts: string
     subscription: { five_hour_pct: number | null; seven_day_pct: number | null }
     api_spend: { month_used_usd: number | null; source: string }
+    codex_usage?: {
+      source: string
+      sessions_24h: number
+      tokens_24h: number
+      largest_session_tokens: number
+      largest_session_id: string | null
+      models: Record<string, number>
+    }
     call_sites: { total: number; bypass: number; legit: number; new_since_baseline: string[] }
     alerts: string[]
   }

@@ -45,6 +45,10 @@ function walkTextFiles(dir: string, acc: string[] = []): string[] {
 }
 
 const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"));
+const canonicalAgentCommandSources = [
+  ...walkTextFiles(join(releaseRoot, "agents")),
+  ...walkTextFiles(join(releaseRoot, "commands")),
+].map((file) => `${file}\n${read(file)}`).join("\n\n");
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
 const limitlessCli = read(join(paiRoot, "bin", "llcli", "llcli.ts"));
@@ -66,6 +70,12 @@ const failureCapture = read(join(paiRoot, "TOOLS", "FailureCapture.ts"));
 const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
 const costTracker = read(join(paiRoot, "TOOLS", "CostTracker.ts"));
+const performanceModule = read(join(paiRoot, "PULSE", "Performance", "module.ts"));
+const pulseHooks = read(join(paiRoot, "PULSE", "modules", "hooks.ts"));
+const pulseObservability = read(join(paiRoot, "PULSE", "Observability", "observability.ts"));
+const pulseSecurityPage = read(join(paiRoot, "PULSE", "Observability", "src", "app", "security", "page.tsx"));
+const paiSystemPrompt = read(join(paiRoot, "PAI_SYSTEM_PROMPT.md"));
+const releaseClaudeMd = read(join(releaseRoot, "CLAUDE.md"));
 const removeBg = read(join(paiRoot, "TOOLS", "RemoveBg.ts"));
 const forgeProgress = read(join(paiRoot, "TOOLS", "ForgeProgress.ts"));
 const anvilProgress = read(join(paiRoot, "TOOLS", "AnvilProgress.ts"));
@@ -165,16 +175,17 @@ check(
   inferenceTool.includes('const framework = getActiveFramework()') &&
     inferenceTool.includes('const useOpenCode = framework === "opencode"') &&
     inferenceTool.includes('const useCodex = !useOpenCode && (framework === "codex"') &&
-    inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("spawn('claude'"),
+    inferenceTool.indexOf('if (useCodex)') < inferenceTool.indexOf("const claudePath"),
   "PAI/TOOLS/Inference.ts (source shape; runtime: CodexFrameworkAgentExecutionSmokeTest)",
 );
 
 check(
-  "Codex classifier inference stays small and isolated",
+  "Codex fast classifier inference stays small and isolated",
   inferenceTool.includes('const CODEX_DEFAULT_CLASSIFIER_MODEL = "gpt-5.3-codex-spark"') &&
-    inferenceTool.includes('if (level !== "smart" && process.env.PAI_CODEX_MODEL_CLASSIFIER)') &&
-    inferenceTool.includes('if (level !== "smart")') &&
+    inferenceTool.includes('if (level === "fast" && process.env.PAI_CODEX_MODEL_CLASSIFIER)') &&
+    inferenceTool.includes('if (level === "fast")') &&
     inferenceTool.includes("return CODEX_DEFAULT_CLASSIFIER_MODEL") &&
+    inferenceTool.includes("return process.env.PAI_CODEX_MODEL || CODEX_DEFAULT_MODEL") &&
     inferenceTool.includes('fast: "low"') &&
     inferenceTool.includes('"--ignore-user-config"') &&
     inferenceTool.includes('"--ignore-rules"') &&
@@ -229,6 +240,34 @@ check(
     architectureSummaryGenerator.includes("const HOME = homeDir()") &&
     !architectureSummaryGenerator.includes('process.env.HOME || process.env.USERPROFILE || ""'),
   "PAI/TOOLS/algorithm.ts, CostTracker.ts, and ArchitectureSummaryGenerator.ts",
+);
+
+check(
+  "CostTracker guards Codex subscription usage without dollarizing it",
+  costTracker.includes("codex_usage: CodexUsageSnapshot") &&
+    costTracker.includes('const SESSION_COSTS_PATH = memoryPath("OBSERVABILITY", "session-costs.jsonl")') &&
+    costTracker.includes("function readCodexUsage()") &&
+    costTracker.includes('row?.framework !== "codex"') &&
+    costTracker.includes("PAI_CODEX_DAILY_TOKEN_ALERT") &&
+    costTracker.includes("PAI_CODEX_SESSION_TOKEN_ALERT") &&
+    costTracker.includes("Codex subscription usage") &&
+    performanceModule.includes("codex_usage?:"),
+  "PAI/TOOLS/CostTracker.ts and PAI/PULSE/Performance/module.ts",
+);
+
+check(
+  "Pulse hook health reads Codex hooks.json",
+  pulseHooks.includes('join(frameworkDir, "hooks.json")') &&
+    pulseHooks.includes('collectHooksFromCodexJson') &&
+    pulseHooks.includes('commandWindows || hook.command') &&
+    pulseHooks.includes('missingHooks') &&
+    pulseObservability.includes('const CODEX_HOOKS_PATH = join(FRAMEWORK_DIR, "hooks.json")') &&
+    pulseObservability.includes("loadSecurityHookHealth()") &&
+    pulseObservability.includes('commandWindows || hook.command') &&
+    pulseSecurityPage.includes("settings.json") &&
+    pulseSecurityPage.includes("hooks.json") &&
+    !pulseSecurityPage.includes("~/.claude/settings.json"),
+  "PAI/PULSE/modules/hooks.ts and Observability security API/UI",
 );
 
 check(
@@ -381,6 +420,15 @@ check(
     installActions.includes('const systemPromptPath = join(paiDir, "PAI", "PAI_SYSTEM_PROMPT.md")') &&
     installActions.includes('frameworkInstructionContent(readFileSync(systemPromptPath, "utf-8"), target)'),
   "PAI/TOOLS/pai.ts and PAI/PAI-Install/engine/actions.ts",
+);
+
+check(
+  "Canonical agent and command sources are not provider-rendered outputs",
+  !canonicalAgentCommandSources.includes("This PAI agent was rendered from the provider-neutral PAI agent contract for OpenCode") &&
+    !canonicalAgentCommandSources.includes("This PAI command was generated for OpenCode from the shared PAI command definition") &&
+    !canonicalAgentCommandSources.includes("If framework state is missing, treat `$PAI_DIR` as `~/.config/opencode/PAI`") &&
+    !canonicalAgentCommandSources.includes("OpenCode defaults (history, project memories)"),
+  "release agents/ and commands/ remain canonical source, not generated provider output",
 );
 
 check(
@@ -928,13 +976,31 @@ check(
   "Installed updater keeps NoPull offline without SourceDir",
   updateInstalledPs1.includes("function Get-ScriptRoot") &&
     updateInstalledPs1.includes("Using bundled source because -NoPull was passed without -SourceDir") &&
+    updateInstalledPs1.includes("Write-PaiFrameworkState $target.Root $target.Framework") &&
+    updateInstalledPs1.includes("Repair-PowerShellProfiles $target.Root $target.Framework $backupRoot") &&
     updateInstalledPs1.indexOf("if ($NoPull)") < updateInstalledPs1.indexOf("git clone --depth 1") &&
     updateInstalledSh.includes("SCRIPT_DIR=") &&
     updateInstalledSh.includes("Using bundled source because --no-pull was passed without --source-dir") &&
+    updateInstalledSh.includes("write_pai_framework_state") &&
+    updateInstalledSh.includes("repair_shell_profiles") &&
+    updateInstalledSh.includes("initialize_pai_environment") &&
     updateInstalledSh.indexOf('if [ "$NO_PULL" -eq 1 ]') < updateInstalledSh.indexOf("git clone --depth 1") &&
     hotfixUpdateRollbackSmoke.includes("NoPull without SourceDir does not invoke git") &&
     hotfixUpdateRollbackSmoke.includes("fakeGitInvoked"),
   "update-installed.ps1, update-installed.sh, and HotfixUpdateRollbackSmokeTest.ts",
+);
+
+check(
+  "Installer and web guidance are provider-native",
+  installActions.includes('const BACKUP_PREFIXES = [".claude", ".codex", ".config-opencode"]') &&
+    installActions.includes("provider backup dirs (`~/.claude*`, `~/.codex*`, `~/.config-opencode*`)") &&
+    installActions.includes("provider backup dirs such as ~/.claude.bak, ~/.codex-bak, or ~/.config-opencode.previous") &&
+    paiSystemPrompt.includes("Codex-native browser tooling is the active harness capability") &&
+    releaseClaudeMd.includes("Codex-native browser tooling is the active harness capability") &&
+    !paiSystemPrompt.includes("Interceptor is the ONLY sanctioned") &&
+    !paiSystemPrompt.includes("No exceptions.") &&
+    !releaseClaudeMd.includes("Interceptor for ALL web verification"),
+  "PAI-Install actions, PAI_SYSTEM_PROMPT.md, and CLAUDE.md",
 );
 
 check(

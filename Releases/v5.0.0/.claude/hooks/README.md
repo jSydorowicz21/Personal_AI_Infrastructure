@@ -167,7 +167,7 @@ interface StopPayload extends BasePayload {
 | *(Pulse HTTP route)* AgentGuard | Guard agent spawning — `localhost:31337/hooks/agent-guard` | Yes (decision) | Pulse server |
 | *(Pulse HTTP route)* SkillGuard | Prevent erroneous skill invocations — `localhost:31337/hooks/skill-guard` | Yes (decision) | Pulse server |
 
-> **Note:** AgentGuard and SkillGuard were migrated from standalone hook files (`AgentExecutionGuard.hook.ts`, `SkillGuard.hook.ts`) to Pulse HTTP routes at `localhost:31337`. They are no longer files on disk — they run as routes within the Pulse server.
+> **Note:** Claude uses Pulse HTTP routes at `localhost:31337` for AgentGuard and SkillGuard. Codex/OpenCode use command-native hook files (`AgentGuard.hook.ts`, `SkillGuard.hook.ts`) that mirror the same policy because those providers do not execute Claude HTTP hook entries.
 
 ### PostToolUse Hooks
 

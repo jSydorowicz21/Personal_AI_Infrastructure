@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Cost Aggregator — scans active framework session JSONLs for token usage data
+ * Cost Aggregator — scans all framework session JSONLs for token usage data
  * and computes per-session cost/usage telemetry.
  *
  * Data source: active framework transcript roots.
@@ -187,6 +187,17 @@ function discoverSessionFiles(framework: FrameworkId, state: AggregatorState, is
   const recentCutoff = Date.now() - RECENT_SCAN_WINDOW_MS;
   files = files.filter((file) => file.mtime >= recentCutoff);
   return files;
+}
+
+function discoverAllSessionFiles(state: AggregatorState, isFullScan: boolean): SessionFile[] {
+  const frameworks: FrameworkId[] = ["claude", "codex", "opencode"];
+  const unique = new Map<string, SessionFile>();
+  for (const framework of frameworks) {
+    for (const file of discoverSessionFiles(framework, state, isFullScan)) {
+      unique.set(file.path, file);
+    }
+  }
+  return [...unique.values()].sort((a, b) => b.mtime - a.mtime);
 }
 
 function asNumber(value: unknown): number {
@@ -400,12 +411,11 @@ async function main(): Promise<void> {
   const state = loadState();
   const existingKeys = loadExistingSessionKeys();
   const isFullScan = process.argv.includes("--full");
-  const framework = getActiveFramework();
-  const roots = getFrameworkSessionRoots(framework);
-  const sessionFiles = discoverSessionFiles(framework, state, isFullScan);
+  const sessionFiles = discoverAllSessionFiles(state, isFullScan);
 
   if (sessionFiles.length === 0) {
-    console.log(`No ${framework} session files found in: ${roots.join(", ")}`);
+    const roots = ["claude", "codex", "opencode"].flatMap((framework) => getFrameworkSessionRoots(framework));
+    console.log(`No session files found in: ${roots.join(", ")}`);
     process.exit(0);
   }
 
