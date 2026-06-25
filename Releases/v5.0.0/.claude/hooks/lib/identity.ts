@@ -2,12 +2,14 @@
  * Central Identity Loader
  * Single source of truth for DA (Digital Assistant) and Principal identity
  *
- * Reads from settings.json - the programmatic way, not markdown parsing.
+ * Reads from settings.json first, then shared USER markdown as the
+ * provider-neutral fallback for Codex/OpenCode installs whose settings only
+ * contain framework metadata.
  * All hooks and tools should import from here.
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { getSettingsPath } from './paths';
+import { getSettingsPath, userPath } from './paths';
 
 const SETTINGS_PATH = getSettingsPath();
 
@@ -88,6 +90,32 @@ export interface Settings {
 }
 
 let cachedSettings: Settings | null = null;
+let cachedUserIdentity: UserIdentityDocuments | null = null;
+
+type AlgorithmVoice = {
+  voiceId: string;
+  voiceName: string;
+  stability: number;
+  similarityBoost: number;
+  style: number;
+  speed: number;
+  useSpeakerBoost: boolean;
+  volume?: number;
+};
+
+type UserIdentityDocuments = {
+  daidentity?: Partial<Identity>;
+  principal?: Partial<Principal>;
+  algorithmVoice?: AlgorithmVoice;
+};
+
+const DEFAULT_MARKDOWN_VOICE: Omit<AlgorithmVoice, 'voiceId' | 'voiceName'> = {
+  stability: 0.5,
+  similarityBoost: 0.75,
+  style: 0,
+  speed: 1,
+  useSpeakerBoost: true,
+};
 
 /**
  * Load settings.json (cached)
@@ -110,11 +138,115 @@ function loadSettings(): Settings {
   }
 }
 
+function loadUserIdentityDocuments(): UserIdentityDocuments {
+  if (cachedUserIdentity) return cachedUserIdentity;
+
+  cachedUserIdentity = {
+    daidentity: parseDaIdentity(readOptional(userPath('DA_IDENTITY.md'))),
+    principal: parsePrincipal(readOptional(userPath('PRINCIPAL_IDENTITY.md'))),
+  };
+
+  const algorithmVoice = parseAlgorithmVoice(readOptional(userPath('DA_IDENTITY.md')));
+  if (algorithmVoice) cachedUserIdentity.algorithmVoice = algorithmVoice;
+
+  return cachedUserIdentity;
+}
+
+function readOptional(path: string): string | null {
+  try {
+    if (!existsSync(path)) return null;
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+function parseDaIdentity(text: string | null): Partial<Identity> {
+  if (!text) return {};
+
+  const name = readMarkdownField(text, 'Name') || readHeaderName(text, 'DA Identity');
+  const fullName = readMarkdownField(text, 'Full Name');
+  const displayName = readMarkdownField(text, 'Display');
+  const color = readMarkdownField(text, 'Color');
+  const mainDAVoiceID = readMarkdownBacktickField(text, 'Voice (main)');
+
+  return compact({
+    name,
+    fullName,
+    displayName,
+    color,
+    mainDAVoiceID,
+  });
+}
+
+function parsePrincipal(text: string | null): Partial<Principal> {
+  if (!text) return {};
+
+  const name = readMarkdownField(text, 'Name') || readHeaderName(text, 'Principal Identity');
+  const pronunciation = readMarkdownField(text, 'Pronunciation');
+  const timezone = readMarkdownField(text, 'Timezone');
+
+  return compact({
+    name,
+    pronunciation,
+    timezone,
+  });
+}
+
+function parseAlgorithmVoice(text: string | null): AlgorithmVoice | undefined {
+  if (!text) return undefined;
+  const voiceId = readMarkdownBacktickField(text, 'Voice (algorithm)');
+  if (!voiceId) return undefined;
+
+  return {
+    voiceId,
+    voiceName: readMarkdownParentheticalField(text, 'Voice (algorithm)') || 'Algorithm',
+    ...DEFAULT_MARKDOWN_VOICE,
+  };
+}
+
+function readHeaderName(text: string, label: string): string | undefined {
+  const match = text.match(new RegExp(`^#\\s+${escapeRegExp(label)}\\s+[—-]\\s+(.+?)\\s*$`, 'im'));
+  return cleanMarkdownScalar(match?.[1]);
+}
+
+function readMarkdownField(text: string, label: string): string | undefined {
+  const match = text.match(new RegExp(`\\*\\*${escapeRegExp(label)}:\\*\\*\\s*([^|\\r\\n]+)`, 'i'));
+  return cleanMarkdownScalar(match?.[1]);
+}
+
+function readMarkdownBacktickField(text: string, label: string): string | undefined {
+  const match = text.match(new RegExp(`\\*\\*${escapeRegExp(label)}:\\*\\*\\s*(?:\`([^\`\\r\\n]+)\`|([^|\\r\\n]+))`, 'i'));
+  return cleanMarkdownScalar(match?.[1] || match?.[2]);
+}
+
+function readMarkdownParentheticalField(text: string, label: string): string | undefined {
+  const match = text.match(new RegExp(`\\*\\*${escapeRegExp(label)}:\\*\\*[^\\r\\n]*\\(([^\\r\\n)]+)\\)`, 'i'));
+  return cleanMarkdownScalar(match?.[1]?.split(/[—-]/)[0]);
+}
+
+function cleanMarkdownScalar(value: string | undefined): string | undefined {
+  const cleaned = value
+    ?.replace(/[`*]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || undefined;
+}
+
+function compact<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== '')) as T;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Get DA (Digital Assistant) identity from settings.json
  */
 export function getIdentity(): Identity {
   const settings = loadSettings();
+  const userDocs = loadUserIdentityDocuments();
 
   // Prefer settings.daidentity, fall back to env.DA for backward compat
   const daidentity = settings.daidentity || {};
@@ -125,11 +257,11 @@ export function getIdentity(): Identity {
   const voiceConfig = voices.main || (daidentity as any).voice;
 
   return {
-    name: daidentity.name || envDA || DEFAULT_IDENTITY.name,
-    fullName: daidentity.fullName || daidentity.name || envDA || DEFAULT_IDENTITY.fullName,
-    displayName: daidentity.displayName || daidentity.name || envDA || DEFAULT_IDENTITY.displayName,
-    mainDAVoiceID: voiceConfig?.voiceId || (daidentity as any).voiceId || daidentity.mainDAVoiceID || DEFAULT_IDENTITY.mainDAVoiceID,
-    color: daidentity.color || DEFAULT_IDENTITY.color,
+    name: daidentity.name || envDA || userDocs.daidentity?.name || DEFAULT_IDENTITY.name,
+    fullName: daidentity.fullName || daidentity.name || envDA || userDocs.daidentity?.fullName || userDocs.daidentity?.name || DEFAULT_IDENTITY.fullName,
+    displayName: daidentity.displayName || daidentity.name || envDA || userDocs.daidentity?.displayName || userDocs.daidentity?.name || DEFAULT_IDENTITY.displayName,
+    mainDAVoiceID: voiceConfig?.voiceId || (daidentity as any).voiceId || daidentity.mainDAVoiceID || userDocs.daidentity?.mainDAVoiceID || DEFAULT_IDENTITY.mainDAVoiceID,
+    color: daidentity.color || userDocs.daidentity?.color || DEFAULT_IDENTITY.color,
     voice: voiceConfig as VoiceProsody | undefined,
     personality: (daidentity as any).personality as VoicePersonality | undefined,
   };
@@ -140,15 +272,16 @@ export function getIdentity(): Identity {
  */
 export function getPrincipal(): Principal {
   const settings = loadSettings();
+  const userDocs = loadUserIdentityDocuments();
 
   // Prefer settings.principal, fall back to env.PRINCIPAL for backward compat
   const principal = settings.principal || {};
   const envPrincipal = settings.env?.PRINCIPAL;
 
   return {
-    name: principal.name || envPrincipal || DEFAULT_PRINCIPAL.name,
-    pronunciation: principal.pronunciation || DEFAULT_PRINCIPAL.pronunciation,
-    timezone: principal.timezone || DEFAULT_PRINCIPAL.timezone,
+    name: principal.name || envPrincipal || userDocs.principal?.name || DEFAULT_PRINCIPAL.name,
+    pronunciation: principal.pronunciation || userDocs.principal?.pronunciation || DEFAULT_PRINCIPAL.pronunciation,
+    timezone: principal.timezone || userDocs.principal?.timezone || DEFAULT_PRINCIPAL.timezone,
   };
 }
 
@@ -157,6 +290,7 @@ export function getPrincipal(): Principal {
  */
 export function clearCache(): void {
   cachedSettings = null;
+  cachedUserIdentity = null;
 }
 
 /**
@@ -240,8 +374,8 @@ export function getDefaultPrincipal(): Principal {
 export function getAlgorithmVoice(): { voiceId: string; voiceName: string; stability: number; similarityBoost: number; style: number; speed: number; useSpeakerBoost: boolean; volume?: number } | null {
   const settings = loadSettings();
   const voices = (settings.daidentity as any)?.voices;
-  if (!voices?.algorithm?.voiceId) return null;
-  return voices.algorithm;
+  if (voices?.algorithm?.voiceId) return voices.algorithm;
+  return loadUserIdentityDocuments().algorithmVoice ?? null;
 }
 
 /**

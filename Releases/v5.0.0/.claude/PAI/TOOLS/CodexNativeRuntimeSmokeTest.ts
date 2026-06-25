@@ -58,6 +58,7 @@ const integrityMaintenanceTranscriptSmoke = read(join(paiRoot, "TOOLS", "Integri
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
 const providerTranscriptConsumersSmoke = read(join(paiRoot, "TOOLS", "ProviderTranscriptConsumersSmokeTest.ts"));
+const identityProviderFallbackSmoke = read(join(paiRoot, "TOOLS", "IdentityProviderFallbackSmokeTest.ts"));
 const failureCapture = read(join(paiRoot, "TOOLS", "FailureCapture.ts"));
 const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
 const costAggregator = read(join(paiRoot, "PULSE", "Performance", "cost-aggregator.ts"));
@@ -89,6 +90,7 @@ const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
 const rtkHook = read(join(releaseRoot, "hooks", "RtkPreToolUse.hook.js"));
 const hookPathHelpers = read(join(releaseRoot, "hooks", "lib", "paths.ts"));
+const identityLoader = read(join(releaseRoot, "hooks", "lib", "identity.ts"));
 const toolPathHelpers = read(join(paiRoot, "TOOLS", "lib", "paths.ts"));
 const toolActivityTracker = read(join(releaseRoot, "hooks", "ToolActivityTracker.hook.ts"));
 const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.ts"));
@@ -544,6 +546,16 @@ check(
 );
 
 check(
+  "PAI banners use central identity loader",
+  bannerSources.includes('from "../../hooks/lib/identity"') &&
+    bannerSources.includes("getStartupCatchphrase") &&
+    (bannerSources.match(/getIdentity/g)?.length ?? 0) >= 5 &&
+    !bannerSources.includes("settings.daidentity?.displayName") &&
+    !bannerSources.includes("settings.daidentity?.name"),
+  "PAI/TOOLS/Banner*.ts and hooks/lib/identity.ts",
+);
+
+check(
   "RTK hook rejects Windows-unsafe rewrites without fast bypass",
   rtkHook.includes("isWindowsUnsafeRtkRewrite") &&
     rtkHook.includes("windows_unsafe_rtk_rewrite") &&
@@ -715,6 +727,20 @@ check(
     !promptProcessing.includes("entry.type === 'user' && entry.message?.content") &&
     !satisfactionCapture.includes("entry.type === 'user' && entry.message?.content"),
   "hooks/PromptProcessing.hook.ts, hooks/SatisfactionCapture.hook.ts, PAI/TOOLS/FailureCapture.ts, and ProviderTranscriptConsumersSmokeTest.ts",
+);
+
+check(
+  "Identity loader falls back to shared USER docs",
+  identityLoader.includes("getSettingsPath, userPath") &&
+    identityLoader.includes("function loadUserIdentityDocuments") &&
+    identityLoader.includes("userPath('DA_IDENTITY.md')") &&
+    identityLoader.includes("userPath('PRINCIPAL_IDENTITY.md')") &&
+    identityLoader.includes("parseAlgorithmVoice") &&
+    identityLoader.includes("cachedUserIdentity = null") &&
+    identityProviderFallbackSmoke.includes("settings.json only contains framework metadata") &&
+    identityProviderFallbackSmoke.includes("Codex identity falls back to shared USER markdown") &&
+    identityProviderFallbackSmoke.includes("Explicit settings identity overrides shared markdown"),
+  "hooks/lib/identity.ts and IdentityProviderFallbackSmokeTest.ts",
 );
 
 check(

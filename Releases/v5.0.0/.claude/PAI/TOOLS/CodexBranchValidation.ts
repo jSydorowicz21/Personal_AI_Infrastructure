@@ -228,6 +228,7 @@ function main(): void {
       "PAI/TOOLS/CodexFrameworkAgentExecutionSmokeTest.ts",
       "PAI/TOOLS/OpenCodeFrameworkAgentExecutionSmokeTest.ts",
       "PAI/TOOLS/TranscriptParserSmokeTest.ts",
+      "PAI/TOOLS/IdentityProviderFallbackSmokeTest.ts",
       "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
       "PAI/TOOLS/ConfigAuditSmokeTest.ts",
       "PAI/TOOLS/DocCheckSmokeTest.ts",
@@ -281,6 +282,7 @@ function main(): void {
     run("Integrity transcript smoke", "bun", ["PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts"]);
     run("Relationship memory transcript smoke", "bun", ["PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts"]);
     run("Provider transcript consumers smoke", "bun", ["PAI/TOOLS/ProviderTranscriptConsumersSmokeTest.ts"]);
+    run("Identity provider fallback smoke", "bun", ["PAI/TOOLS/IdentityProviderFallbackSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("Config audit smoke", "bun", ["PAI/TOOLS/ConfigAuditSmokeTest.ts"]);
     run("DocCheck smoke", "bun", ["PAI/TOOLS/DocCheckSmokeTest.ts"]);

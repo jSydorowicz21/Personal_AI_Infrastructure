@@ -14,6 +14,7 @@ import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, paiPath, userPath } from "./lib/paths";
 import { activeRuntimeLabel } from "./lib/framework-display";
 import { countRegisteredHooks } from "./lib/banner-counts";
+import { getIdentity, getStartupCatchphrase } from "../../hooks/lib/identity";
 
 const FRAMEWORK_DIR = getFrameworkDir();
 const FRAMEWORK = process.env.PAI_FRAMEWORK || "claude";
@@ -140,8 +141,12 @@ function getStats(): SystemStats {
   let catchphrase = "{name} here, ready to go";
   let repoUrl = "github.com/danielmiessler/PAI";
   try {
+    const identity = getIdentity();
+    name = identity.displayName || identity.name || name;
+    catchphrase = getStartupCatchphrase();
+  } catch {}
+  try {
     const settings = JSON.parse(readFileSync(join(FRAMEWORK_DIR, "settings.json"), "utf-8"));
-    name = settings.daidentity?.displayName || settings.daidentity?.name || "PAI";
     paiVersion = settings.pai?.version || "2.0";
     // v6.2.0+: LATEST is the single source of truth. settings.pai.algorithmVersion was removed.
     try {
@@ -150,7 +155,6 @@ function getStats(): SystemStats {
         algorithmVersion = readFileSync(latestPath, "utf-8").trim().replace(/^v/i, "") || algorithmVersion;
       }
     } catch {}
-    catchphrase = settings.daidentity?.startupCatchphrase || catchphrase;
     repoUrl = settings.pai?.repoUrl || repoUrl;
   } catch {}
 

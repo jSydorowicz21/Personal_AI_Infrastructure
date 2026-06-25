@@ -21,6 +21,7 @@ import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 import { activeRuntimeLabel } from "./lib/framework-display";
 import { countRegisteredHooks } from "./lib/banner-counts";
+import { getIdentity } from "../../hooks/lib/identity";
 
 const FRAMEWORK_DIR = getFrameworkDir();
 
@@ -319,10 +320,9 @@ interface SystemStats {
 }
 
 function readDAIdentity(): string {
-  const settingsPath = join(FRAMEWORK_DIR, "settings.json");
   try {
-    const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "PAI";
+    const identity = getIdentity();
+    return identity.displayName || identity.name || "PAI";
   } catch {
     return "PAI";
   }

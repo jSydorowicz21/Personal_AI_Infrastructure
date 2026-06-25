@@ -133,6 +133,10 @@
       "target": "PAI/TOOLS/ProviderTranscriptConsumersSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/IdentityProviderFallbackSmokeTest.ts",
+      "target": "PAI/TOOLS/IdentityProviderFallbackSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },
