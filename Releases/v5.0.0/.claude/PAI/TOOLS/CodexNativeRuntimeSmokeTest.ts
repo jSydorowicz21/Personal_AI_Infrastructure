@@ -53,6 +53,8 @@ const installActions = read(join(paiRoot, "PAI-Install", "engine", "actions.ts")
 const installDetect = read(join(paiRoot, "PAI-Install", "engine", "detect.ts"));
 const installValidate = read(join(paiRoot, "PAI-Install", "engine", "validate.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
+const integrityMaintenance = read(join(paiRoot, "TOOLS", "IntegrityMaintenance.ts"));
+const integrityMaintenanceTranscriptSmoke = read(join(paiRoot, "TOOLS", "IntegrityMaintenanceTranscriptSmokeTest.ts"));
 const transcriptParser = read(join(paiRoot, "TOOLS", "TranscriptParser.ts"));
 const transcriptRoots = read(join(paiRoot, "TOOLS", "lib", "transcripts.ts"));
 const architectureSummaryGenerator = read(join(paiRoot, "TOOLS", "ArchitectureSummaryGenerator.ts"));
@@ -664,6 +666,18 @@ check(
     transcriptRoots.includes('join(root, "sessions")') &&
     transcriptRoots.includes('join(getPaiDataDir(), "TRANSCRIPTS", "opencode")'),
   "PAI/TOOLS/lib/transcripts.ts",
+);
+
+check(
+  "Integrity maintenance reads provider-native transcript context",
+  integrityMaintenance.includes("parseTranscriptEntries(transcriptPath, framework)") &&
+    integrityMaintenance.includes("export function readTranscriptContext") &&
+    integrityMaintenance.includes("if (import.meta.main)") &&
+    !integrityMaintenance.includes("entry.type === 'user' && entry.message?.content") &&
+    integrityMaintenanceTranscriptSmoke.includes("Codex response_item context is parsed") &&
+    integrityMaintenanceTranscriptSmoke.includes("Claude transcript context still parses") &&
+    integrityMaintenanceTranscriptSmoke.includes("OpenCode transcript context parses"),
+  "PAI/TOOLS/IntegrityMaintenance.ts and IntegrityMaintenanceTranscriptSmokeTest.ts",
 );
 
 check(

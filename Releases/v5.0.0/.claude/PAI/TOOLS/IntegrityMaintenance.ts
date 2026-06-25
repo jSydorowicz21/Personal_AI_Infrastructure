@@ -23,6 +23,7 @@ import { join, basename } from 'path';
 import { inference } from './Inference';
 import { getIdentity } from '../../hooks/lib/identity';
 import { memoryPath } from './lib/paths';
+import { getActiveFramework, parseTranscriptEntries, type FrameworkId } from './lib/transcripts';
 
 // ============================================================================
 // Types
@@ -131,63 +132,28 @@ interface TranscriptMessage {
  * Read and parse the transcript file to extract conversation context.
  * Returns a summarized version suitable for AI analysis.
  */
-function readTranscriptContext(transcriptPath: string, maxMessages: number = 20): TranscriptMessage[] {
+export function readTranscriptContext(
+  transcriptPath: string,
+  maxMessages: number = 20,
+  framework: FrameworkId = getActiveFramework()
+): TranscriptMessage[] {
   if (!existsSync(transcriptPath)) {
     console.error('[IntegrityMaintenance] Transcript not found:', transcriptPath);
     return [];
   }
 
   try {
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const lines = content.trim().split('\n');
-    const messages: TranscriptMessage[] = [];
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const entry = JSON.parse(line);
-        if (entry.type === 'user' && entry.message?.content) {
-          const text = extractTextContent(entry.message.content);
-          if (text && text.length > 10) {
-            messages.push({ role: 'user', content: text });
-          }
-        } else if (entry.type === 'assistant' && entry.message?.content) {
-          const text = extractTextContent(entry.message.content);
-          if (text && text.length > 10) {
-            // Truncate long assistant messages
-            messages.push({ role: 'assistant', content: text.slice(0, 2000) });
-          }
-        }
-      } catch {
-        // Skip invalid JSON lines
-      }
-    }
-
-    // Return last N messages for context
-    return messages.slice(-maxMessages);
+    return parseTranscriptEntries(transcriptPath, framework)
+      .filter(entry => entry.text && entry.text.length > 10)
+      .map(entry => ({
+        role: entry.role,
+        content: entry.role === 'assistant' ? entry.text.slice(0, 2000) : entry.text,
+      }))
+      .slice(-maxMessages);
   } catch (error) {
     console.error('[IntegrityMaintenance] Error reading transcript:', error);
     return [];
   }
-}
-
-/**
- * Extract text from Claude's content format (string or array of blocks).
- */
-function extractTextContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map(c => {
-        if (typeof c === 'string') return c;
-        if (c?.text) return c.text;
-        if (c?.content) return extractTextContent(c.content);
-        return '';
-      })
-      .join(' ')
-      .trim();
-  }
-  return '';
 }
 
 /**
@@ -1015,7 +981,9 @@ async function main(): Promise<void> {
   console.error('[IntegrityMaintenance] Complete');
 }
 
-main().catch(err => {
-  console.error('[IntegrityMaintenance] Error:', err);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch(err => {
+    console.error('[IntegrityMaintenance] Error:', err);
+    process.exit(1);
+  });
+}

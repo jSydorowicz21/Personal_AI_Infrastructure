@@ -117,6 +117,14 @@
       "target": "PAI/TOOLS/FailureCapture.ts"
     },
     {
+      "source": "PAI/TOOLS/IntegrityMaintenance.ts",
+      "target": "PAI/TOOLS/IntegrityMaintenance.ts"
+    },
+    {
+      "source": "PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts",
+      "target": "PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },

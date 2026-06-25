@@ -278,6 +278,7 @@ function main(): void {
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);
     run("Performance cost aggregator smoke", "bun", ["PAI/TOOLS/PerformanceCostAggregatorSmokeTest.ts"]);
     run("Transcript parser smoke", "bun", ["PAI/TOOLS/TranscriptParserSmokeTest.ts"]);
+    run("Integrity transcript smoke", "bun", ["PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts"]);
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("Config audit smoke", "bun", ["PAI/TOOLS/ConfigAuditSmokeTest.ts"]);
     run("DocCheck smoke", "bun", ["PAI/TOOLS/DocCheckSmokeTest.ts"]);
