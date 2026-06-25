@@ -125,6 +125,10 @@
       "target": "PAI/TOOLS/IntegrityMaintenanceTranscriptSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts",
+      "target": "PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },
@@ -391,6 +395,10 @@
     {
       "source": "hooks/LoadContext.hook.ts",
       "target": "hooks/LoadContext.hook.ts"
+    },
+    {
+      "source": "hooks/RelationshipMemory.hook.ts",
+      "target": "hooks/RelationshipMemory.hook.ts"
     },
     {
       "source": "hooks/PreCompact.hook.ts",

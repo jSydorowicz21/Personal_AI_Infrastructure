@@ -92,6 +92,8 @@ const telosSummaryHook = read(join(releaseRoot, "hooks", "TelosSummarySync.hook.
 const tabSetter = read(join(releaseRoot, "hooks", "lib", "tab-setter.ts"));
 const isaUtils = read(join(releaseRoot, "hooks", "lib", "isa-utils.ts"));
 const restoreContext = read(join(releaseRoot, "hooks", "RestoreContext.hook.ts"));
+const relationshipMemory = read(join(releaseRoot, "hooks", "RelationshipMemory.hook.ts"));
+const relationshipMemoryTranscriptSmoke = read(join(paiRoot, "TOOLS", "RelationshipMemoryTranscriptSmokeTest.ts"));
 const patternInspector = read(join(releaseRoot, "hooks", "security", "inspectors", "PatternInspector.ts"));
 const codexHookContractSmoke = read(join(paiRoot, "TOOLS", "CodexHookContractSmokeTest.ts"));
 const codexFreshInstallSmoke = read(join(paiRoot, "TOOLS", "CodexFreshInstallSmokeTest.ts"));
@@ -678,6 +680,19 @@ check(
     integrityMaintenanceTranscriptSmoke.includes("Claude transcript context still parses") &&
     integrityMaintenanceTranscriptSmoke.includes("OpenCode transcript context parses"),
   "PAI/TOOLS/IntegrityMaintenance.ts and IntegrityMaintenanceTranscriptSmokeTest.ts",
+);
+
+check(
+  "Relationship memory reads provider-native transcript context",
+  relationshipMemory.includes("parseTranscriptEntries(path, framework)") &&
+    relationshipMemory.includes("export function readTranscriptEntries") &&
+    relationshipMemory.includes("export function analyzeForRelationship") &&
+    relationshipMemory.includes("if (import.meta.main)") &&
+    relationshipMemory.includes("Preference signal:") &&
+    !relationshipMemory.includes("const parsed = parseTranscript(path)") &&
+    relationshipMemoryTranscriptSmoke.includes("Codex user preference becomes relationship opinion note") &&
+    relationshipMemoryTranscriptSmoke.includes("Claude relationship transcript still parses"),
+  "hooks/RelationshipMemory.hook.ts and PAI/TOOLS/RelationshipMemoryTranscriptSmokeTest.ts",
 );
 
 check(

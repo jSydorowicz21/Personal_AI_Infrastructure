@@ -33,7 +33,7 @@ import { join } from 'path';
 import { memoryPath } from './lib/paths';
 import { getPSTComponents } from './lib/time';
 import { getDAName, getPrincipalName } from './lib/identity';
-import { parseTranscript } from '../PAI/TOOLS/TranscriptParser';
+import { parseTranscriptEntries, type FrameworkId } from '../PAI/TOOLS/lib/transcripts';
 
 interface HookInput {
   session_id: string;
@@ -48,7 +48,7 @@ interface RelationshipNote {
   confidence?: number;
 }
 
-interface TranscriptEntry {
+export interface TranscriptEntry {
   type: 'user' | 'assistant';
   text: string;
 }
@@ -67,18 +67,14 @@ async function readStdinWithTimeout(timeout: number = 5000): Promise<string> {
 }
 
 /**
- * Read transcript using shared TranscriptParser
+ * Read transcript using shared provider-normalized transcript parser.
  */
-function readTranscriptEntries(path: string): TranscriptEntry[] {
+export function readTranscriptEntries(path: string, framework?: FrameworkId): TranscriptEntry[] {
   if (!path || !existsSync(path)) return [];
 
   try {
-    const parsed = parseTranscript(path);
-    const entries: TranscriptEntry[] = [];
-    if (parsed.lastMessage) {
-      entries.push({ type: 'assistant', text: parsed.lastMessage });
-    }
-    return entries;
+    return parseTranscriptEntries(path, framework)
+      .map(entry => ({ type: entry.role, text: entry.text }));
   } catch {
     return [];
   }
@@ -87,7 +83,7 @@ function readTranscriptEntries(path: string): TranscriptEntry[] {
 /**
  * Analyze transcript for relationship-relevant content
  */
-function analyzeForRelationship(entries: TranscriptEntry[]): RelationshipNote[] {
+export function analyzeForRelationship(entries: TranscriptEntry[]): RelationshipNote[] {
   const notes: RelationshipNote[] = [];
 
   // Patterns that indicate relationship-relevant content
@@ -158,6 +154,18 @@ function analyzeForRelationship(entries: TranscriptEntry[]): RelationshipNote[] 
   }
 
   // O (Opinion) - Inferred preferences
+  if (userPreferences.length > 0) {
+    const uniquePreferences = [...new Set(userPreferences)].slice(0, 2);
+    for (const preference of uniquePreferences) {
+      notes.push({
+        type: 'O',
+        entities: [`@${getPrincipalName()}`],
+        content: `Preference signal: ${preference}`,
+        confidence: 0.65
+      });
+    }
+  }
+
   if (positives.length >= 2) {
     notes.push({
       type: 'O',
@@ -276,4 +284,6 @@ async function main() {
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
