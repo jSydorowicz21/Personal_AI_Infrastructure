@@ -11,6 +11,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/haydencj/Personal_AI_Infrastructure.git"
 BRANCH="pai-codex-flawless-runtime"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 FRAMEWORK=""
 INSTALL_ROOT=""
 AGENTS_SKILLS_ROOT=""
@@ -41,7 +42,7 @@ Options:
   --source-dir PATH       Local checkout or release root to use
   --manifest-path PATH    Override manifest path
   --dry-run               Show planned updates without writing files
-  --no-pull               Do not git fetch/pull when --source-dir is a checkout
+  --no-pull               Do not fetch; without --source-dir use this updater's bundle
   --keep-temp             Keep the temporary clone
   -h, --help              Show this help
 EOF
@@ -248,6 +249,14 @@ get_release_root() {
       git -C "$source_abs" pull --ff-only >&2
     fi
     resolve_release_root "$source_abs"
+    return 0
+  fi
+
+  if [ "$NO_PULL" -eq 1 ]; then
+    local script_abs
+    script_abs="$(absolute_path "$SCRIPT_DIR")"
+    info "Using bundled source because --no-pull was passed without --source-dir: $script_abs"
+    resolve_release_root "$script_abs"
     return 0
   fi
 

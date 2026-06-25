@@ -248,6 +248,13 @@ function Resolve-ReleaseRoot([string]$Path) {
   throw "Could not locate release root under $pathAbs"
 }
 
+function Get-ScriptRoot {
+  if ($PSScriptRoot) { return (Resolve-AbsolutePath $PSScriptRoot) }
+  if ($PSCommandPath) { return (Resolve-AbsolutePath (Split-Path -Parent $PSCommandPath)) }
+  if ($MyInvocation.MyCommand.Path) { return (Resolve-AbsolutePath (Split-Path -Parent $MyInvocation.MyCommand.Path)) }
+  return (Resolve-AbsolutePath (Get-Location).Path)
+}
+
 function Get-ReleaseRoot {
   if ($SourceDir) {
     $sourceAbs = Resolve-AbsolutePath $SourceDir
@@ -263,6 +270,12 @@ function Get-ReleaseRoot {
       if ($LASTEXITCODE -ne 0) { throw "git pull --ff-only failed" }
     }
     return [pscustomobject]@{ Root = Resolve-ReleaseRoot $sourceAbs; Temp = "" }
+  }
+
+  if ($NoPull) {
+    $scriptRoot = Get-ScriptRoot
+    Info "Using bundled source because -NoPull was passed without -SourceDir: $scriptRoot"
+    return [pscustomobject]@{ Root = Resolve-ReleaseRoot $scriptRoot; Temp = "" }
   }
 
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) {

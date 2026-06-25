@@ -7,9 +7,9 @@
  * overlaying the backup contents onto the install root.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 type Check = {
@@ -247,7 +247,68 @@ const update = spawnSync(updateCommand, updateArgs, {
   },
 });
 
+const offlineHome = join(root, "offline-home");
+const offlineInstallRoot = join(root, "offline-codex");
+const offlineDataDir = join(offlineHome, ".pai");
+const offlineConfigDir = join(offlineHome, ".config", "PAI");
+const fakeBin = join(root, "fake-bin");
+const fakeGitInvoked = join(fakeBin, "git-invoked.txt");
+mkdirSync(offlineInstallRoot, { recursive: true });
+mkdirSync(offlineDataDir, { recursive: true });
+mkdirSync(fakeBin, { recursive: true });
+write(join(offlineDataDir, "framework.json"), JSON.stringify({ active: "codex", root: offlineInstallRoot, dataDir: offlineDataDir }, null, 2));
+write(join(offlineInstallRoot, "AGENTS.md"), "OFFLINE_OLD_AGENTS_SENTINEL");
+write(join(offlineInstallRoot, "PAI", "TOOLS", "pai.ts"), "OFFLINE_OLD_PAI_TOOL_SENTINEL");
+if (process.platform === "win32") {
+  write(join(fakeBin, "git.cmd"), `@echo off\r\necho invoked>${fakeGitInvoked}\r\nexit /b 86\r\n`);
+} else {
+  write(join(fakeBin, "git"), `#!/usr/bin/env sh\nprintf invoked > '${fakeGitInvoked}'\nexit 86\n`);
+  chmodSync(join(fakeBin, "git"), 0o755);
+}
+
+const offlineUpdateArgs = process.platform === "win32"
+  ? [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      join(installedSourceRoot, "update-installed.ps1"),
+      "-Framework",
+      "codex",
+      "-InstallRoot",
+      offlineInstallRoot,
+      "-NoPull",
+    ]
+  : [
+      join(installedSourceRoot, "update-installed.sh"),
+      "--framework",
+      "codex",
+      "--install-root",
+      offlineInstallRoot,
+      "--no-pull",
+    ];
+const offlineUpdate = spawnSync(updateCommand, offlineUpdateArgs, {
+  cwd: repoRoot,
+  encoding: "utf-8",
+  timeout: 180_000,
+  maxBuffer: 20 * 1024 * 1024,
+  windowsHide: true,
+  env: {
+    ...process.env,
+    HOME: offlineHome,
+    USERPROFILE: offlineHome,
+    CODEX_HOME: offlineInstallRoot,
+    PAI_DATA_DIR: offlineDataDir,
+    PAI_CONFIG_DIR: offlineConfigDir,
+    PAI_FRAMEWORK_DIR: offlineInstallRoot,
+    PAI_FRAMEWORK: "codex",
+    PAI_USER_ENV_TARGET: "Process",
+    PATH: `${fakeBin}${delimiter}${process.env.PATH || ""}`,
+  },
+});
+
 const backupRoot = latestBackupRoot(home);
+const offlineUpdatedPaiTool = read(join(offlineInstallRoot, "PAI", "TOOLS", "pai.ts"));
 const updatedPaiTool = read(join(installRoot, "PAI", "TOOLS", "pai.ts"));
 const updatedCheckpointTool = read(join(installRoot, "PAI", "TOOLS", "Checkpoint.ts"));
 const updatedMemoryRetriever = read(join(installRoot, "PAI", "TOOLS", "MemoryRetriever.ts"));
@@ -315,6 +376,9 @@ const requiredManifestSources = [
 const beforeRollbackChecks: Check[] = [
   check("hotfix manifest covers current parity files", requiredManifestSources.every((source) => sources.has(source)), JSON.stringify(requiredManifestSources.filter((source) => !sources.has(source)))),
   check("hotfix update exits cleanly", update.status === 0, `status=${update.status ?? "null"} ${update.stderr.split(/\r?\n/).slice(-4).join(" | ")}`),
+  check("NoPull without SourceDir exits cleanly", offlineUpdate.status === 0, `status=${offlineUpdate.status ?? "null"} ${offlineUpdate.stderr.split(/\r?\n/).slice(-6).join(" | ")}`),
+  check("NoPull without SourceDir uses bundled source", offlineUpdatedPaiTool.includes("k doctor                 Run AV-safe PAI diagnostics") && `${offlineUpdate.stdout}\n${offlineUpdate.stderr}`.includes("Using bundled source"), join(offlineInstallRoot, "PAI", "TOOLS", "pai.ts")),
+  check("NoPull without SourceDir does not invoke git", !existsSync(fakeGitInvoked), fakeGitInvoked),
   check("backup root created", backupRoot.length > 0, backupRoot || "missing"),
   check("AGENTS.md backup captured old content", read(join(backupRoot, "AGENTS.md")) === sentinels.agents, join(backupRoot, "AGENTS.md")),
   check("pai.ts backup captured old content", read(join(backupRoot, "PAI", "TOOLS", "pai.ts")) === sentinels.paiTool, join(backupRoot, "PAI", "TOOLS", "pai.ts")),

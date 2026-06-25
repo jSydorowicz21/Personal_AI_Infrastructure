@@ -126,6 +126,8 @@ const hotfixUpdateRollbackSmoke = read(join(paiRoot, "TOOLS", "HotfixUpdateRollb
 const junctionSafeUpdateSmoke = read(join(paiRoot, "TOOLS", "JunctionSafeUpdateSmokeTest.ts"));
 const memoryDeleteSmoke = read(join(paiRoot, "TOOLS", "MemoryDeleteSmokeTest.ts"));
 const paiSecurityAuditSmoke = read(join(paiRoot, "TOOLS", "PaiSecurityAuditSmokeTest.ts"));
+const updateInstalledPs1 = read(join(releaseRoot, "update-installed.ps1"));
+const updateInstalledSh = read(join(releaseRoot, "update-installed.sh"));
 const containmentZones = read(join(releaseRoot, "hooks", "lib", "containment-zones.ts"));
 const containmentGuard = read(join(releaseRoot, "hooks", "ContainmentGuard.hook.ts"));
 const containmentZonesSmoke = read(join(paiRoot, "TOOLS", "ContainmentZonesSmokeTest.ts"));
@@ -875,6 +877,19 @@ check(
     branchValidation.includes("windowsHide: true") &&
     !branchValidation.includes("const resolvedCommand = Bun.which(command) || command;"),
   "PAI/TOOLS/CodexBranchValidation.ts",
+);
+
+check(
+  "Installed updater keeps NoPull offline without SourceDir",
+  updateInstalledPs1.includes("function Get-ScriptRoot") &&
+    updateInstalledPs1.includes("Using bundled source because -NoPull was passed without -SourceDir") &&
+    updateInstalledPs1.indexOf("if ($NoPull)") < updateInstalledPs1.indexOf("git clone --depth 1") &&
+    updateInstalledSh.includes("SCRIPT_DIR=") &&
+    updateInstalledSh.includes("Using bundled source because --no-pull was passed without --source-dir") &&
+    updateInstalledSh.indexOf('if [ "$NO_PULL" -eq 1 ]') < updateInstalledSh.indexOf("git clone --depth 1") &&
+    hotfixUpdateRollbackSmoke.includes("NoPull without SourceDir does not invoke git") &&
+    hotfixUpdateRollbackSmoke.includes("fakeGitInvoked"),
+  "update-installed.ps1, update-installed.sh, and HotfixUpdateRollbackSmokeTest.ts",
 );
 
 check(
