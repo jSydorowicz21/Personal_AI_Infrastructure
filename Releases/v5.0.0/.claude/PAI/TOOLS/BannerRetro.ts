@@ -19,6 +19,7 @@ import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
+import { activeRuntimeLabel } from "./lib/framework-display";
 
 const CLAUDE_DIR = getFrameworkDir();
 
@@ -401,7 +402,7 @@ function getStats(): SystemStats {
     hooks: countHooks(),
     workItems: countWorkItems(),
     learnings: countLearnings(),
-    model: "Opus 4.5",
+    model: activeRuntimeLabel(CLAUDE_DIR),
   };
 }
 

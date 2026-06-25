@@ -73,6 +73,26 @@
       "target": "PAI/TOOLS/CompactSkillDescriptions.ts"
     },
     {
+      "source": "PAI/TOOLS/Banner.ts",
+      "target": "PAI/TOOLS/Banner.ts"
+    },
+    {
+      "source": "PAI/TOOLS/BannerNeofetch.ts",
+      "target": "PAI/TOOLS/BannerNeofetch.ts"
+    },
+    {
+      "source": "PAI/TOOLS/BannerMatrix.ts",
+      "target": "PAI/TOOLS/BannerMatrix.ts"
+    },
+    {
+      "source": "PAI/TOOLS/BannerRetro.ts",
+      "target": "PAI/TOOLS/BannerRetro.ts"
+    },
+    {
+      "source": "PAI/TOOLS/NeofetchBanner.ts",
+      "target": "PAI/TOOLS/NeofetchBanner.ts"
+    },
+    {
       "source": "PAI/TOOLS/RemoveBg.ts",
       "target": "PAI/TOOLS/RemoveBg.ts"
     },

@@ -12,6 +12,7 @@ import { readdirSync, existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, paiPath, userPath } from "./lib/paths";
+import { activeRuntimeLabel } from "./lib/framework-display";
 
 const FRAMEWORK_DIR = getFrameworkDir();
 const FRAMEWORK = process.env.PAI_FRAMEWORK || "claude";
@@ -222,7 +223,7 @@ function getStats(): SystemStats {
     learnings,
     userFiles,
     sessions,
-    model: "Opus 4.5",
+    model: activeRuntimeLabel(FRAMEWORK_DIR),
     platform,
     arch,
     ccVersion,
@@ -251,6 +252,12 @@ function center(str: string, width: number): string {
   const visible = visibleLength(str);
   const left = Math.floor((width - visible) / 2);
   return " ".repeat(Math.max(0, left)) + str + " ".repeat(Math.max(0, width - visible - left));
+}
+
+function truncateText(str: string, width: number): string {
+  if (str.length <= width) return str;
+  if (width <= 3) return str.slice(0, width);
+  return `${str.slice(0, width - 3)}...`;
 }
 
 function randomHex(len: number = 4): string {
@@ -316,6 +323,7 @@ function createNavyBanner(stats: SystemStats, width: number): string {
   ];
   const LOGO_WIDTH = 20;
   const SEPARATOR = `${C.steel}${BOX.v}${RESET}`;
+  const modelLabel = truncateText(stats.model, 24);
 
   // Info section with Unicode icons - meaningful symbols (10 lines for perfect centering with 10-row logo)
   const infoLines = [
@@ -328,6 +336,7 @@ function createNavyBanner(stats: SystemStats, width: number): string {
     `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`,         // ↪ hook arrow
     `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`,          // ✦ star (user sentiment signals)
     `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`,           // ≡ identical to (files/menu)
+    `${C.lightBlue}\u25CE${RESET}  ${C.slate}Model${RESET}     ${C.iceBlue}${modelLabel}${RESET}`,              // ◎ active provider/model
     `${C.steel}${BOX.h.repeat(24)}${RESET}`,
   ];
 
@@ -688,6 +697,7 @@ function createNavyMediumBanner(stats: SystemStats, width: number): string {
   ];
   const LOGO_WIDTH = 20;
   const SEPARATOR = `${C.steel}${BOX.v}${RESET}`;
+  const modelLabel = truncateText(stats.model, 24);
 
   const infoLines = [
     `${C.slate}"${RESET}${C.lightBlue}${stats.catchphrase}${RESET}${C.slate}..."${RESET}`,
@@ -699,6 +709,7 @@ function createNavyMediumBanner(stats: SystemStats, width: number): string {
     `${C.royalBlue}\u21AA${RESET}  ${C.slate}Hooks${RESET}     ${C.periwinkle}${stats.hooks}${RESET}`,
     `${C.medBlue}\u2726${RESET}  ${C.slate}Signals${RESET}   ${C.skyBlue}${stats.learnings}${RESET}`,
     `${C.navy}\u2261${RESET}  ${C.slate}Files${RESET}     ${C.lightBlue}${stats.userFiles}${RESET}`,
+    `${C.lightBlue}\u25CE${RESET}  ${C.slate}Model${RESET}     ${C.iceBlue}${modelLabel}${RESET}`,
     `${C.steel}${BOX.h.repeat(24)}${RESET}`,
   ];
 

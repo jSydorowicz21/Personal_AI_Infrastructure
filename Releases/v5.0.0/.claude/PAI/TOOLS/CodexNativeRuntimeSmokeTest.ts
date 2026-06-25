@@ -68,6 +68,7 @@ const referenceCheck = read(join(paiRoot, "TOOLS", "ReferenceCheck.ts"));
 const secretScan = read(join(paiRoot, "TOOLS", "SecretScan.ts"));
 const splitAndTranscribe = read(join(paiRoot, "TOOLS", "SplitAndTranscribe.ts"));
 const compactSkillDescriptions = read(join(paiRoot, "TOOLS", "CompactSkillDescriptions.ts"));
+const frameworkDisplay = read(join(paiRoot, "TOOLS", "lib", "framework-display.ts"));
 const bannerSources = [
   "Banner.ts",
   "BannerNeofetch.ts",
@@ -459,6 +460,20 @@ check(
     (bannerSources.match(/process\.platform !== "win32" && \(!width \|\| width <= 0\)/g)?.length ?? 0) >= 10 &&
     (bannerSources.match(/windowsHide:\s*true/g)?.length ?? 0) >= 11,
   "PAI/TOOLS/Banner*.ts and pai.ts",
+);
+
+check(
+  "PAI banners report active provider runtime",
+  frameworkDisplay.includes("export function activeRuntimeLabel") &&
+    frameworkDisplay.includes('return "Codex"') &&
+    frameworkDisplay.includes('return "OpenCode"') &&
+    frameworkDisplay.includes("readCodexModel") &&
+    frameworkDisplay.includes('join(root, "config.toml")') &&
+    frameworkDisplay.includes("PAI_CODEX_MODEL") &&
+    frameworkDisplay.includes("PAI_OPENCODE_MODEL") &&
+    (bannerSources.match(/activeRuntimeLabel/g)?.length ?? 0) >= 5 &&
+    !bannerSources.includes('model: "Opus'),
+  "PAI/TOOLS/lib/framework-display.ts and Banner*.ts",
 );
 
 check(
