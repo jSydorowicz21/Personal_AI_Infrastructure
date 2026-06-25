@@ -103,6 +103,7 @@ const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection
 const configAudit = read(join(releaseRoot, "hooks", "ConfigAudit.hook.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
+const rebuildArchSummarySmoke = read(join(paiRoot, "TOOLS", "RebuildArchSummarySmokeTest.ts"));
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
 const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
 const getCountsTool = read(join(paiRoot, "TOOLS", "GetCounts.ts"));
@@ -705,16 +706,26 @@ check(
 );
 
 check(
-  "Arch summary rebuild watches active framework instruction files",
+  "Arch summary rebuild watches active framework config and instruction files",
   rebuildArchSummary.includes('"DOCUMENTATION", "ARCHITECTURE_SUMMARY.md"') &&
     rebuildArchSummary.includes('"TOOLS", "ArchitectureSummaryGenerator.ts"') &&
+    rebuildArchSummary.includes("getFrameworkDir") &&
+    !rebuildArchSummary.includes("getClaudeDir") &&
+    rebuildArchSummary.includes('"config.toml"') &&
+    rebuildArchSummary.includes('"hooks.json"') &&
+    rebuildArchSummary.includes('"opencode.json"') &&
     rebuildArchSummary.includes('"AGENTS.md"') &&
     rebuildArchSummary.includes('"RTK.md"') &&
     rebuildArchSummary.includes("process.execPath") &&
+    rebuildArchSummarySmoke.includes("config.toml") &&
+    rebuildArchSummarySmoke.includes("hooks.json") &&
+    rebuildArchSummarySmoke.includes("opencode.json") &&
+    rebuildArchSummarySmoke.includes("generator-marker.txt") &&
+    rebuildArchSummarySmoke.includes("pathToFileURL") &&
     !rebuildArchSummary.includes('spawn("bun"') &&
     !rebuildArchSummary.includes('"PAI_ARCHITECTURE_SUMMARY.md"') &&
     !rebuildArchSummary.includes('"Tools/ArchitectureSummaryGenerator.ts"'),
-  "hooks/handlers/RebuildArchSummary.ts",
+  "hooks/handlers/RebuildArchSummary.ts and RebuildArchSummarySmokeTest.ts",
 );
 
 check(

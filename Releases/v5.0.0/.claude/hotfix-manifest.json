@@ -69,6 +69,10 @@
       "target": "PAI/TOOLS/ReferenceCheckSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/RebuildArchSummarySmokeTest.ts",
+      "target": "PAI/TOOLS/RebuildArchSummarySmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/SecretScan.ts",
       "target": "PAI/TOOLS/SecretScan.ts"
     },

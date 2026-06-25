@@ -17,13 +17,13 @@
  */
 
 import { statSync, readdirSync, existsSync } from "fs";
-import { join } from "path";
+import { join, relative } from "path";
 import { spawn } from "child_process";
-import { getPaiDir, getClaudeDir, getUserDir } from "../lib/paths";
+import { getPaiDir, getFrameworkDir, getUserDir } from "../lib/paths";
 
 export async function handleRebuildArchSummary(): Promise<void> {
   const paiDir = getPaiDir();
-  const claudeDir = getClaudeDir();
+  const frameworkDir = getFrameworkDir();
   const userDir = getUserDir();
   const output = join(paiDir, "DOCUMENTATION", "ARCHITECTURE_SUMMARY.md");
   const generator = join(paiDir, "TOOLS", "ArchitectureSummaryGenerator.ts");
@@ -41,14 +41,14 @@ export async function handleRebuildArchSummary(): Promise<void> {
     const trackedDirs = [
       join(paiDir, ""),
       join(paiDir, "DOCUMENTATION"),
-      join(claudeDir, "hooks"),
+      join(frameworkDir, "hooks"),
       join(paiDir, "ALGORITHM"),
       join(paiDir, "TOOLS"),
       join(userDir, "Config"),
       join(userDir, "SECURITY"),
     ];
 
-    const trackedExtensions = new Set([".ts", ".md", ".yaml", ".yml", ".sh", ".json"]);
+    const trackedExtensions = new Set([".ts", ".md", ".yaml", ".yml", ".sh", ".json", ".toml"]);
 
     let newestSystemFile = "";
     let newestMtime = 0;
@@ -74,10 +74,13 @@ export async function handleRebuildArchSummary(): Promise<void> {
     }
 
     for (const f of [
-      join(claudeDir, "settings.json"),
-      join(claudeDir, "CLAUDE.md"),
-      join(claudeDir, "AGENTS.md"),
-      join(claudeDir, "RTK.md"),
+      join(frameworkDir, "settings.json"),
+      join(frameworkDir, "config.toml"),
+      join(frameworkDir, "hooks.json"),
+      join(frameworkDir, "opencode.json"),
+      join(frameworkDir, "CLAUDE.md"),
+      join(frameworkDir, "AGENTS.md"),
+      join(frameworkDir, "RTK.md"),
     ]) {
       if (existsSync(f)) {
         const mtime = statSync(f).mtimeMs;
@@ -89,7 +92,7 @@ export async function handleRebuildArchSummary(): Promise<void> {
     }
 
     if (newestMtime > outputStat.mtimeMs) {
-      const rel = newestSystemFile.replace(claudeDir + "/", "");
+      const rel = relative(frameworkDir, newestSystemFile);
       console.error(`[RebuildArchSummary] System file changed (${rel}) - regenerating`);
       await rebuild(generator, paiDir);
     } else {
