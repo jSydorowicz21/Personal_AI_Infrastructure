@@ -13,6 +13,7 @@ import { join } from "path";
 import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, paiPath, userPath } from "./lib/paths";
 import { activeRuntimeLabel } from "./lib/framework-display";
+import { countRegisteredHooks } from "./lib/banner-counts";
 
 const FRAMEWORK_DIR = getFrameworkDir();
 const FRAMEWORK = process.env.PAI_FRAMEWORK || "claude";
@@ -177,6 +178,9 @@ function getStats(): SystemStats {
       learnings = settings.counts.signals || 0;
       userFiles = settings.counts.files || 0;
     }
+  } catch {}
+  try {
+    hooks = countRegisteredHooks(FRAMEWORK_DIR);
   } catch {}
 
   if (!learnings) {

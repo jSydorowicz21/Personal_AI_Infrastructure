@@ -95,7 +95,7 @@ try {
     `count=${countRegisteredHooks(frameworkRoot)}`,
   );
 
-  const bannerFiles = ["BannerNeofetch.ts", "BannerMatrix.ts", "BannerRetro.ts", "NeofetchBanner.ts"];
+  const bannerFiles = ["Banner.ts", "BannerNeofetch.ts", "BannerMatrix.ts", "BannerRetro.ts", "NeofetchBanner.ts"];
   const stale = bannerFiles.filter((file) => {
     const source = read(join(paiRoot, "TOOLS", file));
     return !source.includes("countRegisteredHooks") ||

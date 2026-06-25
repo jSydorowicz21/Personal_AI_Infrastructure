@@ -532,7 +532,7 @@ check(
     bannerCounts.includes('join(frameworkDir, "settings.json")') &&
     bannerProviderCountsSmoke.includes("Codex hooks.json wins over dormant hook files") &&
     bannerProviderCountsSmoke.includes("Claude settings.json remains native fallback") &&
-    (bannerSources.match(/countRegisteredHooks/g)?.length ?? 0) >= 4 &&
+    (bannerSources.match(/countRegisteredHooks/g)?.length ?? 0) >= 5 &&
     !bannerSources.includes("const CLAUDE_DIR") &&
     !bannerSources.includes("readdirSync(hooksDir"),
   "PAI/TOOLS/lib/banner-counts.ts, Banner*.ts, and BannerProviderCountsSmokeTest.ts",
