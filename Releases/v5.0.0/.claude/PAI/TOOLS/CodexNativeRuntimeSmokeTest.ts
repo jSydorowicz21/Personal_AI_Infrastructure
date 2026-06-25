@@ -69,6 +69,8 @@ const secretScan = read(join(paiRoot, "TOOLS", "SecretScan.ts"));
 const splitAndTranscribe = read(join(paiRoot, "TOOLS", "SplitAndTranscribe.ts"));
 const compactSkillDescriptions = read(join(paiRoot, "TOOLS", "CompactSkillDescriptions.ts"));
 const frameworkDisplay = read(join(paiRoot, "TOOLS", "lib", "framework-display.ts"));
+const bannerCounts = read(join(paiRoot, "TOOLS", "lib", "banner-counts.ts"));
+const bannerProviderCountsSmoke = read(join(paiRoot, "TOOLS", "BannerProviderCountsSmokeTest.ts"));
 const bannerSources = [
   "Banner.ts",
   "BannerNeofetch.ts",
@@ -519,6 +521,19 @@ check(
     (bannerSources.match(/activeRuntimeLabel/g)?.length ?? 0) >= 5 &&
     !bannerSources.includes('model: "Opus'),
   "PAI/TOOLS/lib/framework-display.ts and Banner*.ts",
+);
+
+check(
+  "PAI banners count provider-native hook registrations",
+  bannerCounts.includes("export function countRegisteredHooks") &&
+    bannerCounts.includes('join(frameworkDir, "hooks.json")') &&
+    bannerCounts.includes('join(frameworkDir, "settings.json")') &&
+    bannerProviderCountsSmoke.includes("Codex hooks.json wins over dormant hook files") &&
+    bannerProviderCountsSmoke.includes("Claude settings.json remains native fallback") &&
+    (bannerSources.match(/countRegisteredHooks/g)?.length ?? 0) >= 4 &&
+    !bannerSources.includes("const CLAUDE_DIR") &&
+    !bannerSources.includes("readdirSync(hooksDir"),
+  "PAI/TOOLS/lib/banner-counts.ts, Banner*.ts, and BannerProviderCountsSmokeTest.ts",
 );
 
 check(

@@ -22,8 +22,9 @@ import { join } from "path";
 import { spawnSync } from "child_process";
 import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 import { activeRuntimeLabel } from "./lib/framework-display";
+import { countRegisteredHooks } from "./lib/banner-counts";
 
-const CLAUDE_DIR = getFrameworkDir();
+const FRAMEWORK_DIR = getFrameworkDir();
 
 // =============================================================================
 // Terminal Width Detection
@@ -271,7 +272,7 @@ interface SystemStats {
 }
 
 function readDAIdentity(): string {
-  const settingsPath = join(CLAUDE_DIR, "settings.json");
+  const settingsPath = join(FRAMEWORK_DIR, "settings.json");
   try {
     const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
     return settings.daidentity?.displayName || settings.daidentity?.name || settings.env?.DA || "PAI";
@@ -281,7 +282,7 @@ function readDAIdentity(): string {
 }
 
 function countSkills(): number {
-  const skillsDir = join(CLAUDE_DIR, "skills");
+  const skillsDir = join(FRAMEWORK_DIR, "skills");
   if (!existsSync(skillsDir)) return 0;
   let count = 0;
   try {
@@ -309,15 +310,7 @@ function countUserFiles(): number {
 }
 
 function countHooks(): number {
-  const hooksDir = join(CLAUDE_DIR, "hooks");
-  if (!existsSync(hooksDir)) return 0;
-  let count = 0;
-  try {
-    for (const entry of readdirSync(hooksDir, { withFileTypes: true })) {
-      if (entry.isFile() && entry.name.endsWith(".ts")) count++;
-    }
-  } catch {}
-  return count;
+  return countRegisteredHooks(FRAMEWORK_DIR);
 }
 
 function countWorkItems(): number {
@@ -356,7 +349,7 @@ function getStats(): SystemStats {
     hooks: countHooks(),
     workItems: countWorkItems(),
     learnings: countLearnings(),
-    model: activeRuntimeLabel(CLAUDE_DIR),
+    model: activeRuntimeLabel(FRAMEWORK_DIR),
   };
 }
 

@@ -283,6 +283,7 @@ function main(): void {
     run("DocCheck smoke", "bun", ["PAI/TOOLS/DocCheckSmokeTest.ts"]);
     run("ReferenceCheck smoke", "bun", ["PAI/TOOLS/ReferenceCheckSmokeTest.ts"]);
     run("Rebuild architecture summary smoke", "bun", ["PAI/TOOLS/RebuildArchSummarySmokeTest.ts"]);
+    run("Banner provider counts smoke", "bun", ["PAI/TOOLS/BannerProviderCountsSmokeTest.ts"]);
     run("MemoryRetriever smoke", "bun", ["PAI/TOOLS/MemoryRetrieverSmokeTest.ts"]);
     run("Codex framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"], { timeout: 120_000 });
     run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);

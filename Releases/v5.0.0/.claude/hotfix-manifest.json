@@ -105,6 +105,10 @@
       "target": "PAI/TOOLS/NeofetchBanner.ts"
     },
     {
+      "source": "PAI/TOOLS/BannerProviderCountsSmokeTest.ts",
+      "target": "PAI/TOOLS/BannerProviderCountsSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/RemoveBg.ts",
       "target": "PAI/TOOLS/RemoveBg.ts"
     },
