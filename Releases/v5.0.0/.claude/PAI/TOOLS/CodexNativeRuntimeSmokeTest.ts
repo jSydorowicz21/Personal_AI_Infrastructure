@@ -100,6 +100,7 @@ const sessionEndLifecycleSmoke = read(join(paiRoot, "TOOLS", "SessionEndLifecycl
 const installerCodexSmoke = read(join(paiRoot, "TOOLS", "InstallerCodexSmokeTest.ts"));
 const frameworkLaunchCwdSmoke = read(join(paiRoot, "TOOLS", "FrameworkLaunchCwdSmokeTest.ts"));
 const changeDetection = read(join(releaseRoot, "hooks", "lib", "change-detection.ts"));
+const configAudit = read(join(releaseRoot, "hooks", "ConfigAudit.hook.ts"));
 const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCrossRefIntegrity.ts"));
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
@@ -612,6 +613,18 @@ check(
     changeDetection.includes("hooks\\.json") &&
     changeDetection.includes("config\\.toml"),
   "hooks/lib/change-detection.ts",
+);
+
+check(
+  "Config audit resolves provider-native config files",
+  configAudit.includes("function defaultConfigPath") &&
+    configAudit.includes("config.toml") &&
+    configAudit.includes("'permissions', 'hooks', 'env'") &&
+    configAudit.includes("SNAPSHOT_DIR = memoryPath('STATE', 'config-audit')") &&
+    configAudit.includes("function resolveConfigPath") &&
+    configAudit.includes("function parseTomlLike") &&
+    !configAudit.includes("'/tmp/pai-settings-snapshot.json'"),
+  "hooks/ConfigAudit.hook.ts",
 );
 
 check(

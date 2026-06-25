@@ -133,6 +133,10 @@
       "target": "PAI/TOOLS/ChangeDetectionSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/ConfigAuditSmokeTest.ts",
+      "target": "PAI/TOOLS/ConfigAuditSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts",
       "target": "PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"
     },

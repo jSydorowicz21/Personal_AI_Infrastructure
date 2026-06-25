@@ -17,8 +17,8 @@
  */
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { memoryPath, getSettingsPath } from './lib/paths';
+import { basename, isAbsolute, join, relative, resolve } from 'path';
+import { memoryPath, getSettingsPath, getFrameworkDir, expandPath } from './lib/paths';
 import { getISOTimestamp } from './lib/time';
 
 interface ConfigChangeInput {
@@ -42,11 +42,11 @@ interface ConfigChangeEvent {
 
 const OBS_DIR = memoryPath('OBSERVABILITY');
 const AUDIT_FILE = join(OBS_DIR, 'config-changes.jsonl');
-const SNAPSHOT_PATH = '/tmp/pai-settings-snapshot.json';
+const SNAPSHOT_DIR = memoryPath('STATE', 'config-audit');
 
 // Sensitive keys that warrant extra logging
 const SENSITIVE_KEYS = new Set([
-  'permissions', 'hooks', 'env', 'mcpServers',
+  'permissions', 'hooks', 'env', 'mcpServers', 'mcp_servers',
   'permissions.allow', 'permissions.deny', 'permissions.ask',
 ]);
 
@@ -60,24 +60,98 @@ async function readStdin(): Promise<string> {
   });
 }
 
+function normalizeFramework(value: string | undefined): string {
+  return (value || '').trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function defaultConfigPath(): string {
+  const frameworkDir = getFrameworkDir();
+  const framework = normalizeFramework(process.env.PAI_FRAMEWORK);
+  if (framework === 'codex' || framework === 'opencode' || framework === 'open') {
+    return join(frameworkDir, 'config.toml');
+  }
+  return getSettingsPath();
+}
+
+function resolveConfigPath(inputPath?: string): string {
+  if (!inputPath?.trim()) return defaultConfigPath();
+  const expanded = expandPath(inputPath.trim());
+  if (isAbsolute(expanded) || /^[A-Za-z]:[\\/]/.test(expanded)) return resolve(expanded);
+  return resolve(getFrameworkDir(), expanded);
+}
+
+function displayConfigPath(configPath: string, inputPath?: string): string {
+  if (inputPath?.trim()) return inputPath.trim().replace(/\\/g, '/');
+  const frameworkDir = resolve(getFrameworkDir());
+  const resolved = resolve(configPath);
+  if (resolved.toLowerCase().startsWith(frameworkDir.toLowerCase())) {
+    return relative(frameworkDir, resolved).replace(/\\/g, '/');
+  }
+  return configPath.replace(/\\/g, '/');
+}
+
+function snapshotPathFor(configPath: string): string {
+  const normalized = resolve(configPath)
+    .replace(/^[A-Za-z]:/, '')
+    .replace(/[^A-Za-z0-9_.-]+/g, '_')
+    .replace(/^_+/, '')
+    .slice(-160);
+  return join(SNAPSHOT_DIR, `${normalized || basename(configPath)}.json`);
+}
+
+function parseTomlLike(text: string): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  let section = '';
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const sectionMatch = line.match(/^\[+([^\]]+)\]+$/);
+    if (sectionMatch) {
+      section = sectionMatch[1].trim();
+      values[section] = true;
+      continue;
+    }
+
+    const keyMatch = line.match(/^([A-Za-z0-9_.-]+)\s*=/);
+    if (!keyMatch) continue;
+    const key = section ? `${section}.${keyMatch[1]}` : keyMatch[1];
+    values[key] = line.slice(line.indexOf('=') + 1).trim();
+  }
+
+  return Object.keys(values).length > 0 ? values : { content: text };
+}
+
+function readConfig(configPath: string): Record<string, unknown> {
+  const text = readFileSync(configPath, 'utf-8');
+  if (configPath.toLowerCase().endsWith('.json')) {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : { content: parsed };
+  }
+  return parseTomlLike(text);
+}
+
 /**
- * Diff current settings.json against cached snapshot.
+ * Diff current config against cached snapshot.
  * Returns array of top-level keys that changed, plus a summary string.
  */
-function diffSettings(): { changedKeys: string[]; summary: string } {
-  const settingsPath = getSettingsPath();
+function diffConfig(configPath: string): { changedKeys: string[]; summary: string } {
+  const snapshotPath = snapshotPathFor(configPath);
+  const configName = basename(configPath);
   let current: Record<string, unknown> = {};
   let snapshot: Record<string, unknown> = {};
 
   try {
-    current = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    current = readConfig(configPath);
   } catch {
-    return { changedKeys: ['settings.json'], summary: 'could not read settings.json' };
+    return { changedKeys: [configName], summary: `could not read ${configName}` };
   }
 
   try {
-    if (existsSync(SNAPSHOT_PATH)) {
-      snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf-8'));
+    if (existsSync(snapshotPath)) {
+      snapshot = JSON.parse(readFileSync(snapshotPath, 'utf-8'));
     }
   } catch {
     // No snapshot or corrupt — treat everything as new
@@ -85,7 +159,8 @@ function diffSettings(): { changedKeys: string[]; summary: string } {
 
   // Save new snapshot for next comparison
   try {
-    writeFileSync(SNAPSHOT_PATH, JSON.stringify(current), 'utf-8');
+    if (!existsSync(SNAPSHOT_DIR)) mkdirSync(SNAPSHOT_DIR, { recursive: true });
+    writeFileSync(snapshotPath, JSON.stringify(current), 'utf-8');
   } catch {
     // Non-fatal
   }
@@ -143,6 +218,14 @@ function diffSettings(): { changedKeys: string[]; summary: string } {
   return { changedKeys: changed, summary: summaryParts.join('; ') };
 }
 
+function isSensitiveKey(key: string): boolean {
+  if (SENSITIVE_KEYS.has(key)) return true;
+  for (const sensitive of SENSITIVE_KEYS) {
+    if (key.startsWith(`${sensitive}.`)) return true;
+  }
+  return false;
+}
+
 async function main() {
   try {
     const input = await readStdin();
@@ -150,16 +233,18 @@ async function main() {
 
     const data: ConfigChangeInput = JSON.parse(input);
 
+    const configPath = resolveConfigPath(data.config_path);
+
     // Use file-diff to determine what actually changed
-    const { changedKeys, summary } = diffSettings();
+    const { changedKeys, summary } = diffConfig(configPath);
     const configKey = changedKeys.join(',');
-    const isSensitive = changedKeys.some(k => SENSITIVE_KEYS.has(k));
+    const isSensitive = changedKeys.some(isSensitiveKey);
 
     const event: ConfigChangeEvent = {
       timestamp: getISOTimestamp(),
       event: 'config_change',
       session_id: data.session_id,
-      config_path: data.config_path || 'settings.json',
+      config_path: displayConfigPath(configPath, data.config_path),
       config_key: configKey,
       change_summary: summary,
     };
