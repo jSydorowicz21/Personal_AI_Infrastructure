@@ -47,6 +47,8 @@ function walkTextFiles(dir: string, acc: string[] = []): string[] {
 const frameworkAgent = read(join(paiRoot, "TOOLS", "lib", "framework-agent.ts"));
 const algorithm = read(join(paiRoot, "TOOLS", "algorithm.ts"));
 const paiCli = read(join(paiRoot, "TOOLS", "pai.ts"));
+const limitlessCli = read(join(paiRoot, "bin", "llcli", "llcli.ts"));
+const limitlessCliSmoke = read(join(paiRoot, "TOOLS", "LimitlessCliConfigSmokeTest.ts"));
 const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
 const installMain = read(join(paiRoot, "PAI-Install", "main.ts"));
 const installActions = read(join(paiRoot, "PAI-Install", "engine", "actions.ts"));
@@ -252,6 +254,20 @@ check(
     frameworkSmoke.includes("tools path uses provider home env without PAI_DIR") &&
     frameworkSmoke.includes("hooks path uses provider home env without PAI_DIR"),
   "hooks/lib/paths.ts, PAI/TOOLS/lib/paths.ts, and FrameworkSmokeTest.ts",
+);
+
+check(
+  "Limitless CLI reads provider-neutral PAI config",
+  limitlessCli.includes("getConfigDir, getEnvPath, getFrameworkDir, homeDir") &&
+    limitlessCli.includes("export function configSearchPaths") &&
+    limitlessCli.includes("process.env.LIMITLESS_API_KEY") &&
+    limitlessCli.includes("join(getConfigDir(), '.env')") &&
+    limitlessCli.includes("join(getFrameworkDir(), '.env')") &&
+    limitlessCli.includes("if (import.meta.main)") &&
+    !limitlessCli.includes("LIMITLESS_API_KEY not found in ~/.claude/.env") &&
+    limitlessCliSmoke.includes("llcli reads shared PAI config env first") &&
+    limitlessCliSmoke.includes("llcli falls back to active Codex framework env"),
+  "PAI/bin/llcli/llcli.ts and LimitlessCliConfigSmokeTest.ts",
 );
 
 check(

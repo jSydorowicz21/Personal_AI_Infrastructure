@@ -37,6 +37,10 @@
       "target": "PAI/TOOLS/MemoryRetrieverSmokeTest.ts"
     },
     {
+      "source": "PAI/bin/llcli",
+      "target": "PAI/bin/llcli"
+    },
+    {
       "source": "PAI/TOOLS/ArchitectureSummaryGenerator.ts",
       "target": "PAI/TOOLS/ArchitectureSummaryGenerator.ts"
     },
@@ -139,6 +143,10 @@
     {
       "source": "PAI/TOOLS/LoadContextSmokeTest.ts",
       "target": "PAI/TOOLS/LoadContextSmokeTest.ts"
+    },
+    {
+      "source": "PAI/TOOLS/LimitlessCliConfigSmokeTest.ts",
+      "target": "PAI/TOOLS/LimitlessCliConfigSmokeTest.ts"
     },
     {
       "source": "PAI/TOOLS/algorithm.ts",

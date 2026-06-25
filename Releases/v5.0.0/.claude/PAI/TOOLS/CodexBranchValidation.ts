@@ -209,6 +209,7 @@ function main(): void {
       "PAI/TOOLS/algorithm.ts",
       "PAI/TOOLS/Inference.ts",
       "PAI/TOOLS/FailureCapture.ts",
+      "PAI/bin/llcli/llcli.ts",
       "PAI/TOOLS/PaiDoctor.ts",
       "PAI/TOOLS/PaiDoctorSmokeTest.ts",
       "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
@@ -219,6 +220,7 @@ function main(): void {
       "PAI/TOOLS/RepeatDetectionSmokeTest.ts",
       "PAI/TOOLS/CodexHookContractSmokeTest.ts",
       "PAI/TOOLS/LoadContextSmokeTest.ts",
+      "PAI/TOOLS/LimitlessCliConfigSmokeTest.ts",
       "PAI/TOOLS/PaiSecurityAuditSmokeTest.ts",
       "PAI/TOOLS/ContainmentZonesSmokeTest.ts",
       "PAI/TOOLS/HotfixUpdateRollbackSmokeTest.ts",
@@ -276,6 +278,7 @@ function main(): void {
       },
     });
     run("LoadContext smoke", "bun", ["PAI/TOOLS/LoadContextSmokeTest.ts"]);
+    run("Limitless CLI config smoke", "bun", ["PAI/TOOLS/LimitlessCliConfigSmokeTest.ts"]);
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);
     run("Containment zones smoke", "bun", ["PAI/TOOLS/ContainmentZonesSmokeTest.ts"]);
     run("Codex native runtime smoke", "bun", ["PAI/TOOLS/CodexNativeRuntimeSmokeTest.ts"]);

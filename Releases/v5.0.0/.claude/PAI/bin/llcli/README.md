@@ -35,26 +35,32 @@ This tool replaces ad-hoc bash scripts with a maintainable, version-controlled i
 
 1. **Install the CLI:**
    ```bash
-   cd ~/.claude/Bin/llcli
+   cd "$PAI_DIR/bin/llcli"
    chmod +x llcli.ts
    ```
 
 2. **Add to PATH (optional):**
    ```bash
    # Add to ~/.zshrc or ~/.bashrc
-   export PATH="$HOME/.claude/Bin/llcli:$PATH"
+   export PATH="$PAI_DIR/bin/llcli:$PATH"
    ```
 
 3. **Configure API Key:**
 
-   Add to `~/.claude/.env`:
+   Prefer the shared PAI config env file:
+   ```bash
+   mkdir -p "$PAI_CONFIG_DIR"
+   printf 'LIMITLESS_API_KEY=your_api_key_here\n' >> "$PAI_CONFIG_DIR/.env"
+   ```
+
+   Direct environment variables and active-framework `.env` files also work:
    ```bash
    LIMITLESS_API_KEY=your_api_key_here
    ```
 
 4. **Verify Installation:**
    ```bash
-   ~/.claude/Bin/llcli/llcli.ts --help
+   "$PAI_DIR/bin/llcli/llcli.ts" --help
    ```
 
 ---
@@ -267,7 +273,9 @@ diff \
 
 ### Environment Variables
 
-**Location:** `~/.claude/.env`
+**Preferred location:** `$PAI_CONFIG_DIR/.env`
+
+`llcli` checks the live `LIMITLESS_API_KEY` environment variable first, then `$PAI_CONFIG_DIR/.env`, then the active framework `.env`. Legacy Claude installs that still keep the key in `~/.claude/.env` remain supported as a compatibility fallback.
 
 **Required:**
 ```bash
@@ -360,17 +368,19 @@ llcli.ts
 
 ### "LIMITLESS_API_KEY not found"
 
-**Solution:** Add API key to `~/.claude/.env`:
+**Solution:** Add API key to the shared PAI config env file:
 ```bash
-echo "LIMITLESS_API_KEY=your_key" >> ~/.claude/.env
+mkdir -p "$PAI_CONFIG_DIR"
+printf 'LIMITLESS_API_KEY=your_key\n' >> "$PAI_CONFIG_DIR/.env"
 ```
 
-### "Cannot read ~/.claude/.env file"
+### "Cannot read config .env file"
 
 **Solution:** Create the file:
 ```bash
-touch ~/.claude/.env
-chmod 600 ~/.claude/.env
+mkdir -p "$PAI_CONFIG_DIR"
+touch "$PAI_CONFIG_DIR/.env"
+chmod 600 "$PAI_CONFIG_DIR/.env"
 ```
 
 ### "bun: command not found"
@@ -384,7 +394,7 @@ curl -fsSL https://bun.sh/install | bash
 
 **Solution:** Make executable:
 ```bash
-chmod +x ~/.claude/Bin/llcli/llcli.ts
+chmod +x "$PAI_DIR/bin/llcli/llcli.ts"
 ```
 
 ### API Errors
@@ -454,7 +464,7 @@ Replace script calls:
 
 **New:**
 ```bash
-~/.claude/Bin/llcli/llcli.ts today --limit 20
+$PAI_DIR/bin/llcli/llcli.ts today --limit 20
 ```
 
 ### With Workflows
@@ -537,9 +547,9 @@ MIT
 ## Support
 
 For issues, questions, or contributions:
-- File: `~/.claude/Bin/llcli/`
-- Skill: `~/.claude/skills/lifelog/`
-- Constitution: `~/.claude/`
+- File: `$PAI_DIR/bin/llcli/`
+- Shared config: `$PAI_CONFIG_DIR/.env`
+- Active framework home: `$PAI_FRAMEWORK_DIR`
 
 ---
 

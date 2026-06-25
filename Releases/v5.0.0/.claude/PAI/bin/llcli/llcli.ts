@@ -9,9 +9,9 @@
  * @version 1.0.0
  */
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { getConfigDir, getEnvPath, getFrameworkDir, homeDir } from '../../TOOLS/lib/paths';
 
 // ============================================================================
 // Types
@@ -37,6 +37,7 @@ interface Config {
   apiKey: string;
   timezone: string;
   baseUrl: string;
+  envSource: string;
 }
 
 // ============================================================================
@@ -52,32 +53,69 @@ const DEFAULTS = {
 /**
  * Load configuration from environment
  */
-function loadConfig(): Config {
-  const envPath = process.env.PAI_CONFIG_DIR ? join(process.env.PAI_CONFIG_DIR, '.env') : join(homedir(), '.claude', '.env');
+export function parseEnvValue(content: string, key: string): string | null {
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(trimmed);
+    if (!match || match[1] !== key) continue;
 
-  try {
-    const envContent = readFileSync(envPath, 'utf-8');
-    const apiKey = envContent
-      .split('\n')
-      .find(line => line.startsWith('LIMITLESS_API_KEY='))
-      ?.split('=')[1]
-      ?.trim();
-
-    if (!apiKey) {
-      console.error('Error: LIMITLESS_API_KEY not found in ~/.claude/.env');
-      process.exit(1);
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
     }
+    return value || null;
+  }
 
+  return null;
+}
+
+export function configSearchPaths(): string[] {
+  const candidates = [
+    getEnvPath(),
+    join(getConfigDir(), '.env'),
+    join(getFrameworkDir(), '.env'),
+    join(homeDir(), '.claude', '.env'),
+  ];
+
+  return [...new Set(candidates)];
+}
+
+export function loadConfig(): Config {
+  const envKey = process.env.LIMITLESS_API_KEY?.trim();
+  if (envKey) {
     return {
-      apiKey,
+      apiKey: envKey,
       timezone: DEFAULTS.timezone,
       baseUrl: DEFAULTS.baseUrl,
+      envSource: 'process.env.LIMITLESS_API_KEY',
     };
-  } catch (error) {
-    console.error(`Error: Cannot read ~/.claude/.env file`);
-    console.error('Make sure LIMITLESS_API_KEY is set in ~/.claude/.env');
-    process.exit(1);
   }
+
+  const checked: string[] = [];
+  for (const envPath of configSearchPaths()) {
+    checked.push(envPath);
+    if (!existsSync(envPath)) continue;
+
+    try {
+      const apiKey = parseEnvValue(readFileSync(envPath, 'utf-8'), 'LIMITLESS_API_KEY');
+      if (!apiKey) continue;
+
+      return {
+        apiKey,
+        timezone: DEFAULTS.timezone,
+        baseUrl: DEFAULTS.baseUrl,
+        envSource: envPath,
+      };
+    } catch {
+      checked[checked.length - 1] = `${envPath} (unreadable)`;
+    }
+  }
+
+  console.error('Error: LIMITLESS_API_KEY not found.');
+  console.error('Set LIMITLESS_API_KEY in the process environment or one of:');
+  for (const path of checked) console.error(`  - ${path}`);
+  process.exit(1);
 }
 
 // ============================================================================
@@ -222,7 +260,8 @@ OUTPUT:
   Exit code 0 on success, 1 on error
 
 CONFIGURATION:
-  API Key:   ~/.claude/.env (LIMITLESS_API_KEY=your_key)
+  API Key:   LIMITLESS_API_KEY environment variable, $PAI_CONFIG_DIR/.env,
+             active framework .env, or legacy ~/.claude/.env
   Timezone:  America/Los_Angeles (Pacific Time)
   Base URL:  https://api.limitless.ai/v1
 
@@ -251,7 +290,7 @@ PHILOSOPHY:
   - Documented: Full help and examples
   - Testable: Predictable behavior
 
-For more information, see ~/.claude/Bin/llcli/README.md
+For more information, see $PAI_DIR/bin/llcli/README.md
 
 Version: 1.0.0
 Author: {{PRINCIPAL_FULL_NAME}}
@@ -321,7 +360,9 @@ async function main() {
 }
 
 // Run CLI
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}
