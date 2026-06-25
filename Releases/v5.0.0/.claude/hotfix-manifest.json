@@ -109,6 +109,10 @@
       "target": "PAI/TOOLS/Checkpoint.ts"
     },
     {
+      "source": "PAI/TOOLS/GetCounts.ts",
+      "target": "PAI/TOOLS/GetCounts.ts"
+    },
+    {
       "source": "PAI/TOOLS/lib",
       "target": "PAI/TOOLS/lib"
     },

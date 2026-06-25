@@ -104,6 +104,7 @@ const docCrossRefIntegrity = read(join(releaseRoot, "hooks", "handlers", "DocCro
 const rebuildArchSummary = read(join(releaseRoot, "hooks", "handlers", "RebuildArchSummary.ts"));
 const systemIntegrity = read(join(releaseRoot, "hooks", "handlers", "SystemIntegrity.ts"));
 const updateCounts = read(join(releaseRoot, "hooks", "handlers", "UpdateCounts.ts"));
+const getCountsTool = read(join(paiRoot, "TOOLS", "GetCounts.ts"));
 const branchValidation = read(join(paiRoot, "TOOLS", "CodexBranchValidation.ts"));
 const frameworkSmoke = read(join(paiRoot, "TOOLS", "FrameworkSmokeTest.ts"));
 const frameworkCommandResolutionSmoke = read(join(paiRoot, "TOOLS", "FrameworkCommandResolutionSmokeTest.ts"));
@@ -657,6 +658,18 @@ check(
     !updateCounts.includes("execSync") &&
     !updateCounts.includes("process.env.HOME || ''"),
   "hooks/handlers/UpdateCounts.ts",
+);
+
+check(
+  "Counts read provider-native hook registration",
+  updateCounts.includes("join(frameworkDir, 'hooks.json')") &&
+    updateCounts.includes("countHookCommands(codexHooks.hooks ?? {})") &&
+    updateCounts.includes("countHookCommands(settings.hooks ?? {})") &&
+    updateCounts.includes("join(getFrameworkDir(), 'skills')") &&
+    getCountsTool.includes('join(FRAMEWORK_DIR, "hooks.json")') &&
+    getCountsTool.includes("countHookCommands(parsed.hooks ?? {})") &&
+    getCountsTool.includes("countHookCommands(settings.hooks ?? {})"),
+  "hooks/handlers/UpdateCounts.ts and PAI/TOOLS/GetCounts.ts",
 );
 
 check(

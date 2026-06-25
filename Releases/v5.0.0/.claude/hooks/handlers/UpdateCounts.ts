@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { spawnSync } from 'child_process';
-import { getPaiDir, getSettingsPath, getClaudeDir, getMemoryDir, getUserDir, memoryPath } from '../lib/paths';
+import { getPaiDir, getSettingsPath, getClaudeDir, getFrameworkDir, getMemoryDir, getUserDir, memoryPath } from '../lib/paths';
 
 
 interface Counts {
@@ -88,7 +88,7 @@ function countWorkflowFiles(dir: string): number {
 function countSkills(_paiDir: string): { total: number; pub: number; priv: number } {
   let pub = 0;
   let priv = 0;
-  const skillsDir = join(getClaudeDir(), 'skills');
+  const skillsDir = join(getFrameworkDir(), 'skills');
   try {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
       const isDir = entry.isDirectory() ||
@@ -108,17 +108,31 @@ function countSkills(_paiDir: string): { total: number; pub: number; priv: numbe
 }
 
 /**
- * Count active hooks: unique commands registered under `hooks.<event>[].hooks[].command`
- * in settings.json. Dormant `.hook.ts` files on disk that aren't wired to any event do
- * NOT count — only what Claude Code will actually fire.
+ * Count active hooks from the native framework registration surface.
+ * Claude registers in settings.json; Codex registers in hooks.json.
+ * Dormant `.hook.ts` files on disk do NOT count.
  */
 function countHooks(_paiDir: string): number {
-  const settingsPath = getSettingsPath();
   try {
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
-    const events = settings.hooks ?? {};
+    const frameworkDir = getFrameworkDir();
+    const codexHooksPath = join(frameworkDir, 'hooks.json');
+    if (existsSync(codexHooksPath)) {
+      const codexHooks = JSON.parse(readFileSync(codexHooksPath, 'utf-8'));
+      return countHookCommands(codexHooks.hooks ?? {});
+    }
+
+    const settings = JSON.parse(readFileSync(getSettingsPath(), 'utf-8'));
+    return countHookCommands(settings.hooks ?? {});
+  } catch {
+    return 0;
+  }
+}
+
+function countHookCommands(events: unknown): number {
+  try {
     const unique = new Set<string>();
-    for (const matchers of Object.values(events)) {
+    if (!events || typeof events !== 'object' || Array.isArray(events)) return 0;
+    for (const matchers of Object.values(events as Record<string, unknown>)) {
       if (!Array.isArray(matchers)) continue;
       for (const matcher of matchers) {
         const list = (matcher as { hooks?: unknown }).hooks;
@@ -188,7 +202,7 @@ function getCounts(paiDir: string): Counts {
     skills: sk.total,
     skillsPublic: sk.pub,
     skillsPrivate: sk.priv,
-    workflows: countWorkflowFiles(join(getClaudeDir(), 'skills')),
+    workflows: countWorkflowFiles(join(getFrameworkDir(), 'skills')),
     hooks: countHooks(paiDir),
     signals: countFilesRecursive(memoryPath('LEARNING'), '.md'),
     files: countFilesRecursive(getUserDir()),

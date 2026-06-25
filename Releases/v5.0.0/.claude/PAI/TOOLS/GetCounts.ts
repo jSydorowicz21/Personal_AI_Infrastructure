@@ -11,7 +11,8 @@
  * COUNTING METHODOLOGY:
  * - Skills: Directories in skills/ that contain a SKILL.md file
  * - Workflows: .md files in any Workflows/ directory (recursive)
- * - Hooks: unique commands registered in settings.json hooks.<event>[].hooks[].command (active only)
+ * - Hooks: unique commands registered in the native framework hook config
+ *   (Codex hooks.json or Claude settings.json)
  * - Signals: .md files in shared MEMORY/LEARNING/ (recursive)
  * - Files: All files in shared USER/ (recursive)
  * - Work: Directories in shared MEMORY/WORK/ (depth 1)
@@ -33,7 +34,7 @@
  *   files_count=172
  */
 
-import { readdirSync, existsSync, statSync } from "fs";
+import { readdirSync, existsSync, statSync, readFileSync } from "fs";
 import { join } from "path";
 import { getFrameworkDir, memoryPath, userPath } from "./lib/paths";
 
@@ -121,18 +122,30 @@ function countSkills(): number {
 }
 
 /**
- * Count active hooks: unique commands registered under `hooks.<event>[].hooks[].command`
- * in settings.json. Dormant hook files on disk that aren't wired to any event do NOT
- * count — only what Claude Code will actually fire.
+ * Count active hooks from the native framework registration surface.
+ * Codex registers in hooks.json; Claude registers in settings.json.
+ * Dormant hook files on disk that aren't wired to any event do NOT count.
  */
 function countHooks(): number {
-  const settingsPath = join(FRAMEWORK_DIR, "settings.json");
   try {
-    const fs = require('fs');
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    const events = settings.hooks ?? {};
+    const hooksJsonPath = join(FRAMEWORK_DIR, "hooks.json");
+    if (existsSync(hooksJsonPath)) {
+      const parsed = JSON.parse(readFileSync(hooksJsonPath, "utf-8"));
+      return countHookCommands(parsed.hooks ?? {});
+    }
+
+    const settings = JSON.parse(readFileSync(join(FRAMEWORK_DIR, "settings.json"), "utf-8"));
+    return countHookCommands(settings.hooks ?? {});
+  } catch {
+    return 0;
+  }
+}
+
+function countHookCommands(events: unknown): number {
+  try {
     const unique = new Set<string>();
-    for (const matchers of Object.values(events)) {
+    if (!events || typeof events !== "object" || Array.isArray(events)) return 0;
+    for (const matchers of Object.values(events as Record<string, unknown>)) {
       if (!Array.isArray(matchers)) continue;
       for (const matcher of matchers) {
         const list = (matcher as { hooks?: unknown }).hooks;
@@ -155,8 +168,7 @@ function countHooks(): number {
 function countRatings(): number {
   const ratingsFile = memoryPath("LEARNING", "SIGNALS", "ratings.jsonl");
   try {
-    const fs = require('fs');
-    const content = fs.readFileSync(ratingsFile, 'utf-8');
+    const content = readFileSync(ratingsFile, 'utf-8');
     return content.split('\n').filter((line: string) => line.trim()).length;
   } catch {
     return 0;
