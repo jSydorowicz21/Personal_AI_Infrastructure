@@ -137,6 +137,10 @@
       "target": "PAI/TOOLS/IdentityProviderFallbackSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/LoadContextSmokeTest.ts",
+      "target": "PAI/TOOLS/LoadContextSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/algorithm.ts",
       "target": "PAI/TOOLS/algorithm.ts"
     },

@@ -362,7 +362,7 @@ function getProjectProgress(): WorkSession[] {
 /**
  * Unified activity dashboard — merges recent WORK sessions + persistent projects.
  */
-async function checkActiveProgress(paiDir: string): Promise<string | null> {
+export async function checkActiveProgress(paiDir: string): Promise<string | null> {
   const recentSessions = getRecentWorkSessions();
   const projects = getProjectProgress();
 
@@ -405,9 +405,9 @@ async function checkActiveProgress(paiDir: string): Promise<string | null> {
     }
   }
 
-  const toolsDir = paiDir + '/Tools';
-  summary += `\n💡 To resume project: \`bun run ${toolsDir}/SessionProgress.ts resume <project>\`\n`;
-  summary += `💡 To complete project: \`bun run ${toolsDir}/SessionProgress.ts complete <project>\`\n`;
+  const sessionProgress = join(paiDir, 'TOOLS', 'SessionProgress.ts');
+  summary += `\n💡 To resume project: \`bun ${sessionProgress} resume <project>\`\n`;
+  summary += `💡 To complete project: \`bun ${sessionProgress} complete <project>\`\n`;
 
   return summary;
 }
@@ -510,4 +510,6 @@ Dynamic context loaded. Constitutional rules are in the system prompt (PAI/PAI_S
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

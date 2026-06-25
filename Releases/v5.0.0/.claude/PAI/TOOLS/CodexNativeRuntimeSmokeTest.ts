@@ -85,6 +85,8 @@ const bannerSources = [
 ].map((file) => read(join(paiRoot, "TOOLS", file))).join("\n");
 const promptProcessing = read(join(releaseRoot, "hooks", "PromptProcessing.hook.ts"));
 const satisfactionCapture = read(join(releaseRoot, "hooks", "SatisfactionCapture.hook.ts"));
+const loadContext = read(join(releaseRoot, "hooks", "LoadContext.hook.ts"));
+const loadContextSmoke = read(join(paiRoot, "TOOLS", "LoadContextSmokeTest.ts"));
 const hookAdapter = read(join(releaseRoot, "hooks", "FrameworkHookAdapter.ts"));
 const smartApprover = read(join(releaseRoot, "hooks", "SmartApprover.hook.ts"));
 const checkpointPerIsc = read(join(releaseRoot, "hooks", "CheckpointPerISC.hook.ts"));
@@ -250,6 +252,18 @@ check(
     frameworkSmoke.includes("tools path uses provider home env without PAI_DIR") &&
     frameworkSmoke.includes("hooks path uses provider home env without PAI_DIR"),
   "hooks/lib/paths.ts, PAI/TOOLS/lib/paths.ts, and FrameworkSmokeTest.ts",
+);
+
+check(
+  "LoadContext active-work reminders use provider PAI/TOOLS path",
+  loadContext.includes("export async function checkActiveProgress") &&
+    loadContext.includes("join(paiDir, 'TOOLS', 'SessionProgress.ts')") &&
+    loadContext.includes("if (import.meta.main)") &&
+    !loadContext.includes("paiDir + '/Tools'") &&
+    loadContextSmoke.includes("SessionProgress reminder uses PAI/TOOLS path") &&
+    loadContextSmoke.includes("SessionProgress reminder avoids legacy PAI/Tools path") &&
+    loadContextSmoke.includes("SessionProgress reminder uses bun directly"),
+  "hooks/LoadContext.hook.ts and LoadContextSmokeTest.ts",
 );
 
 check(
