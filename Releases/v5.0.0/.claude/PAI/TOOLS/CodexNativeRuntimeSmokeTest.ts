@@ -606,7 +606,11 @@ check(
   changeDetection.includes("entry.type === 'response_item'") &&
     changeDetection.includes("entry.payload?.type === 'function_call'") &&
     changeDetection.includes("parseModifiedFilePaths") &&
-    changeDetection.includes("*** Begin Patch"),
+    changeDetection.includes("*** Begin Patch") &&
+    changeDetection.includes("function isNativeHookRegistryPath") &&
+    changeDetection.includes("function isNativeFrameworkConfigPath") &&
+    changeDetection.includes("hooks\\.json") &&
+    changeDetection.includes("config\\.toml"),
   "hooks/lib/change-detection.ts",
 );
 

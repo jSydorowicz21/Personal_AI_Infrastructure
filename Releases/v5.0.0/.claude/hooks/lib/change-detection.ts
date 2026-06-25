@@ -78,9 +78,12 @@ const HIGH_PRIORITY_PATHS = [
   'SKILLSYSTEM.md',
   'MEMORYSYSTEM.md',
   'THEHOOKSYSTEM.md',
+  'DOCUMENTATION/Hooks/HookSystem.md',
   'THEDELEGATIONSYSTEM.md',
   'THENOTIFICATIONSYSTEM.md',
+  'hooks.json',
   'settings.json',
+  'config.toml',
 ];
 
 // Philosophical/architectural patterns in paths
@@ -96,7 +99,9 @@ const PHILOSOPHICAL_PATTERNS = [
 const STRUCTURAL_PATTERNS = [
   /\/SKILL\.md$/i,           // Skill definitions
   /\/Workflows\//i,          // Workflow routing
+  /(^|\/)hooks\.json$/i,     // Native hook registry
   /settings\.json$/i,        // Configuration
+  /(^|\/)config\.toml$/i,    // Codex/OpenCode configuration
   /frontmatter/i,            // Metadata changes
 ];
 
@@ -115,6 +120,14 @@ function normalizePathText(value: string): string {
 
 function normalizePathTextLower(value: string): string {
   return normalizePathText(value).replace(/\/+$/g, '').toLowerCase();
+}
+
+function isNativeHookRegistryPath(path: string): boolean {
+  return /(^|\/)hooks\.json$/i.test(normalizePathText(path));
+}
+
+function isNativeFrameworkConfigPath(path: string): boolean {
+  return /(^|\/)(settings\.json|config\.toml)$/i.test(normalizePathText(path));
 }
 
 function parseJsonMaybe(value: any): any {
@@ -342,7 +355,8 @@ export function categorizeChange(path: string): ChangeCategory | null {
   const frameworkLower = normalizePathTextLower(FRAMEWORK_DIR);
   const relativeFrameworkRoots = /^(hooks|skills|commands|agents|custom-agents)\//i.test(normalizedPath) ||
     /^(CLAUDE|AGENTS|RTK)\.md$/i.test(normalizedPath) ||
-    /^settings\.json$/i.test(normalizedPath);
+    isNativeHookRegistryPath(normalizedPath) ||
+    isNativeFrameworkConfigPath(normalizedPath);
   const relativePaiRoots = /^(TOOLS|ALGORITHM|DOCUMENTATION|PULSE|USER|MEMORY)\//i.test(normalizedPath) ||
     /^PAI_SYSTEM_PROMPT\.md$/i.test(normalizedPath);
 
@@ -363,11 +377,11 @@ export function categorizeChange(path: string): ChangeCategory | null {
     return 'skill';
   }
 
-  if (normalizedPath.includes('hooks/')) return 'hook';
+  if (normalizedPath.includes('hooks/') || isNativeHookRegistryPath(normalizedPath)) return 'hook';
   if (normalizedPath.startsWith('TOOLS/') || normalizedPath.includes('/TOOLS/') || normalizedPath.includes('/Tools/')) return 'tool';
   if (normalizedPath.includes('MEMORY/PAISYSTEMUPDATES/')) return 'documentation';
   if (normalizedPath.includes('MEMORY/')) return 'memory-system';
-  if (normalizedPath.endsWith('settings.json') || /^(CLAUDE|AGENTS|RTK)\.md$/i.test(normalizedPath)) return 'config';
+  if (isNativeFrameworkConfigPath(normalizedPath) || /^(CLAUDE|AGENTS|RTK)\.md$/i.test(normalizedPath)) return 'config';
   if (normalizedPath.endsWith('.md') && !normalizedPath.includes('WORK/')) return 'documentation';
 
   return null;
@@ -647,8 +661,9 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
   const hasSkillMd = paths.some(p => p.endsWith('SKILL.md'));
   const hasWorkflows = paths.some(p => p.includes('/Workflows/'));
   const hasTools = paths.some(p => p.includes('/Tools/') && p.endsWith('.ts'));
-  const hasHooks = paths.some(p => p.includes('hooks/'));
-  const hasConfig = paths.some(p => p.endsWith('settings.json'));
+  const hasHookRegistry = paths.some(p => isNativeHookRegistryPath(p));
+  const hasHooks = paths.some(p => p.includes('hooks/') || isNativeHookRegistryPath(p));
+  const hasConfig = paths.some(p => isNativeFrameworkConfigPath(p));
   const hasCoreSystem = paths.some(p => p.match(/PAI\/(?:DOCUMENTATION\/)?(?:PAISYSTEM|THEHOOKSYSTEM|THEDELEGATION|MEMORYSYSTEM)/));
   const hasCoreUser = paths.some(p => p.includes('PAI/USER/'));
 
@@ -691,7 +706,9 @@ export function generateDescriptiveTitle(changes: FileChange[]): string {
     const hookNames = paths
       .filter(p => p.includes('hooks/'))
       .map(p => basename(p, '.ts').replace('.hook', ''));
-    if (hookNames.length === 1) {
+    if (hasHookRegistry && hookNames.length === 0) {
+      title = 'PAI Hook Registration Updated';
+    } else if (hookNames.length === 1) {
       title = `${hookNames[0]} Hook Updated`;
     } else if (hookNames.length <= 3) {
       title = `${hookNames.slice(0, 3).join(', ')} Hooks Updated`;

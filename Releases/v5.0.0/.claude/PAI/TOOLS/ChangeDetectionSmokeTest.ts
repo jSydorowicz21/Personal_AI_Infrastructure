@@ -38,7 +38,7 @@ function writeJsonl(name: string, rows: unknown[]): string {
 }
 
 mkdirSync(join(frameworkRoot, "hooks"), { recursive: true });
-mkdirSync(join(paiDir, "DOCUMENTATION"), { recursive: true });
+mkdirSync(join(paiDir, "DOCUMENTATION", "Hooks"), { recursive: true });
 mkdirSync(join(paiDir, "TOOLS"), { recursive: true });
 mkdirSync(dataDir, { recursive: true });
 mkdirSync(configDir, { recursive: true });
@@ -70,7 +70,7 @@ try {
           {
             type: "tool_use",
             name: "Edit",
-            input: { file_path: join(paiDir, "DOCUMENTATION", "HookSystem.md") },
+            input: { file_path: join(paiDir, "DOCUMENTATION", "Hooks", "HookSystem.md") },
           },
           {
             type: "tool_use",
@@ -119,9 +119,33 @@ try {
     },
   ]);
 
+  const codexNativeConfigTranscript = writeJsonl("codex-native-config.jsonl", [
+    {
+      type: "session_meta",
+      payload: { id: "codex-native-config-session", cwd: frameworkRoot },
+    },
+    {
+      type: "response_item",
+      payload: {
+        type: "function_call",
+        name: "write",
+        arguments: JSON.stringify({ file_path: join(frameworkRoot, "hooks.json") }),
+      },
+    },
+    {
+      type: "response_item",
+      payload: {
+        type: "function_call",
+        name: "edit",
+        arguments: JSON.stringify({ file_path: join(frameworkRoot, "config.toml") }),
+      },
+    },
+  ]);
+
   const claudeChanges = changeDetection.parseToolUseBlocks(claudeTranscript);
   const codexChanges = changeDetection.parseToolUseBlocks(codexTranscript);
   const codexPaths = changeDetection.parseModifiedFilePaths(codexTranscript);
+  const codexNativeConfigChanges = changeDetection.parseToolUseBlocks(codexNativeConfigTranscript);
 
   check(
     "Claude hook write still detected",
@@ -130,7 +154,7 @@ try {
   );
   check(
     "Claude PAI documentation edit still detected",
-    claudeChanges.some((change) => change.path.replace(/\\/g, "/") === "DOCUMENTATION/HookSystem.md" && change.category === "documentation"),
+    claudeChanges.some((change) => change.path.replace(/\\/g, "/") === "DOCUMENTATION/Hooks/HookSystem.md" && change.category === "documentation"),
     JSON.stringify(claudeChanges),
   );
   check(
@@ -164,6 +188,38 @@ try {
     "Codex changes are significant and documentable",
     changeDetection.isSignificantChange(codexChanges) && changeDetection.shouldDocumentChanges(codexChanges),
     JSON.stringify(codexChanges),
+  );
+  check(
+    "Codex hooks.json is native hook registration",
+    codexNativeConfigChanges.some((change) =>
+      change.path === "hooks.json" &&
+      change.category === "hook" &&
+      change.tool === "Write" &&
+      change.isStructural
+    ),
+    JSON.stringify(codexNativeConfigChanges),
+  );
+  check(
+    "Codex config.toml is native framework config",
+    codexNativeConfigChanges.some((change) =>
+      change.path === "config.toml" &&
+      change.category === "config" &&
+      change.tool === "Edit" &&
+      change.isStructural
+    ),
+    JSON.stringify(codexNativeConfigChanges),
+  );
+  check(
+    "Codex native config changes trigger integrity docs",
+    changeDetection.isSignificantChange(codexNativeConfigChanges) &&
+      changeDetection.shouldDocumentChanges(codexNativeConfigChanges) &&
+      changeDetection.inferChangeType(codexNativeConfigChanges) === "hook_update" &&
+      changeDetection.generateDescriptiveTitle(codexNativeConfigChanges).includes("Hook"),
+    JSON.stringify({
+      changes: codexNativeConfigChanges,
+      type: changeDetection.inferChangeType(codexNativeConfigChanges),
+      title: changeDetection.generateDescriptiveTitle(codexNativeConfigChanges),
+    }),
   );
 } finally {
   rmSync(root, { recursive: true, force: true });
