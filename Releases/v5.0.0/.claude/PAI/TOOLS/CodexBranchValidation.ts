@@ -230,6 +230,7 @@ function main(): void {
       "PAI/TOOLS/ChangeDetectionSmokeTest.ts",
       "PAI/TOOLS/ConfigAuditSmokeTest.ts",
       "PAI/TOOLS/DocCheckSmokeTest.ts",
+      "PAI/TOOLS/ReferenceCheckSmokeTest.ts",
       "PAI/TOOLS/FrameworkSmokeTest.ts",
       "PAI/TOOLS/FrameworkCommandResolutionSmokeTest.ts",
       "PAI/TOOLS/FrameworkLaunchCwdSmokeTest.ts",
@@ -277,6 +278,7 @@ function main(): void {
     run("Change detection smoke", "bun", ["PAI/TOOLS/ChangeDetectionSmokeTest.ts"]);
     run("Config audit smoke", "bun", ["PAI/TOOLS/ConfigAuditSmokeTest.ts"]);
     run("DocCheck smoke", "bun", ["PAI/TOOLS/DocCheckSmokeTest.ts"]);
+    run("ReferenceCheck smoke", "bun", ["PAI/TOOLS/ReferenceCheckSmokeTest.ts"]);
     run("MemoryRetriever smoke", "bun", ["PAI/TOOLS/MemoryRetrieverSmokeTest.ts"]);
     run("Codex framework parity smoke", "bun", ["PAI/TOOLS/FrameworkSmokeTest.ts", "--framework", "codex"], { timeout: 120_000 });
     run("PAI doctor smoke", "bun", ["PAI/TOOLS/PaiDoctorSmokeTest.ts"]);

@@ -29,7 +29,7 @@ import { join, resolve, dirname, relative, extname, sep } from 'path';
 import { spawnSync } from 'child_process';
 import { getFrameworkDir, getPaiDir } from './lib/paths';
 
-const CLAUDE_DIR = getFrameworkDir();
+const FRAMEWORK_DIR = getFrameworkDir();
 const PAI_DIR = getPaiDir();
 
 // ── Arg parsing (manual, zero deps) ──
@@ -65,7 +65,7 @@ const EXCLUDE_DIR_NAMES = new Set([
   'logs',
 ]);
 
-// Top-level path segments (relative to CLAUDE_DIR) that are entirely ignored.
+// Top-level path segments (relative to FRAMEWORK_DIR) that are entirely ignored.
 const EXCLUDE_PATH_PREFIXES = [
   'PAI/MEMORY',
   'PAI/PULSE/Observability/.next',
@@ -110,6 +110,7 @@ const EXCLUDE_PATH_PREFIXES = [
   '.wrangler',
   '.next',
   '.claude',        // nested .claude (from shadow releases)
+  '.codex',         // nested .codex (from shadow releases)
 ];
 
 // Specific files matched by exact relative path. Currently used to exclude
@@ -130,7 +131,7 @@ let _latestAlgVersionCache: string | null = null;
 function getLatestAlgorithmVersion(): string {
   if (_latestAlgVersionCache !== null) return _latestAlgVersionCache;
   try {
-    const algDir = join(CLAUDE_DIR, 'PAI', 'ALGORITHM');
+    const algDir = join(FRAMEWORK_DIR, 'PAI', 'ALGORITHM');
     const versions = readdirSync(algDir)
       .map(f => f.match(/^v(\d+\.\d+\.\d+)\.md$/)?.[1])
       .filter((v): v is string => !!v)
@@ -171,7 +172,7 @@ const EXCLUDE_FILE_NAMES = new Set([
 function isExcludedDir(absPath: string): boolean {
   const base = absPath.split(sep).pop() || '';
   if (EXCLUDE_DIR_NAMES.has(base)) return true;
-  const rel = relative(CLAUDE_DIR, absPath);
+  const rel = relative(FRAMEWORK_DIR, absPath);
   if (rel.startsWith('..')) return true;
   for (const pref of EXCLUDE_PATH_PREFIXES) {
     if (rel === pref || rel.startsWith(pref + sep)) return true;
@@ -196,7 +197,7 @@ function isScannableFile(absPath: string): boolean {
   for (const sub of EXCLUDE_SUBSTRINGS) {
     if (absPath.includes(sub)) return false;
   }
-  const rel = relative(CLAUDE_DIR, absPath);
+  const rel = relative(FRAMEWORK_DIR, absPath);
   if (isArchivedAlgorithmVersion(rel)) return false;
   const ext = extname(absPath);
   return ext === '.md' || ext === '.ts' || ext === '.tsx' || ext === '.json';
@@ -229,8 +230,8 @@ function walk(root: string): string[] {
     }
 
     for (const entry of entries) {
-      if (entry.startsWith('.') && entry !== '.claude') {
-        // allow .claude top-level but skip hidden files/dirs like .git, .DS_Store
+      if (entry.startsWith('.') && entry !== '.claude' && entry !== '.codex') {
+        // allow nested framework homes but skip hidden files/dirs like .git, .DS_Store
         if (entry === '.git' || entry === '.DS_Store' || entry === '.cache' ||
             entry === '.next' || entry === '.turbo' || entry === '.venv') continue;
       }
@@ -261,11 +262,11 @@ const EXT = '\\.\\w+(?:\\.\\w+)*';
 
 const REF_PATTERNS: { re: RegExp; label: string }[] = [
   // Backtick-quoted paths with top-level anchor
-  { re: new RegExp('`((?:PAI|hooks|skills|agents|Pulse|USER|MEMORY|Components|Algorithm|Tools|Workflows|References)\\/[\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-anchored' },
-  // Backtick-quoted paths starting with ~/.claude/
-  { re: new RegExp('`~\\/\\.claude\\/([\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-home' },
-  // Backtick-quoted paths with $HOME/.claude/ or ${HOME}/.claude/
-  { re: new RegExp('`\\$(?:HOME|\\{HOME\\})\\/\\.claude\\/([\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-env-home' },
+  { re: new RegExp('`((?:PAI|hooks|skills|agents|commands|plugins|MCPs|Pulse|USER|MEMORY|Components|Algorithm|Tools|Workflows|References)\\/[\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-anchored' },
+  // Backtick-quoted paths starting with ~/.claude, ~/.codex, or ~/.config/opencode
+  { re: new RegExp('`~\\/(?:\\.claude|\\.codex|\\.config\\/opencode)\\/([\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-home' },
+  // Backtick-quoted paths with $HOME/${HOME} framework-home prefixes
+  { re: new RegExp('`\\$(?:HOME|\\{HOME\\})\\/(?:\\.claude|\\.codex|\\.config\\/opencode)\\/([\\w/@.-]+?' + EXT + ')`', 'g'), label: 'backtick-env-home' },
   // @-import at start of line: @PAI/USER/FILE.md
   { re: /^@(PAI\/[\w/@.-]+\.md)/gm, label: 'at-import' },
   // Markdown link target: [text](./path) or [text](path.md)
@@ -273,11 +274,11 @@ const REF_PATTERNS: { re: RegExp; label: string }[] = [
   // Arrow notation: → file: `path`
   { re: new RegExp('→\\s+[\\w\\s]+:\\s+`([\\w/@.-]+?' + EXT + ')`', 'g'), label: 'arrow' },
   // Table cell paths in pipes (kept narrow: must include a top-level anchor)
-  { re: new RegExp('\\|\\s*`?((?:PAI|hooks|skills|agents|Pulse|USER|Components|Algorithm|Tools)\\/[\\w/@.-]+?' + EXT + ')`?\\s*\\|', 'g'), label: 'table-cell' },
+  { re: new RegExp('\\|\\s*`?((?:PAI|hooks|skills|agents|commands|plugins|Pulse|USER|Components|Algorithm|Tools)\\/[\\w/@.-]+?' + EXT + ')`?\\s*\\|', 'g'), label: 'table-cell' },
   // TS/TSX relative imports with explicit relative prefix
   { re: /from\s+["'](\.\.?\/[\w/@.-]+?)["']/g, label: 'ts-import' },
-  // settings.json style: "command": "... $HOME/.claude/hooks/Foo.hook.ts ..."
-  { re: new RegExp('\\$\\{?HOME\\}?\\/\\.claude\\/((?:hooks|PAI|skills|agents)\\/[\\w/@.-]+?' + EXT + ')', 'g'), label: 'json-home' },
+  // settings/hooks config style: "command": "... $HOME/.codex/hooks/Foo.hook.ts ..."
+  { re: new RegExp('\\$\\{?HOME\\}?\\/(?:\\.claude|\\.codex|\\.config\\/opencode)\\/((?:hooks|PAI|skills|agents|commands|plugins)\\/[\\w/@.-]+?' + EXT + ')', 'g'), label: 'json-home' },
 ];
 
 interface RefHit {
@@ -400,8 +401,8 @@ function extractRefs(content: string, referringFile: string): RefHit[] {
       } else if (raw.startsWith('./') || raw.startsWith('../')) {
         candidates.push(resolve(refDir, raw));
       } else {
-        // Try CLAUDE_DIR-relative, PAI_DIR-relative, referring-dir-relative.
-        candidates.push(resolve(CLAUDE_DIR, raw));
+        // Try FRAMEWORK_DIR-relative, PAI_DIR-relative, referring-dir-relative.
+        candidates.push(resolve(FRAMEWORK_DIR, raw));
         candidates.push(resolve(PAI_DIR, raw));
         candidates.push(resolve(refDir, raw));
         // Skill-internal refs: when file lives in skills/X/Workflows/ or skills/X/Tools/,
@@ -413,7 +414,7 @@ function extractRefs(content: string, referringFile: string): RefHit[] {
         // intentional convention used by CLAUDE.md routing entries.
         if (sectionRoots) {
           const sectionRoot = getSectionRootAt(sectionRoots, m.index);
-          if (sectionRoot) candidates.push(resolve(CLAUDE_DIR, sectionRoot, raw));
+          if (sectionRoot) candidates.push(resolve(FRAMEWORK_DIR, sectionRoot, raw));
         }
       }
       for (const cand of candidates) {
@@ -465,13 +466,13 @@ function getChangedFiles(): Set<string> {
   const changed = new Set<string>();
   for (const args of [["diff", "--name-only", "HEAD"], ["diff", "--cached", "--name-only"]]) {
     const diff = spawnSync("git", args, {
-      cwd: CLAUDE_DIR,
+      cwd: FRAMEWORK_DIR,
       encoding: "utf-8",
       windowsHide: true,
     });
     if (diff.status !== 0 && !diff.stdout) continue;
     for (const file of diff.stdout.split('\n').filter(Boolean)) {
-      changed.add(resolve(CLAUDE_DIR, file));
+      changed.add(resolve(FRAMEWORK_DIR, file));
     }
   }
   return changed;
@@ -481,7 +482,7 @@ function getChangedFiles(): Set<string> {
 
 interface Finding {
   type: 'missing' | 'stale' | 'orphan';
-  file: string;   // relative to CLAUDE_DIR
+  file: string;   // relative to FRAMEWORK_DIR
   line: number | null;
   ref: string | null;
   resolved: string;
@@ -497,7 +498,7 @@ let scannedRefs = 0;
 
 let allFiles: string[];
 try {
-  allFiles = walk(CLAUDE_DIR);
+  allFiles = walk(FRAMEWORK_DIR);
 } catch (e: any) {
   console.error(`ReferenceCheck: scan error — ${e?.message || e}`);
   process.exit(2);
@@ -538,7 +539,7 @@ const filesToReport = changed
 for (const [file, refs] of fileRefs) {
   if (filesToReport && !filesToReport.has(file)) continue;
   let refMtimeCache: number | null = null;
-  const relFile = relative(CLAUDE_DIR, file);
+  const relFile = relative(FRAMEWORK_DIR, file);
 
   for (const r of refs) {
     if (!r.exists) {
@@ -583,7 +584,7 @@ for (const [file, refs] of fileRefs) {
 // Skill SKILL.md files are auto-discovered by Claude Code harness via frontmatter.
 if (includeOrphans) {
   for (const file of allFiles) {
-    const rel = relative(CLAUDE_DIR, file);
+    const rel = relative(FRAMEWORK_DIR, file);
     const isPaiTopMd = /^PAI\/[^/]+\.md$/.test(rel);
     if (!isPaiTopMd) continue;
     if (!referenced.has(file)) {

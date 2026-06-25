@@ -456,6 +456,16 @@ check(
 );
 
 check(
+  "ReferenceCheck resolves provider-native framework paths",
+  referenceCheck.includes("const FRAMEWORK_DIR = getFrameworkDir()") &&
+    referenceCheck.includes(".codex") &&
+    referenceCheck.includes("opencode") &&
+    referenceCheck.includes("commands|plugins") &&
+    !referenceCheck.includes("const CLAUDE_DIR"),
+  "PAI/TOOLS/ReferenceCheck.ts",
+);
+
+check(
   "Runtime helper child processes stay hidden on Windows",
   secretScan.includes("spawn('trufflehog', args, { windowsHide: true })") &&
     splitAndTranscribe.includes("], { windowsHide: true })") &&

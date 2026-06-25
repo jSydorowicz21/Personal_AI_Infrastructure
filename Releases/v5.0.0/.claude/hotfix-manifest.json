@@ -65,6 +65,10 @@
       "target": "PAI/TOOLS/ReferenceCheck.ts"
     },
     {
+      "source": "PAI/TOOLS/ReferenceCheckSmokeTest.ts",
+      "target": "PAI/TOOLS/ReferenceCheckSmokeTest.ts"
+    },
+    {
       "source": "PAI/TOOLS/SecretScan.ts",
       "target": "PAI/TOOLS/SecretScan.ts"
     },
