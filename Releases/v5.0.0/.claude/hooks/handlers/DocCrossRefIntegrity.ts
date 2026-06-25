@@ -15,7 +15,7 @@
  * 2. Handler file references (handlers/*.ts) - diff against disk
  * 3. Shared lib references (hooks/lib/*.ts) - diff against disk
  * 4. SYSTEM doc path references - validate files exist
- * 5. Numeric counts (e.g., "21 hooks active") - recount from disk
+ * 5. Numeric counts (e.g., "21 hooks active") - recount from native hook config
  * 6. Last Updated timestamps - update on modification
  *
  * INFERENCE ANALYSIS (OPT-IN):
@@ -32,8 +32,8 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
-import { isAbsolute, join, basename } from 'path';
-import { paiPath, getPaiDir, getClaudeDir } from '../lib/paths';
+import { isAbsolute, join, basename, relative } from 'path';
+import { paiPath, getPaiDir, getFrameworkDir, getSettingsPath } from '../lib/paths';
 import { getIdentity } from '../lib/identity';
 import { parseModifiedFilePaths } from '../lib/change-detection';
 import { inference } from '../../PAI/TOOLS/Inference';
@@ -63,7 +63,8 @@ interface DriftItem {
 
 const SYSTEM_DIR = getPaiDir();
 const DOCS_DIR = join(SYSTEM_DIR, 'DOCUMENTATION');
-const HOOKS_DIR = join(getClaudeDir(), 'hooks');
+const FRAMEWORK_DIR = getFrameworkDir();
+const HOOKS_DIR = join(FRAMEWORK_DIR, 'hooks');
 const HANDLERS_DIR = join(HOOKS_DIR, 'handlers');
 const LIB_DIR = join(HOOKS_DIR, 'lib');
 const TAG = '[DocAutoUpdate]';
@@ -87,6 +88,24 @@ function listFiles(dir: string, suffix: string): string[] {
   }
 }
 
+function listFilesRecursive(dir: string, suffix: string, root = dir): string[] {
+  try {
+    if (!existsSync(dir)) return [];
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        out.push(...listFilesRecursive(fullPath, suffix, root));
+      } else if (entry.isFile() && entry.name.endsWith(suffix)) {
+        out.push(normalizePathText(relative(root, fullPath)));
+      }
+    }
+    return out.sort();
+  } catch {
+    return [];
+  }
+}
+
 function getHookFilesOnDisk(): string[] {
   return listFiles(HOOKS_DIR, '.hook.ts');
 }
@@ -100,7 +119,43 @@ function getLibFilesOnDisk(): string[] {
 }
 
 function getSystemDocsOnDisk(): string[] {
-  return listFiles(DOCS_DIR, '.md');
+  return listFilesRecursive(DOCS_DIR, '.md');
+}
+
+function countHookCommands(events: unknown): number {
+  try {
+    const unique = new Set<string>();
+    if (!events || typeof events !== 'object' || Array.isArray(events)) return 0;
+    for (const matchers of Object.values(events as Record<string, unknown>)) {
+      if (!Array.isArray(matchers)) continue;
+      for (const matcher of matchers) {
+        const list = (matcher as { hooks?: unknown }).hooks;
+        if (!Array.isArray(list)) continue;
+        for (const h of list) {
+          const cmd = (h as { command?: unknown }).command;
+          if (typeof cmd === 'string' && cmd.length > 0) unique.add(cmd);
+        }
+      }
+    }
+    return unique.size;
+  } catch {
+    return 0;
+  }
+}
+
+function countActiveHookCommands(): number {
+  try {
+    const hooksJsonPath = join(FRAMEWORK_DIR, 'hooks.json');
+    if (existsSync(hooksJsonPath)) {
+      const hooksJson = JSON.parse(readFileSync(hooksJsonPath, 'utf-8'));
+      return countHookCommands(hooksJson.hooks ?? {});
+    }
+
+    const settings = JSON.parse(readFileSync(getSettingsPath(), 'utf-8'));
+    return countHookCommands(settings.hooks ?? {});
+  } catch {
+    return 0;
+  }
 }
 
 // ============================================================================
@@ -129,7 +184,7 @@ function stripRoot(filePath: string, root: string): string | null {
 }
 
 function relativeToFramework(filePath: string): string {
-  const frameworkRel = stripRoot(filePath, getClaudeDir());
+  const frameworkRel = stripRoot(filePath, FRAMEWORK_DIR);
   if (frameworkRel !== null) return frameworkRel;
   return normalizePathText(filePath);
 }
@@ -143,7 +198,7 @@ function relativeToPai(filePath: string): string {
 function resolveModifiedFilePath(filePath: string): string {
   if (isAbsolute(filePath) || /^[A-Za-z]:[\\/]/.test(filePath)) return filePath;
 
-  const frameworkCandidate = join(getClaudeDir(), filePath);
+  const frameworkCandidate = join(FRAMEWORK_DIR, filePath);
   if (existsSync(frameworkCandidate)) return frameworkCandidate;
 
   const paiCandidate = join(getPaiDir(), filePath);
@@ -163,7 +218,8 @@ function isSystemDocModified(modifiedFiles: Set<string>): boolean {
 function isHookModified(modifiedFiles: Set<string>): boolean {
   for (const path of modifiedFiles) {
     const frameworkRel = relativeToFramework(path);
-    if ((frameworkRel.startsWith('hooks/') || normalizePathText(path).includes('/hooks/')) && path.endsWith('.ts')) return true;
+    if (frameworkRel === 'hooks.json') return true;
+    if ((frameworkRel.startsWith('hooks/') || normalizePathText(path).includes('/hooks/')) && (path.endsWith('.ts') || path.endsWith('.sh'))) return true;
   }
   return false;
 }
@@ -171,15 +227,15 @@ function isHookModified(modifiedFiles: Set<string>): boolean {
 /**
  * Check if ANY meaningful PAI system file was modified.
  * PAI spans TWO root directories:
- *   - CLAUDE_DIR (~/.claude) — hooks, skills, settings, agents, CLAUDE.md
- *   - PAI_DIR (~/.claude/PAI) — PAI data, Tools, Components, Workflows, SYSTEM docs
+ *   - FRAMEWORK_DIR (~/.claude, ~/.codex, ~/.config/opencode) — hooks, skills, settings, agents, instructions
+ *   - PAI_DIR (<framework>/PAI) — PAI system files, Tools, Workflows, SYSTEM docs
  * Excludes MEMORY/WORK, MEMORY/LEARNING, MEMORY/STATE, and other non-system paths.
  */
 function isSystemFileModified(modifiedFiles: Set<string>): boolean {
   const PAI_DIR = getPaiDir();
-  const CLAUDE_DIR = getClaudeDir();
+  const FRAMEWORK_ROOT = FRAMEWORK_DIR;
   const PAI_EXCLUDED = ['MEMORY/WORK/', 'MEMORY/LEARNING/', 'MEMORY/STATE/', 'Plans/', '.git/', 'node_modules/', 'ShellSnapshots/', 'MEMORY/VOICE/', 'MEMORY/RELATIONSHIP/', 'history.jsonl', '.quote-cache'];
-  const CLAUDE_EXCLUDED = ['projects/', '.git/', 'node_modules/', 'history.jsonl'];
+  const FRAMEWORK_EXCLUDED = ['projects/', '.git/', 'node_modules/', 'history.jsonl'];
 
   for (const filePath of modifiedFiles) {
     const normalizedPath = normalizePathText(filePath);
@@ -187,12 +243,13 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
     const relPai = relativeToPai(filePath);
 
     // --- Check framework-root relative paths (Claude/Codex/OpenCode homes) ---
-    if (relClaude !== normalizedPath || /^(hooks|skills|commands|agents|custom-agents)\//.test(relClaude) || /^(CLAUDE|AGENTS|RTK)\.md$/.test(relClaude) || relClaude === 'settings.json') {
-      if (CLAUDE_EXCLUDED.some(ex => relClaude.includes(ex))) continue;
+    if (relClaude !== normalizedPath || /^(hooks|skills|commands|agents|custom-agents)\//.test(relClaude) || /^(CLAUDE|AGENTS|RTK)\.md$/.test(relClaude) || relClaude === 'settings.json' || relClaude === 'hooks.json') {
+      if (FRAMEWORK_EXCLUDED.some(ex => relClaude.includes(ex))) continue;
 
       if (relClaude.startsWith('hooks/') && (relClaude.endsWith('.ts') || relClaude.endsWith('.sh'))) return true;
       if (relClaude.startsWith('skills/') && (relClaude.endsWith('.md') || relClaude.endsWith('.ts') || relClaude.endsWith('.yaml') || relClaude.endsWith('.yml'))) return true;
       if (relClaude === 'settings.json') return true;
+      if (relClaude === 'hooks.json') return true;
       if (relClaude === 'CLAUDE.md' || relClaude === 'AGENTS.md' || relClaude === 'RTK.md') return true;
       if (relClaude.startsWith('agents/') && (relClaude.endsWith('.md') || relClaude.endsWith('.toml'))) return true;
       if (relClaude.startsWith('custom-agents/') && relClaude.endsWith('.md')) return true;
@@ -211,15 +268,16 @@ function isSystemFileModified(modifiedFiles: Set<string>): boolean {
       continue;
     }
 
-    // --- Check ~/.claude/ paths ---
-    if (normalizedPath.startsWith(normalizePathText(CLAUDE_DIR) + '/')) {
-      const relPath = normalizedPath.slice(normalizePathText(CLAUDE_DIR).length + 1);
-      if (CLAUDE_EXCLUDED.some(ex => relPath.includes(ex))) continue;
+    // --- Check framework-root absolute paths ---
+    if (normalizedPath.startsWith(normalizePathText(FRAMEWORK_ROOT) + '/')) {
+      const relPath = normalizedPath.slice(normalizePathText(FRAMEWORK_ROOT).length + 1);
+      if (FRAMEWORK_EXCLUDED.some(ex => relPath.includes(ex))) continue;
 
       if (relPath.startsWith('hooks/') && (relPath.endsWith('.ts') || relPath.endsWith('.sh'))) return true;
       if (relPath.startsWith('skills/') && (relPath.endsWith('.md') || relPath.endsWith('.ts') || relPath.endsWith('.yaml') || relPath.endsWith('.yml'))) return true;
       if (relPath === 'settings.json') return true;
-      if (relPath === 'CLAUDE.md') return true;
+      if (relPath === 'hooks.json') return true;
+      if (relPath === 'CLAUDE.md' || relPath === 'AGENTS.md' || relPath === 'RTK.md') return true;
       if (relPath.startsWith('agents/') && relPath.endsWith('.md')) return true;
       if (relPath.startsWith('custom-agents/') && relPath.endsWith('.md')) return true;
       if (relPath.startsWith('commands/') && relPath.endsWith('.md')) return true;
@@ -343,7 +401,7 @@ function checkSystemDocRefs(docsToCheck: string[], systemDocsOnDisk: Set<string>
   const sysDocRefRegex = /(?:`|'|")(?:~\/\.(?:claude|config\/PAI)\/)?(?:skills\/)?PAI\/([\w/]+\.md)(?:`|'|")/g;
 
   for (const docFile of docsToCheck) {
-    const docPath = join(SYSTEM_DIR, docFile);
+    const docPath = join(DOCS_DIR, docFile);
     if (!existsSync(docPath)) continue;
 
     const content = readFileSync(docPath, 'utf-8');
@@ -371,11 +429,12 @@ function checkSystemDocRefs(docsToCheck: string[], systemDocsOnDisk: Set<string>
 }
 
 /**
- * Check Pattern 5: Numeric hook counts in docs vs actual count on disk.
+ * Check Pattern 5: Numeric hook counts in docs vs active provider hook count.
  */
 function checkHookCounts(docsToCheck: string[], actualCount: number): DriftItem[] {
   const drift: DriftItem[] = [];
-  // Match "N hooks active" or "N hooks running" patterns, NOT in example/anti-pattern contexts
+  // Match "N hooks active" or "N hooks running" patterns, NOT in example/anti-pattern contexts.
+  // `actualCount` is active hook commands from the provider-native registration config.
   const countRegex = /\*\*Status:\*\*.*?(\d+) hooks? active/g;
 
   for (const docFile of docsToCheck) {
@@ -392,7 +451,7 @@ function checkHookCounts(docsToCheck: string[], actualCount: number): DriftItem[
           doc: docFile,
           pattern: 'hook_count',
           reference: match[0],
-          issue: `States "${docCount} hooks active" but actual count on disk is ${actualCount}`,
+          issue: `States "${docCount} hooks active" but active registered hook count is ${actualCount}`,
         });
       }
     }
@@ -472,8 +531,11 @@ function buildInferenceContext(
     f.startsWith('DOCUMENTATION/') ||
     f.includes('skills/') ||
     f.endsWith('settings.json') ||
+    f.endsWith('hooks.json') ||
     f.includes('/agents/') ||
     f.includes('/custom-agents/') ||
+    f.endsWith('AGENTS.md') ||
+    f.endsWith('RTK.md') ||
     f.endsWith('CLAUDE.md'),
   );
 
@@ -495,7 +557,7 @@ function buildInferenceContext(
   // For each affected doc, extract the FULL section (## heading to next ## heading)
   // so inference has enough context to make quality corrections
   for (const docFile of docsToCheck) {
-    const docPath = join(SYSTEM_DIR, docFile);
+    const docPath = join(DOCS_DIR, docFile);
     if (!existsSync(docPath)) continue;
 
     try {
@@ -693,7 +755,9 @@ function updateLastUpdatedTimestamp(docFile: string): string | null {
  * Update Pattern 5: Hook count in DOCUMENTATION/Hooks/HookSystem.md.
  */
 function updateHookCount(actualCount: number): string | null {
-  const docPath = join(DOCS_DIR, 'THEHOOKSYSTEM.md');
+  const docPath = existsSync(join(DOCS_DIR, 'Hooks', 'HookSystem.md'))
+    ? join(DOCS_DIR, 'Hooks', 'HookSystem.md')
+    : join(DOCS_DIR, 'THEHOOKSYSTEM.md');
   if (!existsSync(docPath)) return null;
 
   const content = readFileSync(docPath, 'utf-8');
@@ -705,7 +769,7 @@ function updateHookCount(actualCount: number): string | null {
     if (oldCount !== actualCount) {
       const updated = content.replace(countRegex, `$1${actualCount}$2`);
       writeFileSync(docPath, updated);
-      return `Updated hook count in THEHOOKSYSTEM.md: ${oldCount} -> ${actualCount}`;
+      return `Updated hook count in ${basename(docPath)}: ${oldCount} -> ${actualCount}`;
     }
   }
 
@@ -746,8 +810,9 @@ export async function handleDocCrossRefIntegrity(
   const handlersOnDisk = new Set(getHandlerFilesOnDisk());
   const libsOnDisk = new Set(getLibFilesOnDisk());
   const systemDocsOnDisk = new Set(getSystemDocsOnDisk());
+  const activeHookCount = countActiveHookCommands();
 
-  console.error(`${TAG} Inventory: ${hooksOnDisk.size} hooks, ${handlersOnDisk.size} handlers, ${libsOnDisk.size} libs, ${systemDocsOnDisk.size} system docs`);
+  console.error(`${TAG} Inventory: ${hooksOnDisk.size} hook files, ${activeHookCount} active hook commands, ${handlersOnDisk.size} handlers, ${libsOnDisk.size} libs, ${systemDocsOnDisk.size} system docs`);
 
   // Step 3: Determine which docs to check
   // Check all SYSTEM docs that reference hooks/handlers/libs
@@ -806,7 +871,7 @@ export async function handleDocCrossRefIntegrity(
   }
 
   // Pattern 5: Hook counts
-  const hookCountDrift = checkHookCounts(docsToCheck, hooksOnDisk.size);
+  const hookCountDrift = checkHookCounts(docsToCheck, activeHookCount);
   if (hookCountDrift.length > 0) {
     console.error(`${TAG} [DRIFT] Hook counts: ${hookCountDrift.length} mismatches found`);
     for (const item of hookCountDrift) {
@@ -835,7 +900,7 @@ export async function handleDocCrossRefIntegrity(
 
   // Auto-fix hook count if drifted
   if (hasHookChanges) {
-    const countResult = updateHookCount(hooksOnDisk.size);
+    const countResult = updateHookCount(activeHookCount);
     if (countResult) {
       console.error(`${TAG} [UPDATED] ${countResult}`);
       updatesApplied.push(countResult);

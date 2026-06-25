@@ -629,6 +629,24 @@ check(
 );
 
 check(
+  "Doc integrity counts provider-native hook registration",
+  docCrossRefIntegrity.includes("function countActiveHookCommands") &&
+    docCrossRefIntegrity.includes("join(FRAMEWORK_DIR, 'hooks.json')") &&
+    docCrossRefIntegrity.includes("countHookCommands(hooksJson.hooks ?? {})") &&
+    docCrossRefIntegrity.includes("getSettingsPath()") &&
+    docCrossRefIntegrity.includes("const activeHookCount = countActiveHookCommands()") &&
+    docCrossRefIntegrity.includes("frameworkRel === 'hooks.json'") &&
+    docCrossRefIntegrity.includes("f.endsWith('AGENTS.md')") &&
+    docCrossRefIntegrity.includes("function listFilesRecursive") &&
+    docCrossRefIntegrity.includes("return listFilesRecursive(DOCS_DIR, '.md')") &&
+    docCrossRefIntegrity.includes("const docPath = join(DOCS_DIR, docFile)") &&
+    !docCrossRefIntegrity.includes("checkHookCounts(docsToCheck, hooksOnDisk.size)") &&
+    !docCrossRefIntegrity.includes("updateHookCount(hooksOnDisk.size)") &&
+    !docCrossRefIntegrity.includes("getClaudeDir"),
+  "hooks/handlers/DocCrossRefIntegrity.ts",
+);
+
+check(
   "Arch summary rebuild watches active framework instruction files",
   rebuildArchSummary.includes('"DOCUMENTATION", "ARCHITECTURE_SUMMARY.md"') &&
     rebuildArchSummary.includes('"TOOLS", "ArchitectureSummaryGenerator.ts"') &&
