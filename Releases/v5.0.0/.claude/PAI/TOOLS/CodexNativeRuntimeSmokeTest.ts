@@ -52,6 +52,7 @@ const limitlessCliSmoke = read(join(paiRoot, "TOOLS", "LimitlessCliConfigSmokeTe
 const configGen = read(join(paiRoot, "PAI-Install", "engine", "config-gen.ts"));
 const installMain = read(join(paiRoot, "PAI-Install", "main.ts"));
 const installActions = read(join(paiRoot, "PAI-Install", "engine", "actions.ts"));
+const installerProviderEnvSmoke = read(join(paiRoot, "TOOLS", "InstallerProviderEnvSmokeTest.ts"));
 const installDetect = read(join(paiRoot, "PAI-Install", "engine", "detect.ts"));
 const installValidate = read(join(paiRoot, "PAI-Install", "engine", "validate.ts"));
 const inferenceTool = read(join(paiRoot, "TOOLS", "Inference.ts"));
@@ -412,6 +413,20 @@ check(
     codexFreshInstallSmoke.includes("shared security patterns installed") &&
     installValidate.includes('join(getPaiDataDir(), "USER", "SECURITY", "PATTERNS.yaml")'),
   "PAI/PAI-Install/engine/actions.ts plus installer/fresh-install smokes",
+);
+
+check(
+  "Installer key discovery checks active provider env files",
+  installActions.includes("export function primaryEnvCandidatePaths") &&
+    installActions.includes("export function findExistingEnvKey(keyName: string, activeFrameworkDir?: string)") &&
+    installActions.includes("process.env.CODEX_HOME") &&
+    installActions.includes("process.env.OPENCODE_CONFIG_DIR") &&
+    installActions.includes('findExistingEnvKey("ELEVENLABS_API_KEY", activeFrameworkDir)') &&
+    installActions.includes('findExistingEnvKey("TELEGRAM_BOT_TOKEN", paiDir)') &&
+    installerProviderEnvSmoke.includes("installer key lookup falls back to Codex framework env") &&
+    installerProviderEnvSmoke.includes("installer Telegram lookup reads Codex framework env") &&
+    installerProviderEnvSmoke.includes("installer voice lookup checks active Codex settings first"),
+  "PAI/PAI-Install/engine/actions.ts and InstallerProviderEnvSmokeTest.ts",
 );
 
 check(

@@ -205,6 +205,10 @@
       "target": "PAI/TOOLS/InstallerCodexSmokeTest.ts"
     },
     {
+      "source": "PAI/TOOLS/InstallerProviderEnvSmokeTest.ts",
+      "target": "PAI/TOOLS/InstallerProviderEnvSmokeTest.ts"
+    },
+    {
       "source": "plugins/pai-opencode.ts",
       "target": "plugins/pai-opencode.ts"
     },

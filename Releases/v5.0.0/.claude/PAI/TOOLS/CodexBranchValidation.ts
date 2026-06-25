@@ -214,6 +214,7 @@ function main(): void {
       "PAI/TOOLS/PaiDoctorSmokeTest.ts",
       "PAI/TOOLS/CodexFreshInstallSmokeTest.ts",
       "PAI/TOOLS/InstallerCodexSmokeTest.ts",
+      "PAI/TOOLS/InstallerProviderEnvSmokeTest.ts",
       "PAI/TOOLS/CodexPaiSecuritySmokeTest.ts",
       "PAI/TOOLS/HookSharedPathSmokeTest.ts",
       "PAI/TOOLS/StartupSelfCheckSmokeTest.ts",
@@ -277,6 +278,7 @@ function main(): void {
         PAI_DATA_DIR: join(tempRoot, "pai-data-hook-contract"),
       },
     });
+    run("Installer provider env smoke", "bun", ["PAI/TOOLS/InstallerProviderEnvSmokeTest.ts"]);
     run("LoadContext smoke", "bun", ["PAI/TOOLS/LoadContextSmokeTest.ts"]);
     run("Limitless CLI config smoke", "bun", ["PAI/TOOLS/LimitlessCliConfigSmokeTest.ts"]);
     run("PAI security audit smoke", "bun", ["PAI/TOOLS/PaiSecurityAuditSmokeTest.ts"]);

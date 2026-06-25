@@ -89,7 +89,7 @@ function computeBackupPath(home: string, framework: FrameworkId = "claude"): str
 }
 
 function displayPath(path: string): string {
-  return path.replace(homedir(), "~");
+  return path.replace(envHome(), "~");
 }
 
 function envHome(): string {
@@ -100,6 +100,31 @@ function resolveConfigDir(): string {
   return process.env.PAI_CONFIG_DIR && existsSync(process.env.PAI_CONFIG_DIR)
     ? process.env.PAI_CONFIG_DIR
     : join(envHome(), ".config", "PAI");
+}
+
+function uniquePaths(paths: string[]): string[] {
+  return [...new Set(paths.filter(Boolean))];
+}
+
+function activeFrameworkEnvDirs(activeFrameworkDir?: string): string[] {
+  const home = envHome();
+  return uniquePaths([
+    activeFrameworkDir || "",
+    process.env.PAI_FRAMEWORK_DIR || "",
+    process.env.CODEX_HOME || "",
+    process.env.OPENCODE_CONFIG_DIR || "",
+    process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || "",
+    join(home, ".claude"),
+  ]);
+}
+
+export function primaryEnvCandidatePaths(activeFrameworkDir?: string): string[] {
+  const home = envHome();
+  return uniquePaths([
+    join(resolveConfigDir(), ".env"),
+    join(home, ".config", "PAI", ".env"),
+    ...activeFrameworkEnvDirs(activeFrameworkDir).map((dir) => join(dir, ".env")),
+  ]);
 }
 
 async function emitSectionHeader(
@@ -232,21 +257,19 @@ function readKeyFromFile(envPath: string, keyName: string): string {
 }
 
 /**
- * Check primary key locations only — current process env, ~/.claude/.env,
- * ~/.config/PAI/.env. These are the user's own active install; no permission
- * prompt needed.
+ * Check primary key locations only — current process env, shared PAI config,
+ * active framework .env, and legacy Claude .env. These are the user's own
+ * active install paths; no backup scan permission prompt needed.
  */
-function findExistingEnvKey(keyName: string): string {
-  const home = homedir();
-  const primary = [
-    join(home, ".claude", ".env"),
-    join(home, ".config", "PAI", ".env"),
-  ];
-  for (const envPath of primary) {
+export function findExistingEnvKey(keyName: string, activeFrameworkDir?: string): string {
+  const live = process.env[keyName];
+  if (live) return live;
+
+  for (const envPath of primaryEnvCandidatePaths(activeFrameworkDir)) {
     const value = readKeyFromFile(envPath, keyName);
     if (value) return value;
   }
-  return process.env[keyName] || "";
+  return "";
 }
 
 /**
@@ -335,12 +358,12 @@ function inventoryExistingConfig(): { signals: string[] } {
  * Search existing .claude directories for settings.json voice configuration.
  * Returns { voiceId, aiName, source } if found, or null.
  */
-function findExistingVoiceConfig(): { voiceId: string; aiName: string; source: string } | null {
-  const home = homedir();
+export function findExistingVoiceConfig(activeFrameworkDir?: string): { voiceId: string; aiName: string; source: string } | null {
+  const home = envHome();
   const candidates: string[] = [];
 
-  // Primary location first
-  candidates.push(join(home, ".claude", "settings.json"));
+  // Active framework first, then legacy Claude compatibility fallback.
+  candidates.push(...activeFrameworkEnvDirs(activeFrameworkDir).map((dir) => join(dir, "settings.json")));
 
   // Scan all .claude* directories (backups, renamed, etc.)
   try {
@@ -2523,6 +2546,12 @@ export async function runVoiceSetup(
     7
   );
   const daName = state.collected.aiName;
+  const activeFrameworkDir = state.detection?.paiDir
+    || process.env.PAI_FRAMEWORK_DIR
+    || process.env.CODEX_HOME
+    || process.env.OPENCODE_CONFIG_DIR
+    || process.env.CLAUDE_HOME
+    || join(envHome(), ".claude");
 
   // ── Upfront scan permission gate (UNCONDITIONAL) ──
   //
@@ -2571,11 +2600,11 @@ export async function runVoiceSetup(
     let elevenLabsKey = "";
 
     if (allowImportPriorConfig) {
-      // Step 1: Check active locations (~/.claude/.env, ~/.config/PAI/.env).
+      // Step 1: Check active locations (shared config plus framework .env).
       await emit({ event: "progress", step: "voice", percent: 5, detail: "Checking existing ElevenLabs key locations..." });
-      const candidate = findExistingEnvKey("ELEVENLABS_API_KEY");
+      const candidate = findExistingEnvKey("ELEVENLABS_API_KEY", activeFrameworkDir);
       if (candidate) {
-        const useIt = await getChoice("confirm-active-key", `Found ElevenLabs API key in ~/.claude/.env or ~/.config/PAI/.env. Use it?`, [
+        const useIt = await getChoice("confirm-active-key", `Found ElevenLabs API key in shared PAI config or active framework .env. Use it?`, [
           { label: "Yes — validate and use", value: "yes" },
           { label: "No — skip this one", value: "no" },
         ], daName);
@@ -2651,7 +2680,7 @@ export async function runVoiceSetup(
       await emit({ event: "message", content: "No ElevenLabs key — voice notifications are disabled. You can add a key later in the framework .env file." });
   }
 
-  const paiDir = state.detection?.paiDir || join(homedir(), ".claude");
+  const paiDir = activeFrameworkDir;
   const pulseDir = join(paiDir, "PAI", "PULSE");
   const pulseInstallCommand = pulseManualStartCommand(paiDir);
   const menuBarInstallCommand = `bash ${join(pulseDir, "MenuBar", "install.sh")}`;
@@ -2739,7 +2768,7 @@ export async function runVoiceSetup(
   // the upfront import permission. Without that consent we never read prior
   // settings.json files.
   if (allowImportPriorConfig) {
-    const existingVoice = findExistingVoiceConfig();
+    const existingVoice = findExistingVoiceConfig(activeFrameworkDir);
     if (existingVoice) {
       const sourceLabel = existingVoice.aiName
         ? `${existingVoice.aiName}'s voice (${existingVoice.voiceId.substring(0, 8)}...)`
@@ -3067,7 +3096,12 @@ export async function runTelegramSetup(
       "Requires a bot token from @BotFather and your Telegram user/chat ID.",
   });
 
-  const paiDir = state.detection?.paiDir || join(homedir(), ".claude");
+  const paiDir = state.detection?.paiDir
+    || process.env.PAI_FRAMEWORK_DIR
+    || process.env.CODEX_HOME
+    || process.env.OPENCODE_CONFIG_DIR
+    || process.env.CLAUDE_HOME
+    || join(envHome(), ".claude");
   const envPath = join(paiDir, ".env");
   const restartCommand = pulseRestartCommand(paiDir);
 
@@ -3083,7 +3117,7 @@ export async function runTelegramSetup(
   }
 
   // ── Step 1: Check primary .env locations (no permission needed) ──
-  let token = findExistingEnvKey("TELEGRAM_BOT_TOKEN");
+  let token = findExistingEnvKey("TELEGRAM_BOT_TOKEN", paiDir);
   let validation: TelegramValidation = { valid: false };
 
   if (token) {
@@ -3149,7 +3183,7 @@ export async function runTelegramSetup(
 
   // ── Step 4: Allowed users / chat ID ──
   // Reuse from primary .env first, fall back to prompt.
-  let allowedUsers = findExistingEnvKey("TELEGRAM_ALLOWED_USERS") || findExistingEnvKey("TELEGRAM_PRINCIPAL_CHAT_ID");
+  let allowedUsers = findExistingEnvKey("TELEGRAM_ALLOWED_USERS", paiDir) || findExistingEnvKey("TELEGRAM_PRINCIPAL_CHAT_ID", paiDir);
   if (!allowedUsers) {
     const entered = await getInput(
       "telegram-allowed-users",
