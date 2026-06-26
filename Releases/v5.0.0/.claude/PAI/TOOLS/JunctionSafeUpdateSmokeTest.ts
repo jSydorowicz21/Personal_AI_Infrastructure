@@ -93,6 +93,7 @@ function runUpdater(args: { installRoot: string; sourceDir: string; manifestPath
       ...process.env,
       HOME: args.home,
       USERPROFILE: args.home,
+      OneDrive: join(args.home, "OneDrive"),
       CLAUDE_HOME: args.installRoot,
       PAI_DATA_DIR: join(args.home, ".pai"),
       PAI_CONFIG_DIR: join(args.home, ".config", "PAI"),

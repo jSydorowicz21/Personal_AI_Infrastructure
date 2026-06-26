@@ -146,15 +146,23 @@ function frameworkRoot(id: FrameworkId): string {
   const switchTarget = normalizeFramework(process.argv[4]);
   const canCreateEnvRoot = process.argv[2] === "framework" && process.argv[3] === "switch" && switchTarget === id;
   const frameworkDirOverride = process.env.PAI_FRAMEWORK_DIR;
-  const explicitHome =
+  // A framework-specific home env (CODEX_HOME / OPENCODE_CONFIG_DIR / CLAUDE_HOME) is an
+  // explicit, deliberate target. Honor it even when it equals CURRENT_INSTALL_ROOT — that is
+  // exactly the in-place hotfix-regeneration case, where pai.ts runs from the very install it
+  // is regenerating. Only the generic PAI_FRAMEWORK_DIR override keeps the canonical-source
+  // guard so it can never redirect native generation into the shared PAI source tree.
+  const providerHome =
     (id === "codex" && process.env.CODEX_HOME ? expandPaiHome(process.env.CODEX_HOME) : "") ||
     (id === "opencode" && process.env.OPENCODE_CONFIG_DIR ? expandPaiHome(process.env.OPENCODE_CONFIG_DIR) : "") ||
     (id === "claude" && (process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME)
       ? expandPaiHome(process.env.CLAUDE_HOME || process.env.PAI_CLAUDE_HOME || "")
-      : "") ||
-    (frameworkDirOverride && envFramework === id ? expandPaiHome(frameworkDirOverride) : "");
-  if (explicitHome && (existsSync(explicitHome) || canCreateEnvRoot) && !wouldContaminateCanonicalSource(id, explicitHome)) {
-    return explicitHome;
+      : "");
+  if (providerHome && (existsSync(providerHome) || canCreateEnvRoot)) {
+    return providerHome;
+  }
+  const overrideHome = frameworkDirOverride && envFramework === id ? expandPaiHome(frameworkDirOverride) : "";
+  if (overrideHome && (existsSync(overrideHome) || canCreateEnvRoot) && !wouldContaminateCanonicalSource(id, overrideHome)) {
+    return overrideHome;
   }
 
   const state = readFrameworkState();
@@ -548,7 +556,15 @@ function syncOpenCodeAgents(root: string): number {
     const { frontmatter, body } = parseMarkdownFrontmatter(readFileSync(sourcePath, "utf-8"));
     const name = frontmatter.name || basename(entry.name, ".md");
     const dst = join(agentsDir, entry.name);
-    if (!shouldReplaceGeneratedPaiFile(dst)) continue;
+    if (existsSync(dst)) {
+      const existing = readFileSync(dst, "utf-8");
+      const dstIsNativeOpenCodeAgent = /(^|\r?\n)mode:\s*subagent\b/.test(existing);
+      // Keep a user's own native OpenCode agent untouched; (re)generate raw Claude-style
+      // agents and PAI-managed ones. This covers in-place hotfix regeneration, where the
+      // agents dir is a real copy (not a symlink) of Claude-style sources that still need
+      // converting to OpenCode-native form.
+      if (dstIsNativeOpenCodeAgent && !shouldReplaceGeneratedPaiFile(dst)) continue;
+    }
     writeFileSync(dst, [
       "---",
       `description: ${yamlString(frontmatter.description || `PAI ${name} agent.`)}`,

@@ -469,6 +469,22 @@
       "target": "hooks/ToolActivityTracker.hook.ts"
     },
     {
+      "source": "hooks/SkillGuard.hook.ts",
+      "target": "hooks/SkillGuard.hook.ts"
+    },
+    {
+      "source": "hooks/RestoreContext.hook.ts",
+      "target": "hooks/RestoreContext.hook.ts"
+    },
+    {
+      "source": "hooks/StopFailureHandler.hook.ts",
+      "target": "hooks/StopFailureHandler.hook.ts"
+    },
+    {
+      "source": "hooks/ToolFailureTracker.hook.ts",
+      "target": "hooks/ToolFailureTracker.hook.ts"
+    },
+    {
       "source": "hooks/VoiceCompletion.hook.ts",
       "target": "hooks/VoiceCompletion.hook.ts"
     },

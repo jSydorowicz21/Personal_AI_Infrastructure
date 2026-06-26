@@ -31,6 +31,9 @@ const ALLOWED_NONZERO_HOOKS = new Set([
   "hooks/ContainmentGuard.hook.ts",
   "hooks/TaskGovernance.hook.ts",
   "hooks/FrameworkHookAdapter.ts",
+  // SkillGuard mirrors Claude's Pulse skill-guard for Codex/OpenCode command
+  // hooks: it denies known false-positive skill invocations (e.g. keybindings-help).
+  "hooks/SkillGuard.hook.ts",
 ]);
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [

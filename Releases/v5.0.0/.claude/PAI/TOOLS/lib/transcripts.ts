@@ -98,7 +98,30 @@ export function getClaudeProjectDirs(root = getActiveFrameworkRoot("claude")): s
   return dirs.length > 0 ? dirs : [getClaudeProjectDir(root)];
 }
 
-export function getFrameworkSessionRoots(framework = getActiveFramework(), root = getActiveFrameworkRoot(framework)): string[] {
+// Resolve a framework's transcript home. The ACTIVE framework honors
+// framework.json / PAI_FRAMEWORK_DIR (via getActiveFrameworkRoot). NON-active
+// frameworks resolve to their own conventional home so cross-framework scans
+// (e.g. Pulse cost aggregation, which iterates claude/codex/opencode) never
+// borrow the active framework's directory and mis-tag its sessions.
+function frameworkRootFor(framework: FrameworkId): string {
+  if (framework === getActiveFramework()) return getActiveFrameworkRoot(framework);
+  if (framework === "codex") {
+    const env = process.env.CODEX_HOME ? expandHome(process.env.CODEX_HOME) : "";
+    return env || join(homeDir(), ".codex");
+  }
+  if (framework === "claude") {
+    const env = process.env.CLAUDE_HOME
+      ? expandHome(process.env.CLAUDE_HOME)
+      : process.env.PAI_CLAUDE_HOME
+        ? expandHome(process.env.PAI_CLAUDE_HOME)
+        : "";
+    return env || join(homeDir(), ".claude");
+  }
+  const env = process.env.OPENCODE_CONFIG_DIR ? expandHome(process.env.OPENCODE_CONFIG_DIR) : "";
+  return env || join(homeDir(), ".config", "opencode");
+}
+
+export function getFrameworkSessionRoots(framework = getActiveFramework(), root = frameworkRootFor(framework)): string[] {
   if (framework === "claude") return getClaudeProjectDirs(root);
   if (framework === "codex") return [join(root, "sessions")];
 
